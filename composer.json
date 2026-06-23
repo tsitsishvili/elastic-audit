@@ -1,0 +1,43 @@
+{
+    "name": "tsitsishvili/elastic-audit",
+    "description": "Laravel package for logging outgoing and incoming third-party HTTP requests to Elasticsearch.",
+    "type": "library",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0 || ^13.0",
+        "elasticsearch/elasticsearch": "^8.0 || ^9.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Tsitsishvili\\ElasticAudit\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tsitsishvili\\ElasticAudit\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Tsitsishvili\\ElasticAudit\\ElasticAuditServiceProvider"
+            ],
+            "aliases": {
+                "HttpLog": "Tsitsishvili\\ElasticAudit\\Facades\\HttpLog",
+                "ActivityLog": "Tsitsishvili\\ElasticAudit\\Facades\\ActivityLog"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+    bootstrap="vendor/autoload.php"
+    colors="true"
+    failOnWarning="true"
+    failOnRisky="true"
+    cacheDirectory=".phpunit.cache"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory suffix="Test.php">tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">src/Stubs</directory>
+        </exclude>
+    </source>
+
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="HTTP_LOGS_ENABLED" value="true"/>
+        <env name="HTTP_LOGS_QUEUE" value="default"/>
+        <env name="LOG_ELASTICSEARCH_HOST" value="localhost"/>
+        <env name="LOG_ELASTICSEARCH_PORT" value="9200"/>
+        <env name="LOG_ELASTICSEARCH_SCHEME" value="http"/>
+        <env name="LOG_ELASTICSEARCH_INDEX_PREFIX" value="test_app"/>
+        <env name="LOG_ELASTICSEARCH_REPLICAS" value="0"/>
+    </php>
+</phpunit>

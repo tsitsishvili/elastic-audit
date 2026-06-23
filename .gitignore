@@ -1,0 +1,33 @@
+/vendor/
+/node_modules/
+
+# Composer lock files are usually not committed for reusable libraries.
+/composer.lock
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+
+# IDE/editor files
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test and analysis artifacts
+/.phpunit.cache/
+/.pest/
+/coverage/
+/build/
+/.cache/
+
+# Logs and temporary files
+*.log
+/storage/
+/tmp/
+/temp/
