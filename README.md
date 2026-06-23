@@ -18,7 +18,6 @@ dashboard, so you can enable only what you need.
 ## Project Documents
 
 - [Changelog](CHANGELOG.md)
-- [Upgrade Guide](UPGRADE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Coding Standards](CODING_STANDARDS.md)
 
