@@ -57,12 +57,12 @@ class ElasticAuditServiceProvider extends ServiceProvider
             return new LogElasticsearchClient($builder->build());
         });
 
-        $this->app->singleton(SensitiveDataRedactor::class, fn (): SensitiveDataRedactor => new SensitiveDataRedactor(
+        $this->app->singleton(SensitiveDataRedactor::class, fn(): SensitiveDataRedactor => new SensitiveDataRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
         ));
 
-        $this->app->singleton(PaymentRedactor::class, fn (): PaymentRedactor => new PaymentRedactor(
+        $this->app->singleton(PaymentRedactor::class, fn(): PaymentRedactor => new PaymentRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
         ));
@@ -91,7 +91,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(ActivityLogger::class, fn (): ActivityLogger => new ActivityLogger(
+        $this->app->singleton(ActivityLogger::class, fn(): ActivityLogger => new ActivityLogger(
             new SensitiveDataRedactor(body: $this->redactionRules('activity_logs.redaction')),
         ));
 
@@ -109,8 +109,8 @@ class ElasticAuditServiceProvider extends ServiceProvider
     private function redactionRules(string $configKey): RedactionRules
     {
         return new RedactionRules(
-            allow: (array) config("{$configKey}.allow", []),
-            block: (array) config("{$configKey}.block", []),
+            allow: (array)config("{$configKey}.allow", []),
+            block: (array)config("{$configKey}.block", []),
         );
     }
 
@@ -123,10 +123,10 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__ . '/../config/http_logs.php' => config_path('http_logs.php'),
-                __DIR__ . '/../config/log_elasticsearch.php'       => config_path('log_elasticsearch.php'),
-                __DIR__ . '/../config/activity_logs.php'         => config_path('activity_logs.php'),
-                __DIR__ . '/Stubs/Enums/ElasticAudit'          => app_path('Enums/ElasticAudit'),
+                __DIR__ . '/../config/http_logs.php'         => config_path('http_logs.php'),
+                __DIR__ . '/../config/log_elasticsearch.php' => config_path('log_elasticsearch.php'),
+                __DIR__ . '/../config/activity_logs.php'     => config_path('activity_logs.php'),
+                __DIR__ . '/Stubs/Enums/ElasticAudit'        => app_path('Enums/ElasticAudit'),
             ], 'elastic-audit');
 
             $this->publishes([
