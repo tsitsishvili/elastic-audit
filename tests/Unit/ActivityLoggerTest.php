@@ -48,6 +48,29 @@ class ActivityLoggerTest extends TestCase
         });
     }
 
+    public function test_record_redacts_sensitive_changes_and_metadata(): void
+    {
+        config(['activity_logs.enabled' => true]);
+        Bus::fake();
+
+        $this->logger->record(
+            action: 'user.updated',
+            context: $this->context,
+            changes: [
+                'password' => ['old' => 'old-hash', 'new' => 'new-hash'],
+                'status'   => ['old' => 'pending', 'new' => 'active'],
+            ],
+            metadata: ['ip' => '1.2.3.4', 'api_key' => 'secret-key'],
+        );
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->changes['password'] === '[REDACTED]'
+                && $job->data->changes['status'] === ['old' => 'pending', 'new' => 'active']
+                && $job->data->metadata['api_key'] === '[REDACTED]'
+                && $job->data->metadata['ip'] === '1.2.3.4';
+        });
+    }
+
     public function test_record_is_no_op_when_disabled(): void
     {
         config(['activity_logs.enabled' => false]);

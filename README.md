@@ -18,6 +18,7 @@ dashboard, so you can enable only what you need.
 ## Project Documents
 
 - [Changelog](CHANGELOG.md)
+- [Upgrade Guide](UPGRADE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Coding Standards](CODING_STANDARDS.md)
 
@@ -151,17 +152,17 @@ LOG_ELASTICSEARCH_INDEX_PREFIX=my_app
 LOG_ELASTICSEARCH_REPLICAS=1
 ```
 
-| Variable                                | Description                                                                                   |
-|-----------------------------------------|-----------------------------------------------------------------------------------------------|
-| `HTTP_LOGS_ENABLED`         | Set to `true` to enable logging.                                                              |
-| `HTTP_LOGS_QUEUE`           | Queue name for log jobs.                                                                      |
-| `HTTP_LOGS_SAMPLE_RATE`     | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.   |
-| `HTTP_LOGS_BODY_PREVIEW_BYTES` | Max bytes stored as sanitized body preview.                                                |
-| `HTTP_LOGS_BODY_MAX_BYTES`     | Max raw body size before truncation.                                                       |
-| `HTTP_LOGS_PAYMENT_BODY_MODE`  | Body handling mode for payment providers (`preview` or `omit`).                            |
-| `HTTP_LOGS_DASHBOARD_ENABLED`  | Set to `true` to register the web dashboard routes.                                        |
-| `ELASTIC_AUDIT_DASHBOARD_PREFIX`            | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
-| `HTTP_LOGS_DASHBOARD_PATH`     | This dashboard's subpath under the group prefix (default `third-party`). Served at `/logger/third-party`. |
+| Variable                         | Description                                                                                                                        |
+|----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `HTTP_LOGS_ENABLED`              | Set to `true` to enable logging.                                                                                                   |
+| `HTTP_LOGS_QUEUE`                | Queue name for log jobs.                                                                                                           |
+| `HTTP_LOGS_SAMPLE_RATE`          | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
+| `HTTP_LOGS_BODY_PREVIEW_BYTES`   | Max bytes stored as sanitized body preview.                                                                                        |
+| `HTTP_LOGS_BODY_MAX_BYTES`       | Max raw body size before truncation.                                                                                               |
+| `HTTP_LOGS_PAYMENT_BODY_MODE`    | Body handling mode for payment providers (`preview` or `omit`).                                                                    |
+| `HTTP_LOGS_DASHBOARD_ENABLED`    | Set to `true` to register the web dashboard routes.                                                                                |
+| `ELASTIC_AUDIT_DASHBOARD_PREFIX` | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
+| `HTTP_LOGS_DASHBOARD_PATH`       | This dashboard's subpath under the group prefix (default `third-party`). Served at `/logger/third-party`.                          |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`:
 
@@ -174,26 +175,30 @@ my_app_http_logs_write
 
 ### `http_logs.php`
 
-| Key                         | Default                                  | Description                                                                              |
-|-----------------------------|------------------------------------------|------------------------------------------------------------------------------------------|
-| `enabled`                   | `false`                                  | Enables or disables third-party HTTP logging. When disabled, no log jobs are dispatched. |
-| `queue`                     | `default`                                | Queue name used by `LogHttpRequestJob`.                                        |
-| `sample_rate`               | `1.0`                                    | Float between `0.0` and `1.0`. `1.0` logs every request, `0.0` logs none, intermediate values use probabilistic sampling (e.g. `0.1` logs ~10%). Controlled by `HTTP_LOGS_SAMPLE_RATE`. |
-| `body_preview_bytes`        | `4096`                                   | Maximum number of sanitized body bytes stored as preview.                                                                                                                                           |
-| `body_max_bytes`            | `32768`                                  | Maximum raw body size considered before truncation handling.                                                                                                                                        |
-| `payment_body_mode`         | `preview`                                | Controls payment provider body handling.                                                                                                                                                            |
-| `index_alias`               | `{prefix}_http_logs`       | Elasticsearch read alias.                                                                                                                                                                           |
-| `index_alias_write`         | `{prefix}_http_logs_write` | Elasticsearch write alias.                                                                                                                                                                          |
-| `enums.provider`            | `null`                                   | Backed enum class implementing `ProviderContract`.                                                                                                                                        |
-| `enums.event_type`          | `null`                                   | Backed enum class implementing `EventTypeContract`.                                                                                                                                       |
-| `enums.entity_type`         | `null`                                   | Backed enum class implementing `EntityTypeContract`.                                                                                                                                      |
-| `enums.entity_type_default` | `none`                                   | Fallback entity type value for incoming callback logs.                                                                                                                                              |
-| `payment_provider_values`   | `[]`                                     | Provider enum values that should use payment-specific redaction.                                                                                                                                    |
-| `dashboard.enabled`         | `true`                                   | Registers the web dashboard routes. Set to `false` to hide the UI entirely.                                                                                                                          |
-| `dashboard.prefix`          | `logger`                                 | Shared group URL segment placed before every dashboard. Both dashboards read `ELASTIC_AUDIT_DASHBOARD_PREFIX`; changing it moves both at once. Set to `''` to serve at the root.                      |
-| `dashboard.path`            | `third-party`                            | This dashboard's own subpath under the group prefix. Composes with `prefix` as `{prefix}/{path}`, e.g. `/logger/third-party`.                                                                       |
-| `dashboard.middleware`      | `['web']`                                | Middleware applied to dashboard routes. The package always appends its authorization middleware after this stack.                                                                                    |
-| `dashboard.per_page`        | `25`                                     | Number of log rows shown per page in the list view.                                                                                                                                                  |
+| Key                         | Default                    | Description                                                                                                                                                                             |
+|-----------------------------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `enabled`                   | `false`                    | Enables or disables third-party HTTP logging. When disabled, no log jobs are dispatched.                                                                                                |
+| `queue`                     | `default`                  | Queue name used by `LogHttpRequestJob`.                                                                                                                                                 |
+| `sample_rate`               | `1.0`                      | Float between `0.0` and `1.0`. `1.0` logs every request, `0.0` logs none, intermediate values use probabilistic sampling (e.g. `0.1` logs ~10%). Controlled by `HTTP_LOGS_SAMPLE_RATE`. |
+| `body_preview_bytes`        | `4096`                     | Maximum number of sanitized body bytes stored as preview.                                                                                                                               |
+| `body_max_bytes`            | `32768`                    | Maximum raw body size considered before truncation handling.                                                                                                                            |
+| `payment_body_mode`         | `preview`                  | Controls payment provider body handling.                                                                                                                                                |
+| `index_alias`               | `{prefix}_http_logs`       | Elasticsearch read alias.                                                                                                                                                               |
+| `index_alias_write`         | `{prefix}_http_logs_write` | Elasticsearch write alias.                                                                                                                                                              |
+| `enums.provider`            | `null`                     | Backed enum class implementing `ProviderContract`.                                                                                                                                      |
+| `enums.event_type`          | `null`                     | Backed enum class implementing `EventTypeContract`.                                                                                                                                     |
+| `enums.entity_type`         | `null`                     | Backed enum class implementing `EntityTypeContract`.                                                                                                                                    |
+| `enums.entity_type_default` | `none`                     | Fallback entity type value for incoming callback logs.                                                                                                                                  |
+| `payment_provider_values`   | `[]`                       | Provider enum values that should use payment-specific redaction.                                                                                                                        |
+| `redaction.headers.allow`   | `[]`                       | Header names to never redact, even when a default rule matches (exact match; takes precedence). See [Redaction Notes](#redaction-notes).                                                |
+| `redaction.headers.block`   | `[]`                       | Extra header names to always redact, in addition to the defaults (whole-word match).                                                                                                    |
+| `redaction.body.allow`      | `[]`                       | Body keys to never redact, even when a default rule matches (exact match; takes precedence).                                                                                            |
+| `redaction.body.block`      | `[]`                       | Extra body keys to always redact, in addition to the defaults (whole-word match).                                                                                                       |
+| `dashboard.enabled`         | `true`                     | Registers the web dashboard routes. Set to `false` to hide the UI entirely.                                                                                                             |
+| `dashboard.prefix`          | `logger`                   | Shared group URL segment placed before every dashboard. Both dashboards read `ELASTIC_AUDIT_DASHBOARD_PREFIX`; changing it moves both at once. Set to `''` to serve at the root.        |
+| `dashboard.path`            | `third-party`              | This dashboard's own subpath under the group prefix. Composes with `prefix` as `{prefix}/{path}`, e.g. `/logger/third-party`.                                                           |
+| `dashboard.middleware`      | `['web']`                  | Middleware applied to dashboard routes. The package always appends its authorization middleware after this stack.                                                                       |
+| `dashboard.per_page`        | `25`                       | Number of log rows shown per page in the list view.                                                                                                                                     |
 
 ### `log_elasticsearch.php`
 
@@ -314,13 +319,14 @@ data, and failure information.
 | `user_id`           | Optional application user id.                                                             |
 | `attempt`           | Queue/job attempt or request attempt value.                                               |
 | `success`           | Boolean success flag.                                                                     |
-| `retention_days`    | Retention window used by `http-logs:prune`.                                        |
+| `retention_days`    | Retention window used by `http-logs:prune`.                                               |
 | `request`           | Sanitized request headers, body preview, body hash, and truncation flag.                  |
 | `response`          | Sanitized response headers, body preview, body hash, and truncation flag.                 |
 | `error.class`       | Exception class for failed outgoing calls when available.                                 |
 | `error.message`     | Sanitized exception message for failed outgoing calls when available.                     |
 
-Both incoming callback logs and outgoing request logs store request **and** response payloads. For incoming callbacks the
+Both incoming callback logs and outgoing request logs store request **and** response payloads. For incoming callbacks
+the
 response is captured automatically by `IncomingHttpLogMiddleware`, or when you pass the response to
 `HttpLog::logIncoming(...)`. Outgoing request logs capture the provider's response when available.
 
@@ -381,7 +387,8 @@ class DeliveryProviderClient
 ```
 
 `HttpLog::make(...)` returns **Laravel's own HTTP client** (`Illuminate\Http\Client\PendingRequest`) with an
-outgoing-request logging middleware already attached. There is no custom wrapper — the **entire** Laravel HTTP client API
+outgoing-request logging middleware already attached. There is no custom wrapper — the **entire** Laravel HTTP client
+API
 is available and every request you make through it is logged automatically:
 
 ```php
@@ -399,7 +406,8 @@ HttpLog::make($provider, $eventType, $context)
     ->post('https://provider.example/oauth/token', ['grant_type' => 'client_credentials']);
 ```
 
-Because logging happens at the transport (Guzzle middleware) layer, the wire format is irrelevant to logging: JSON, form,
+Because logging happens at the transport (Guzzle middleware) layer, the wire format is irrelevant to logging: JSON,
+form,
 multipart, etc. are all redacted and stored uniformly, and no method call can bypass logging.
 
 The original provider call behavior is preserved. If the provider request fails, the package dispatches the log job and
@@ -602,6 +610,43 @@ Schedule::command('http-logs:prune')->dailyAt('03:00');
 The package sanitizes headers, request bodies, response bodies, and exception messages before indexing. Query strings
 are stripped from stored URLs because they can contain API keys or tokens.
 
+### How matching works
+
+Sensitive header names and body keys are matched as **whole words**, not raw substrings. Names are first normalized —
+`camelCase`, `kebab-case`, dotted and spaced variants all fold to `snake_case`, so `accessToken`, `access-token`, and
+`access_token` are treated identically. A built-in word only matches at a word boundary, so it never fires inside a
+larger word (e.g. `key` does not match `monkey` or `keyword`).
+
+Most secret words (`password`, `secret`, `signature`, `hmac`, `authorization`, `credential`, …) match in any position,
+so compound keys like `password_confirmation` and `webhook_secret` are redacted. The positional words `token` and `key`
+match only as the **final** word, so `access_token` / `x-api-key` are redacted while the non-secret `token_type` and
+`token_expires_in` are kept.
+
+### Customizing what gets redacted
+
+You can extend or override the built-in rules per surface (headers vs. body) without forking the package, via the
+`redaction` config — kept separate for headers and body so a body rule never affects a header and vice versa:
+
+```php
+// config/http_logs.php
+'redaction' => [
+    'headers' => [
+        'block' => ['x-internal-trace'], // always redact this header (in addition to defaults)
+        'allow' => [],
+    ],
+    'body' => [
+        'block' => ['customer_reference'], // whole-word: also redacts 'customerReference'
+        'allow' => ['email'],              // keep emails in logs, even though 'email' is redacted by default
+    ],
+],
+```
+
+- **`block`** — extra names to always redact, matched as whole words exactly like the built-ins. The word `reference`
+  blocks any `*_reference` key.
+- **`allow`** — names to never redact, even when a built-in or `block` rule matches. Matched **exactly** (after
+  normalization), so it un-redacts only the named field, not a whole family — and it takes precedence over everything
+  else. Use with care: anything listed here is stored in clear text.
+
 Body storage is controlled by:
 
 ```dotenv
@@ -612,24 +657,31 @@ HTTP_LOGS_PAYMENT_BODY_MODE=preview
 
 For payment providers, add the provider enum value to `payment_provider_values`.
 
+> Activity logging applies the same redaction to its `changes` and `metadata` maps — see
+> [Activity Logging](#activity-logging).
+
 ## Sampling
 
-Control what fraction of requests are logged using the `sample_rate` config key (or `HTTP_LOGS_SAMPLE_RATE` env variable).
+Control what fraction of requests are logged using the `sample_rate` config key (or `HTTP_LOGS_SAMPLE_RATE` env
+variable).
 
-| Value | Behaviour                                   |
-|-------|---------------------------------------------|
-| `1.0` | Every request is logged (default).          |
-| `0.0` | No requests are logged.                     |
+| Value | Behaviour                                      |
+|-------|------------------------------------------------|
+| `1.0` | Every request is logged (default).             |
+| `0.0` | No requests are logged.                        |
 | `0.1` | ~10% of requests are logged, chosen at random. |
 
-Sampling is applied independently to each request via `mt_rand()` before any payload is built or any job dispatched, so skipped requests have zero overhead beyond the random check. Setting `sample_rate` to `1.0` skips the random check entirely.
+Sampling is applied independently to each request via `mt_rand()` before any payload is built or any job dispatched, so
+skipped requests have zero overhead beyond the random check. Setting `sample_rate` to `1.0` skips the random check
+entirely.
 
 ```dotenv
 # Log roughly 25% of requests
 HTTP_LOGS_SAMPLE_RATE=0.25
 ```
 
-> **Note:** Sampling is statistical. At low rates and low traffic volumes the actual percentage may deviate noticeably from the configured value.
+> **Note:** Sampling is statistical. At low rates and low traffic volumes the actual percentage may deviate noticeably
+> from the configured value.
 
 ## Troubleshooting
 
@@ -915,13 +967,31 @@ $hits = $results['hits']['hits'];
   "query": {
     "bool": {
       "must": [
-        { "term": { "provider":   "delivery" } },
-        { "term": { "direction":  "outgoing" } },
-        { "term": { "success":    false      } }
+        {
+          "term": {
+            "provider": "delivery"
+          }
+        },
+        {
+          "term": {
+            "direction": "outgoing"
+          }
+        },
+        {
+          "term": {
+            "success": false
+          }
+        }
       ]
     }
   },
-  "sort": [{ "@timestamp": { "order": "desc" } }],
+  "sort": [
+    {
+      "@timestamp": {
+        "order": "desc"
+      }
+    }
+  ],
   "size": 100
 }
 ```
@@ -933,12 +1003,26 @@ $hits = $results['hits']['hits'];
   "query": {
     "bool": {
       "must": [
-        { "term": { "entity.type": "order" } },
-        { "term": { "entity.id":   "42"    } }
+        {
+          "term": {
+            "entity.type": "order"
+          }
+        },
+        {
+          "term": {
+            "entity.id": "42"
+          }
+        }
       ]
     }
   },
-  "sort": [{ "@timestamp": { "order": "desc" } }],
+  "sort": [
+    {
+      "@timestamp": {
+        "order": "desc"
+      }
+    }
+  ],
   "size": 50
 }
 ```
@@ -949,14 +1033,38 @@ $hits = $results['hits']['hits'];
 {
   "query": {
     "bool": {
-      "must":   [{ "term":  { "direction": "outgoing" } }],
+      "must": [
+        {
+          "term": {
+            "direction": "outgoing"
+          }
+        }
+      ],
       "filter": [
-        { "range": { "http.latency_ms": { "gte": 3000 } } },
-        { "range": { "@timestamp":      { "gte": "now-24h" } } }
+        {
+          "range": {
+            "http.latency_ms": {
+              "gte": 3000
+            }
+          }
+        },
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "now-24h"
+            }
+          }
+        }
       ]
     }
   },
-  "sort": [{ "http.latency_ms": { "order": "desc" } }],
+  "sort": [
+    {
+      "http.latency_ms": {
+        "order": "desc"
+      }
+    }
+  ],
   "size": 50
 }
 ```
@@ -967,13 +1075,30 @@ $hits = $results['hits']['hits'];
 {
   "query": {
     "bool": {
-      "must":   [{ "term":  { "http.status_class": "5xx" } }],
-      "filter": [{ "range": { "@timestamp": { "gte": "now-1h" } } }]
+      "must": [
+        {
+          "term": {
+            "http.status_class": "5xx"
+          }
+        }
+      ],
+      "filter": [
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "now-1h"
+            }
+          }
+        }
+      ]
     }
   },
   "aggs": {
     "by_provider": {
-      "terms": { "field": "provider", "size": 20 }
+      "terms": {
+        "field": "provider",
+        "size": 20
+      }
     }
   },
   "size": 0
@@ -987,15 +1112,35 @@ $hits = $results['hits']['hits'];
   "query": {
     "bool": {
       "must": [
-        { "term": { "direction":  "incoming"                } },
-        { "term": { "event_type": "delivery_status_callback" } }
+        {
+          "term": {
+            "direction": "incoming"
+          }
+        },
+        {
+          "term": {
+            "event_type": "delivery_status_callback"
+          }
+        }
       ],
       "filter": [
-        { "range": { "@timestamp": { "gte": "now-7d" } } }
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "now-7d"
+            }
+          }
+        }
       ]
     }
   },
-  "sort": [{ "@timestamp": { "order": "desc" } }],
+  "sort": [
+    {
+      "@timestamp": {
+        "order": "desc"
+      }
+    }
+  ],
   "size": 50
 }
 ```
@@ -1041,6 +1186,12 @@ return [
     'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',
     'index_alias_write' => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs_write',
 
+    // Redaction applied to the 'changes' and 'metadata' maps before queueing.
+    'redaction' => [
+        'block' => [],
+        'allow' => [],
+    ],
+
     'dashboard' => [
         'enabled'    => env('ACTIVITY_LOGS_DASHBOARD_ENABLED', true),
         'prefix'     => env('ELASTIC_AUDIT_DASHBOARD_PREFIX', 'logger'),
@@ -1054,15 +1205,20 @@ return [
 It reuses the existing `log_elasticsearch.php` connection — activity logs are never written to the
 product-search cluster.
 
+The `changes` and `metadata` maps are redacted by key name before queueing, using the same rules as the HTTP logger
+(so a model's `password` / `email` attribute diffs never reach Elasticsearch in clear text). Tune it with
+`activity_logs.redaction.block` / `.allow` — same semantics as the HTTP [Redaction Notes](#redaction-notes), but a
+single flat list since activity events have no headers.
+
 Relevant environment variables:
 
-| Variable                            | Default          | Purpose                                  |
-|-------------------------------------|------------------|------------------------------------------|
-| `ACTIVITY_LOGS_ENABLED`           | `true`           | Master on/off switch for capture                                                                         |
-| `ACTIVITY_LOGS_QUEUE`             | `default`        | Queue the indexing job is dispatched to                                                                  |
-| `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`           | Register the dashboard routes                                                                            |
-| `ELASTIC_AUDIT_DASHBOARD_PREFIX`     | `logger`         | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths.       |
-| `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity`       | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                          |
+| Variable                          | Default    | Purpose                                                                                           |
+|-----------------------------------|------------|---------------------------------------------------------------------------------------------------|
+| `ACTIVITY_LOGS_ENABLED`           | `true`     | Master on/off switch for capture                                                                  |
+| `ACTIVITY_LOGS_QUEUE`             | `default`  | Queue the indexing job is dispatched to                                                           |
+| `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`     | Register the dashboard routes                                                                     |
+| `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`   | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
+| `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity` | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
 
 ### Create the Activity Index
 
@@ -1169,13 +1325,29 @@ For manual `ActivityLog::record()` calls you set the actor explicitly via the co
   "event_id": "01JX...",
   "schema_version": 1,
   "request_id": "01JX...",
-  "actor":   { "type": "user", "id": 42 },
-  "action":  "order.status_updated",
-  "entity":  { "type": "order", "id": "99" },
-  "changes": { "status": { "old": "pending", "new": "paid" } },
-  "metadata": { "ip": "1.2.3.4" },
+  "actor": {
+    "type": "user",
+    "id": 42
+  },
+  "action": "order.status_updated",
+  "entity": {
+    "type": "order",
+    "id": "99"
+  },
+  "changes": {
+    "status": {
+      "old": "pending",
+      "new": "paid"
+    }
+  },
+  "metadata": {
+    "ip": "1.2.3.4"
+  },
   "success": true,
-  "error":   { "class": null, "message": null },
+  "error": {
+    "class": null,
+    "message": null
+  },
   "retention_days": 360
 }
 ```
