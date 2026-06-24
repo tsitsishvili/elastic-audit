@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Bus;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
+use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
+use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -72,6 +77,58 @@ class ElasticAuditServiceProviderTest extends TestCase
         );
 
         $this->assertInstanceOf(PendingRequest::class, $client);
+    }
+
+    public function test_redactor_applies_configured_allow_and_block_lists(): void
+    {
+        config([
+            'http_logs.redaction.body.allow' => ['email'],
+            'http_logs.redaction.body.block' => ['customer_reference'],
+        ]);
+
+        $redactor = $this->app->make(SensitiveDataRedactor::class);
+
+        $result = $redactor->redactBody([
+            'email'              => 'user@example.com',
+            'customer_reference' => 'CR-1',
+            'password'           => 'secret',
+        ]);
+
+        $this->assertSame('user@example.com', $result['email']);
+        $this->assertSame('[REDACTED]', $result['customer_reference']);
+        $this->assertSame('[REDACTED]', $result['password']);
+    }
+
+    public function test_activity_logger_applies_configured_redaction(): void
+    {
+        config([
+            'activity_logs.redaction.allow' => ['email'],
+            'activity_logs.redaction.block' => ['internal_note'],
+        ]);
+
+        $logger = $this->app->make(ActivityLogger::class);
+
+        Bus::fake();
+        $logger->record(
+            action: 'user.updated',
+            context: ActivityLogContext::forActor(
+                actorType: 'user',
+                actorId: 1,
+                entityType: TestEntityType::Order,
+                entityId: '1',
+            ),
+            changes: [
+                'email'         => ['old' => 'a@x.com', 'new' => 'b@x.com'], // allowed → kept
+                'internal_note' => ['old' => 'x', 'new' => 'y'],            // blocked → redacted
+                'password'      => ['old' => 'h1', 'new' => 'h2'],          // default → redacted
+            ],
+        );
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->changes['email'] === ['old' => 'a@x.com', 'new' => 'b@x.com']
+                && $job->data->changes['internal_note'] === '[REDACTED]'
+                && $job->data->changes['password'] === '[REDACTED]';
+        });
     }
 
     public function test_elasticsearch_client_uses_basic_auth_when_credentials_configured(): void
