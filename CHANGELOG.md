@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-24
+
+Initial stable release. Provides two independent subsystems on a shared Elasticsearch connection: HTTP traffic logging (outgoing third-party requests and incoming callbacks) and actor/model activity logging, with redaction at capture, queued indexing, sampling, pruning commands, and optional dashboards.
+
 ### Added
 
 - GitHub Actions CI workflow running the test suite across PHP 8.2, 8.3, and 8.4 on both the lowest and highest supported dependency versions.
