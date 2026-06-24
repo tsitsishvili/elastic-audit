@@ -14,6 +14,7 @@ use Tsitsishvili\ElasticAudit\Console\PruneActivityLogCommand;
 use Tsitsishvili\ElasticAudit\Console\PruneHttpLogCommand;
 use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
 use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
 use Tsitsishvili\ElasticAudit\Http\Middleware\AuthorizeDashboard;
 use Tsitsishvili\ElasticAudit\Http\HttpLogClientFactory;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
@@ -21,6 +22,8 @@ use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
+use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\HttpLogManager;
 
 class ElasticAuditServiceProvider extends ServiceProvider
@@ -54,6 +57,16 @@ class ElasticAuditServiceProvider extends ServiceProvider
             return new LogElasticsearchClient($builder->build());
         });
 
+        $this->app->singleton(SensitiveDataRedactor::class, fn (): SensitiveDataRedactor => new SensitiveDataRedactor(
+            headers: $this->redactionRules('http_logs.redaction.headers'),
+            body: $this->redactionRules('http_logs.redaction.body'),
+        ));
+
+        $this->app->singleton(PaymentRedactor::class, fn (): PaymentRedactor => new PaymentRedactor(
+            headers: $this->redactionRules('http_logs.redaction.headers'),
+            body: $this->redactionRules('http_logs.redaction.body'),
+        ));
+
         $this->app->singleton(HttpLogClientFactory::class);
         $this->app->singleton(HttpLogManager::class);
 
@@ -78,7 +91,9 @@ class ElasticAuditServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(ActivityLogger::class);
+        $this->app->singleton(ActivityLogger::class, fn (): ActivityLogger => new ActivityLogger(
+            new SensitiveDataRedactor(body: $this->redactionRules('activity_logs.redaction')),
+        ));
 
         $this->app->singleton(ActivityDashboardQuery::class, function (Application $app) {
             return new ActivityDashboardQuery(
@@ -86,6 +101,17 @@ class ElasticAuditServiceProvider extends ServiceProvider
                 readAlias: $app['config']['activity_logs']['index_alias'],
             );
         });
+    }
+
+    /**
+     * Build a RedactionRules from the 'allow'/'block' arrays under a config key.
+     */
+    private function redactionRules(string $configKey): RedactionRules
+    {
+        return new RedactionRules(
+            allow: (array) config("{$configKey}.allow", []),
+            block: (array) config("{$configKey}.block", []),
+        );
     }
 
     public function boot(): void
