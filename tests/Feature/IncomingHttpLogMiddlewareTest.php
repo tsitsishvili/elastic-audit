@@ -186,6 +186,65 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         Bus::assertDispatched(LogHttpRequestJob::class);
     }
 
+    public function test_middleware_records_external_id_and_user_id_from_attributes(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-with-ids', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_external_id', 'ext-abc-123');
+            request()->attributes->set('third_party_user_id', '42');
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-with-ids', [])->assertOk();
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->externalId === 'ext-abc-123'
+                && $job->data->userId === 42;
+        });
+    }
+
+    public function test_middleware_leaves_external_id_and_user_id_null_when_attributes_absent(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-without-ids', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-without-ids', [])->assertOk();
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->externalId === null
+                && $job->data->userId === null;
+        });
+    }
+
+    public function test_middleware_ignores_non_numeric_user_id_attribute(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-bad-user-id', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_user_id', 'not-a-number');
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-bad-user-id', [])->assertOk();
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->userId === null;
+        });
+    }
+
     public function test_middleware_logs_the_response_body(): void
     {
         Bus::fake();

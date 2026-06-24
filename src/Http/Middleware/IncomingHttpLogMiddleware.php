@@ -29,6 +29,8 @@ class IncomingHttpLogMiddleware
      *   third_party_provider   — string matching a case in your Provider enum
      *   third_party_event_type — string matching a case in your HttpLogEventType enum
      *   third_party_entity_type / third_party_entity_id — optional entity context
+     *   third_party_external_id — optional provider-side identifier (string)
+     *   third_party_user_id     — optional acting user id (int)
      *
      * Register your enum classes in config:
      *   http_logs.enums.provider, .event_type, .entity_type
@@ -64,6 +66,8 @@ class IncomingHttpLogMiddleware
         $context = HttpLogContext::forEntity(
             entityType: $entityType,
             entityId: $entityId,
+            externalId: $this->resolveExternalId($request->attributes->get('third_party_external_id')),
+            userId: $this->resolveUserId($request->attributes->get('third_party_user_id')),
         );
 
         $this->logger->logIncoming(
@@ -125,5 +129,25 @@ class IncomingHttpLogMiddleware
         }
 
         return $resolved instanceof EntityTypeContract ? $resolved : null;
+    }
+
+    private function resolveExternalId(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = (string) $value;
+
+        return $value === '' ? null : $value;
+    }
+
+    private function resolveUserId(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return (int) $value;
     }
 }

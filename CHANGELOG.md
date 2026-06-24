@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-24
+
 ### Added
 
+- `IncomingHttpLogMiddleware` now records the optional `external.id` and `user_id` fields for incoming callbacks from the server-set request attributes `third_party_external_id` (string) and `third_party_user_id` (int) — read only from `$request->attributes`, never URL segments or request input. An empty `third_party_external_id` and a non-numeric `third_party_user_id` are both treated as null. Brings incoming logging to parity with outgoing calls, which already populate these via `HttpLogContext`.
 - `http_logs.redaction` config with `allow` and `block` lists so consuming apps can tune redaction without forking the package, kept separate per surface under `redaction.headers` and `redaction.body`. `block` adds extra names to redact (word-matched, like the built-ins); `allow` exempts specific names even when a built-in or `block` rule matches (exact match, takes precedence). `SensitiveDataRedactor`/`PaymentRedactor` accept a `RedactionRules` value object per surface and are bound as singletons that read the config.
 - Activity logging now redacts the `changes` and `metadata` maps at capture using the same rules as the HTTP logger (so model attribute diffs like `password`/`email` no longer reach Elasticsearch in clear text). Tunable via the new `activity_logs.redaction` `allow`/`block` config. `ActivityLogger` accepts a `SensitiveDataRedactor` and is bound with one built from the activity config.
 
