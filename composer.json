@@ -1,7 +1,21 @@
 {
     "name": "tsitsishvili/elastic-audit",
-    "description": "Laravel package for logging outgoing and incoming third-party HTTP requests to Elasticsearch.",
+    "description": "Laravel package that logs third-party HTTP traffic (outgoing requests and incoming callbacks) and actor/model activity to a dedicated Elasticsearch cluster, with redaction, queued indexing, sampling, and optional dashboards.",
     "type": "library",
+    "keywords": [
+        "laravel",
+        "elasticsearch",
+        "audit",
+        "audit-log",
+        "audit-trail",
+        "logging",
+        "http-client",
+        "http-logging",
+        "activity-log",
+        "observability",
+        "guzzle",
+        "redaction"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.2",
