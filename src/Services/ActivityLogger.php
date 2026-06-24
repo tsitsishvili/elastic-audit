@@ -7,10 +7,16 @@ namespace Tsitsishvili\ElasticAudit\Services;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
+use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Throwable;
 
 class ActivityLogger
 {
+    public function __construct(
+        private readonly SensitiveDataRedactor $redactor = new SensitiveDataRedactor(),
+    ) {
+    }
+
     public function record(
         string $action,
         ActivityLogContext $context,
@@ -28,8 +34,8 @@ class ActivityLogger
             $data = ActivityLogData::make(
                 action: $action,
                 context: $context,
-                changes: $changes,
-                metadata: $metadata,
+                changes: (array) $this->redactor->redactBody($changes),
+                metadata: (array) $this->redactor->redactBody($metadata),
                 success: $success,
                 errorClass: $errorClass,
                 errorMessage: $errorMessage,
