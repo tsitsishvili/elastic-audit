@@ -6,7 +6,8 @@
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0 || ^13.0",
-        "elasticsearch/elasticsearch": "^8.0 || ^9.0"
+        "elasticsearch/elasticsearch": "^8.5 || ^9.0",
+        "guzzlehttp/psr7": "^2.0"
     },
     "require-dev": {
         "orchestra/testbench": "^10.0 || ^11.0",
@@ -32,6 +33,9 @@
                 "ActivityLog": "Tsitsishvili\\ElasticAudit\\Facades\\ActivityLog"
             }
         }
+    },
+    "scripts": {
+        "test": "phpunit"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
