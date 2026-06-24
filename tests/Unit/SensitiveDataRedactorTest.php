@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
+use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use PHPUnit\Framework\TestCase;
 
@@ -59,6 +60,57 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame('[REDACTED]', $result['x-api-key']);
     }
 
+    public function test_redacts_vendor_prefixed_headers_by_word(): void
+    {
+        $headers = [
+            'X-Asd-Signature'   => 'sig-abc',
+            'Postman-Token'     => 'tok-xyz',
+            'X-Csrf-Token'      => 'csrf-123',
+            'X-Hub-Signature'   => 'sha256=...',
+            'X-Hmac'            => 'mac-1',
+            'X-Client-Secret'   => 'shhh',
+            'X-Api-Key'         => 'ak-1',
+            'X-Functions-Key'   => 'func-key',
+            'Idempotency-Key'   => 'idem-1',
+            'X-Request-Id'      => 'req-1',
+            'Content-Type'      => 'application/json',
+        ];
+
+        $result = $this->redactor->redactHeaders($headers);
+
+        $this->assertSame('[REDACTED]', $result['X-Asd-Signature']);
+        $this->assertSame('[REDACTED]', $result['Postman-Token']);
+        $this->assertSame('[REDACTED]', $result['X-Csrf-Token']);
+        $this->assertSame('[REDACTED]', $result['X-Hub-Signature']);
+        $this->assertSame('[REDACTED]', $result['X-Hmac']);
+        $this->assertSame('[REDACTED]', $result['X-Client-Secret']);
+        $this->assertSame('[REDACTED]', $result['X-Api-Key']);
+        $this->assertSame('[REDACTED]', $result['X-Functions-Key']);
+        // 'key' as a trailing word redacts idempotency keys too.
+        $this->assertSame('[REDACTED]', $result['Idempotency-Key']);
+        $this->assertSame('req-1', $result['X-Request-Id']);
+        $this->assertSame('application/json', $result['Content-Type']);
+    }
+
+    public function test_does_not_redact_headers_with_secret_words_embedded_mid_word(): void
+    {
+        $headers = [
+            'X-Monkey-Business' => 'banana', // 'key' embedded in 'monkey'
+            'X-Monkey'          => 'banana',
+            'X-Keyword'         => 'sale',    // 'key' is a prefix, not a word
+            'X-Token-Type'      => 'bearer',  // 'token' is not the final word
+            'X-Request-Id'      => 'req-1',
+        ];
+
+        $result = $this->redactor->redactHeaders($headers);
+
+        $this->assertSame('banana', $result['X-Monkey-Business']);
+        $this->assertSame('banana', $result['X-Monkey']);
+        $this->assertSame('sale', $result['X-Keyword']);
+        $this->assertSame('bearer', $result['X-Token-Type']);
+        $this->assertSame('req-1', $result['X-Request-Id']);
+    }
+
     public function test_preserves_header_key_when_redacting(): void
     {
         $result = $this->redactor->redactHeaders(['Authorization' => 'Bearer token']);
@@ -89,7 +141,7 @@ class SensitiveDataRedactorTest extends TestCase
 
         $result = $this->redactor->redactBody($body);
 
-        $this->assertSame('john', $result['username']);
+        $this->assertSame('[REDACTED]', $result['username']);
         $this->assertSame('[REDACTED]', $result['password']);
         $this->assertSame('[REDACTED]', $result['token']);
         $this->assertSame('[REDACTED]', $result['access_token']);
@@ -102,6 +154,121 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame('[REDACTED]', $result['cvc']);
         $this->assertSame('[REDACTED]', $result['personal_id']);
         $this->assertSame(42, $result['order_id']);
+    }
+
+    public function test_redacts_credential_fields(): void
+    {
+        $body = [
+            'username'   => 'john',
+            'user_name'  => 'john.doe',
+            'login'      => 'jdoe',
+            'password'   => 'secret123',
+            'pwd'        => 'secret123',
+            'passwd'     => 'secret123',
+            'passphrase' => 'correct horse battery staple',
+            'pin'        => '1234',
+            'otp'        => '987654',
+            'order_id'   => 7,
+        ];
+
+        $result = $this->redactor->redactBody($body);
+
+        foreach (['username', 'user_name', 'login', 'password', 'pwd',
+            'passwd', 'passphrase', 'pin', 'otp'] as $key) {
+            $this->assertSame('[REDACTED]', $result[$key], "Key '{$key}' was not redacted");
+        }
+
+        $this->assertSame(7, $result['order_id']);
+    }
+
+    public function test_redacts_compound_body_keys_by_word(): void
+    {
+        $body = [
+            'password_confirmation' => 'secret',
+            'new_password'          => 'secret',
+            'webhook_secret'        => 'shhh',
+            'client_secret'         => 'shhh',
+            'csrf_token'            => 'tok',
+            'refresh_token'         => 'tok',
+            'webhook_signature'     => 'sig',
+            'hmac_signature'        => 'mac',
+            'authorization_code'    => 'code',
+            'credentials'           => ['a' => 'b'],
+            'order_id'              => 5,
+        ];
+
+        $result = $this->redactor->redactBody($body);
+
+        foreach (['password_confirmation', 'new_password', 'webhook_secret',
+            'client_secret', 'csrf_token', 'refresh_token', 'webhook_signature',
+            'hmac_signature', 'authorization_code', 'credentials'] as $key) {
+            $this->assertSame('[REDACTED]', $result[$key], "Key '{$key}' was not redacted");
+        }
+
+        $this->assertSame(5, $result['order_id']);
+    }
+
+    public function test_redacts_camel_case_body_keys(): void
+    {
+        $body = [
+            'accessToken'    => 'at',  // word-matched after normalization
+            'webhookSecret'  => 'sh',
+            'cardNumber'     => '4111111111111111', // exact key after normalization
+            'apiKey'         => 'ak',
+            'orderId'        => 5,
+        ];
+
+        $result = $this->redactor->redactBody($body);
+
+        $this->assertSame('[REDACTED]', $result['accessToken']);
+        $this->assertSame('[REDACTED]', $result['webhookSecret']);
+        $this->assertSame('[REDACTED]', $result['cardNumber']);
+        $this->assertSame('[REDACTED]', $result['apiKey']);
+        $this->assertSame(5, $result['orderId']);
+    }
+
+    public function test_keeps_token_qualifier_prefixes_visible(): void
+    {
+        // 'token' is a trailing-word match, so OAuth metadata stays readable
+        // while the secret-bearing token fields are still redacted.
+        $body = [
+            'token_type'       => 'Bearer',
+            'token_expires_in' => 3600,
+            'tokenType'        => 'Bearer',
+            'access_token'     => 'at',
+            'tokens'           => ['a', 'b'],
+        ];
+
+        $result = $this->redactor->redactBody($body);
+
+        $this->assertSame('Bearer', $result['token_type']);
+        $this->assertSame(3600, $result['token_expires_in']);
+        $this->assertSame('Bearer', $result['tokenType']);
+        $this->assertSame('[REDACTED]', $result['access_token']);
+        $this->assertSame('[REDACTED]', $result['tokens']);
+    }
+
+    public function test_does_not_redact_ambiguous_words_of_short_keys(): void
+    {
+        // Short exact-match keys (pin, pan, bin, key, cvv) must not leak into
+        // ordinary field names via word matching.
+        $body = [
+            'shipping_address' => '12 Main St', // contains 'pin'
+            'company_name'     => 'Acme',       // contains 'pan'
+            'keyword'          => 'sale',       // 'key' is a prefix, not a word
+            'monkey'           => 'george',     // 'key' embedded mid-word
+            'binary_flag'      => true,         // contains 'bin'
+            'order_id'         => 7,
+        ];
+
+        $result = $this->redactor->redactBody($body);
+
+        $this->assertSame('12 Main St', $result['shipping_address']);
+        $this->assertSame('Acme', $result['company_name']);
+        $this->assertSame('sale', $result['keyword']);
+        $this->assertSame('george', $result['monkey']);
+        $this->assertTrue($result['binary_flag']);
+        $this->assertSame(7, $result['order_id']);
     }
 
     public function test_redacts_pii_fields(): void
@@ -180,6 +347,114 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame('raw string', $this->redactor->redactBody('raw string'));
         $this->assertNull($this->redactor->redactBody(null));
         $this->assertSame(42, $this->redactor->redactBody(42));
+    }
+
+    // ── Allow / block overrides ──────────────────────────────────────────────
+
+    public function test_allow_list_keeps_named_body_keys(): void
+    {
+        $redactor = new SensitiveDataRedactor(body: new RedactionRules(allow: ['email', 'card_holder']));
+
+        $result = $redactor->redactBody([
+            'email'       => 'user@example.com',
+            'card_holder' => 'John Doe',
+            'password'    => 'secret',
+        ]);
+
+        $this->assertSame('user@example.com', $result['email']);
+        $this->assertSame('John Doe', $result['card_holder']);
+        $this->assertSame('[REDACTED]', $result['password']);
+    }
+
+    public function test_allow_list_matches_after_normalization(): void
+    {
+        $redactor = new SensitiveDataRedactor(body: new RedactionRules(allow: ['access_token']));
+
+        $result = $redactor->redactBody([
+            'accessToken' => 'at',  // normalizes to access_token
+            'csrf_token'  => 'ct',
+        ]);
+
+        $this->assertSame('at', $result['accessToken']);
+        $this->assertSame('[REDACTED]', $result['csrf_token']);
+    }
+
+    public function test_allow_list_keeps_named_headers(): void
+    {
+        $redactor = new SensitiveDataRedactor(headers: new RedactionRules(allow: ['x-api-key']));
+
+        $result = $redactor->redactHeaders([
+            'X-Api-Key'     => 'ak',
+            'Authorization' => 'Bearer t',
+        ]);
+
+        $this->assertSame('ak', $result['X-Api-Key']);
+        $this->assertSame('[REDACTED]', $result['Authorization']);
+    }
+
+    public function test_block_list_redacts_additional_body_keys(): void
+    {
+        $redactor = new SensitiveDataRedactor(body: new RedactionRules(block: ['reference']));
+
+        $result = $redactor->redactBody([
+            'customer_reference' => 'CR-1', // word 'reference'
+            'reference'          => 'R-1',
+            'order_id'           => 7,
+        ]);
+
+        $this->assertSame('[REDACTED]', $result['customer_reference']);
+        $this->assertSame('[REDACTED]', $result['reference']);
+        $this->assertSame(7, $result['order_id']);
+    }
+
+    public function test_block_list_redacts_additional_headers(): void
+    {
+        $redactor = new SensitiveDataRedactor(headers: new RedactionRules(block: ['x-internal-trace']));
+
+        $result = $redactor->redactHeaders([
+            'X-Internal-Trace' => 'trace-1',
+            'X-Request-Id'     => 'req-1',
+        ]);
+
+        $this->assertSame('[REDACTED]', $result['X-Internal-Trace']);
+        $this->assertSame('req-1', $result['X-Request-Id']);
+    }
+
+    public function test_allow_takes_precedence_over_block_and_defaults(): void
+    {
+        $redactor = new SensitiveDataRedactor(body: new RedactionRules(allow: ['email'], block: ['email']));
+
+        $result = $redactor->redactBody(['email' => 'user@example.com']);
+
+        $this->assertSame('user@example.com', $result['email']);
+    }
+
+    public function test_header_and_body_rules_are_independent(): void
+    {
+        // Header allow/block must not affect body keys, and vice versa.
+        $redactor = new SensitiveDataRedactor(
+            headers: new RedactionRules(allow: ['authorization'], block: ['x-trace']),
+            body: new RedactionRules(allow: ['email'], block: ['reference']),
+        );
+
+        $headers = $redactor->redactHeaders([
+            'Authorization' => 'Bearer t', // allowed for headers → kept
+            'X-Trace'       => 'tr',        // blocked for headers → redacted
+            'X-Reference'   => 'r',         // body block must not apply → kept
+        ]);
+        $body = $redactor->redactBody([
+            'email'              => 'user@example.com', // allowed for body → kept
+            'customer_reference' => 'CR-1',             // blocked for body → redacted
+            'authorization'      => 'a',                // header allow must not apply → redacted
+        ]);
+
+        $this->assertSame('Bearer t', $headers['Authorization']);
+        $this->assertSame('[REDACTED]', $headers['X-Trace']);
+        $this->assertSame('r', $headers['X-Reference']);
+
+        $this->assertSame('user@example.com', $body['email']);
+        $this->assertSame('[REDACTED]', $body['customer_reference']);
+        $this->assertSame('[REDACTED]', $body['authorization']);
     }
 
     // ── buildPayload — preview and hash derived from redacted content ────────

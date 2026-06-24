@@ -64,4 +64,32 @@ return [
      * Example: ['tbc', 'bog', 'credo'...]
      */
     'payment_provider_values' => [],
+
+    /*
+     * Redaction overrides applied on top of the package's built-in rules, kept
+     * separate for request/response headers and JSON body keys. Names are
+     * matched case-insensitively after normalization (camelCase and kebab-case
+     * fold to snake_case, so 'accessToken' == 'access-token' == 'access_token').
+     *
+     * 'block'  Extra names to ALWAYS redact, in addition to the defaults.
+     *          Matched as whole words in any position, exactly like the
+     *          built-ins — e.g. 'customer_reference' here also redacts
+     *          'customerReference', and the word 'reference' redacts any
+     *          '*_reference' key.
+     * 'allow'  Names to NEVER redact, even when a built-in (or 'block') rule
+     *          would match. Matched exactly (not as a word), so it un-redacts
+     *          only the named field, not a whole family. Takes precedence over
+     *          everything else. Use with care: anything listed here is stored
+     *          in clear text. Example: body ['email'] to keep emails in logs.
+     */
+    'redaction' => [
+        'headers' => [
+            'block' => [],
+            'allow' => [],
+        ],
+        'body' => [
+            'block' => [],
+            'allow' => [],
+        ],
+    ],
 ];
