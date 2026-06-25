@@ -76,4 +76,38 @@ class ActivityDashboardTest extends TestCase
             ->assertSee('HTTP Logs')
             ->assertSee(route('http-logs.overview', [], false), false);
     }
+
+    public function test_overview_renders_activity_chart_when_data_present(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+        $fake->searchResponse = [
+            'hits'         => ['total' => ['value' => 5], 'hits' => []],
+            'aggregations' => [
+                'by_action'  => ['buckets' => [['key' => 'user.login', 'doc_count' => 5]]],
+                'by_actor'   => ['buckets' => [['key' => 'user', 'doc_count' => 5]]],
+                'success'    => ['buckets' => [
+                    ['key' => 1, 'key_as_string' => 'true', 'doc_count' => 4],
+                    ['key' => 0, 'key_as_string' => 'false', 'doc_count' => 1],
+                ]],
+                'over_time'  => ['buckets' => [[
+                    'key_as_string' => '2026-06-24T00:00:00.000Z',
+                    'key'           => 1750723200000,
+                    'doc_count'     => 5,
+                    'success'       => ['buckets' => [
+                        ['key' => 1, 'key_as_string' => 'true', 'doc_count' => 4],
+                        ['key' => 0, 'key_as_string' => 'false', 'doc_count' => 1],
+                    ]],
+                ]]],
+            ],
+        ];
+
+        $this->get(route('activity-logs.overview', [], false))
+            ->assertOk()
+            ->assertSee('Activity over time')
+            ->assertSee('id="activityChart"', false)
+            ->assertSee('Interval:')
+            ->assertSee('Success Rate')
+            ->assertSee('80%');
+    }
 }

@@ -12,8 +12,11 @@
             document.documentElement.classList.toggle('dark', dark);
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {{-- Tailwind Play CDN: version-pinned for reproducibility. No SRI: the Play CDN sends no CORS header, so integrity+crossorigin would block it. --}}
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"
+            integrity="sha384-X9kJyAubVxnP0hcA+AMMs21U445qsnqhnUF8EBlEpP3a42Kh/JwWjlv2ZcvGfphb"
+            crossorigin="anonymous"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',

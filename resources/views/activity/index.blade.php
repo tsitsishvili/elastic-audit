@@ -21,7 +21,7 @@
     $hasFilters = ! empty($filters);
 @endphp
 
-<div class="mb-4 flex flex-wrap items-center gap-2">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     {{-- Filters form --}}
     <form method="GET" class="flex flex-wrap items-center gap-2">
         <select name="action" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
@@ -52,6 +52,30 @@
             <a href="{{ route('activity-logs.logs.index') }}" class="text-sm text-red-500 hover:underline">Clear filters</a>
         @endif
     </form>
+
+    {{-- Live: auto-refresh the list to surface new activity as it lands. --}}
+    <button type="button"
+            x-data="{
+                on: localStorage.getItem('tphl_live_activity') === '1',
+                timer: null,
+                toggle() {
+                    this.on = !this.on;
+                    localStorage.setItem('tphl_live_activity', this.on ? '1' : '0');
+                    if (this.on) { this.timer = setInterval(() => location.reload(), 10000); }
+                    else if (this.timer) { clearInterval(this.timer); this.timer = null; }
+                },
+            }"
+            x-init="if (on) { timer = setInterval(() => location.reload(), 10000); }"
+            @click="toggle()"
+            :class="on
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
+            :title="on ? 'Live: refreshing every 10s' : 'Auto-refresh the list every 10s'"
+            class="inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-sm font-medium transition">
+        <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'"></span>
+        Live
+        <span x-show="on" x-cloak class="text-[11px] opacity-70">10s</span>
+    </button>
 </div>
 
 @if($error)

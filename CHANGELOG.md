@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-06-25
+
+### Added
+
+- **Activity overview charts**: the activity dashboard overview (`activity-logs.overview`) now renders an "Activity over time" stacked bar chart (successful vs failed events per bucket), fed by the existing `over_time` date-histogram aggregation. Adds an **interval** selector (per hour / per day) alongside the range pills, a **Success Rate** stat card, and renders Top Actions / By Actor Type as proportional bar rows. Mirrors the HTTP overview interactions: click a bar to open matching logs for that bucket, drag across to zoom into a sub-range, and export each chart to PNG.
+- HTTP overview charts support **drag-to-zoom**: dragging horizontally across any chart re-opens the overview scoped to that sub-range (`range=custom` with the corresponding `from`/`to`). A single click still opens the matching logs for one bucket.
+- **Live** auto-refresh toggle on both log list views (`http-logs.logs.index` and `activity-logs.logs.index`): reloads the list every 10s, with the on/off state persisted in `localStorage` (`tphl_live_logs` / `tphl_live_activity`). Off by default. Mirrors the existing Live toggle on the HTTP overview.
+
+### Changed
+
+- HTTP overview dashboard: the Volume / Latency / Error-rate charts now render one per row at a larger height (was a cramped three-up grid), so trends are easier to read.
+
+### Security
+
+- Dashboard CDN assets are now **version-pinned**, and the jsDelivr-hosted scripts (Chart.js `4.4.7`, Alpine.js `3.14.8`) carry Subresource Integrity (`integrity` + `crossorigin="anonymous"`) so a compromised CDN cannot inject altered code. The Tailwind Play CDN is pinned to `3.4.16` but intentionally left without SRI: it serves no CORS header, so `integrity`+`crossorigin` would cause the browser to block it.
+
+### Fixed
+
+- HTTP overview "Custom range": the From/To `datetime-local` inputs now populate after a chart drag-to-zoom. The drag writes ISO `...Z` `from`/`to` params, which a `datetime-local` input rejects; the inputs now normalize incoming values to the app timezone (`Y-m-d\TH:i`), matching the log list view.
+
 ## [2.1.0] - 2026-06-24
 
 ### Added

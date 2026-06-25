@@ -86,6 +86,28 @@
             </div>
             <div class="flex items-center gap-2">
                 <button type="button"
+                        x-data="{
+                            on: localStorage.getItem('tphl_live_logs') === '1',
+                            timer: null,
+                            toggle() {
+                                this.on = !this.on;
+                                localStorage.setItem('tphl_live_logs', this.on ? '1' : '0');
+                                if (this.on) { this.timer = setInterval(() => location.reload(), 10000); }
+                                else if (this.timer) { clearInterval(this.timer); this.timer = null; }
+                            },
+                        }"
+                        x-init="if (on) { timer = setInterval(() => location.reload(), 10000); }"
+                        @click="toggle()"
+                        :class="on
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'"
+                        :title="on ? 'Live: refreshing every 10s' : 'Auto-refresh the list every 10s'"
+                        class="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition">
+                    <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'"></span>
+                    Live
+                    <span x-show="on" x-cloak class="text-[11px] opacity-70">10s</span>
+                </button>
+                <button type="button"
                         x-data="{ copied: false }"
                         @click="navigator.clipboard.writeText(location.href).then(() => { copied = true; setTimeout(() => copied = false, 1500); })"
                         class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">

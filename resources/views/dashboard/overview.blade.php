@@ -78,6 +78,19 @@
 
     $timeoutCount = (int) ($aggs['timeouts']['doc_count'] ?? 0);
 
+    // datetime-local inputs only accept `YYYY-MM-DDTHH:MM` (no seconds/zone), so normalize
+    // any incoming value (e.g. an ISO `...Z` written by the chart drag-to-zoom) to the app timezone.
+    $fmtLocal = function (?string $ts) use ($timezone): string {
+        if (! $ts) {
+            return '';
+        }
+        try {
+            return \Illuminate\Support\Carbon::parse($ts)->timezone($timezone)->format('Y-m-d\TH:i');
+        } catch (\Throwable) {
+            return '';
+        }
+    };
+
     $cards = [
         ['label' => 'Total requests', 'value' => number_format($total), 'sub' => $rangeSub, 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => $logsLink()],
         ['label' => 'Success rate', 'value' => $successRate . '%', 'sub' => number_format($successCount) . ' ok', 'accent' => 'text-emerald-600', 'link' => $logsLink(['success' => 'true'])],
@@ -140,12 +153,12 @@
                 <div class="flex flex-wrap items-end gap-4">
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="from-input">From</label>
-                        <input id="from-input" type="datetime-local" name="from" value="{{ request('from') }}"
+                        <input id="from-input" type="datetime-local" name="from" value="{{ $fmtLocal(request('from')) }}"
                                class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
                     </div>
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="to-input">To</label>
-                        <input id="to-input" type="datetime-local" name="to" value="{{ request('to') }}"
+                        <input id="to-input" type="datetime-local" name="to" value="{{ $fmtLocal(request('to')) }}"
                                class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
                     </div>
                     <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">Apply</button>
@@ -188,7 +201,7 @@
         ];
     @endphp
 
-    <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="mt-4 grid grid-cols-1 gap-4">
         @foreach ($miniCharts as $chart)
             @php
                 // The Errors card shows a clean "all good" state when there are no errors at all.
@@ -214,7 +227,7 @@
                         </button>
                     @endif
                 </div>
-                <div class="mt-3 h-56">
+                <div class="mt-3 h-72 sm:h-80">
                     @if ($noErrors)
                         <div class="flex h-full flex-col items-center justify-center text-center">
                             <span class="text-3xl">✓</span>
@@ -228,7 +241,7 @@
                     @endif
                 </div>
                 @if ($showCanvas)
-                    <p class="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Click a point to open matching logs</p>
+                    <p class="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Click a point to open matching logs · drag across to zoom into that range</p>
                 @endif
             </div>
         @endforeach
@@ -319,7 +332,9 @@
 
 @push('scripts')
     @if ($hasData)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+                integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
+                crossorigin="anonymous"></script>
         <script>
             (function () {
                 const tz       = @json($timezone);
@@ -327,6 +342,8 @@
                 const perDay   = interval === '1d';
                 const labels   = @json($chartLabels);
                 const logsBase = @json(route('http-logs.logs.index', [], false));
+                const overviewBase = @json(route('http-logs.overview', [], false));
+                const bucketMs = perDay ? 86400000 : 3600000;
 
                 const axisOpts = perDay
                     ? { timeZone: tz, month: 'short', day: 'numeric' }
@@ -395,8 +412,76 @@
                     },
                 };
 
+                // Set by a drag so the trailing click doesn't also trigger onClick navigation.
+                let suppressClick = false;
+
+                // Drag horizontally across a chart to zoom the whole dashboard into the
+                // selected sub-range (re-renders the overview with a custom from/to).
+                const dragSelect = {
+                    id: 'dragSelect',
+                    _isDown: (t) => t === 'mousedown' || t === 'touchstart',
+                    _isMove: (t) => t === 'mousemove' || t === 'touchmove',
+                    _isUp:   (t) => t === 'mouseup' || t === 'touchend',
+                    afterEvent(chart, args) {
+                        const e = args.event;
+                        const area = chart.chartArea;
+                        const st = chart.$drag || (chart.$drag = { active: false, startX: null, curX: null });
+                        const clamp = (x) => Math.min(Math.max(x, area.left), area.right);
+
+                        if (dragSelect._isDown(e.type)) {
+                            st.active = true;
+                            st.startX = st.curX = clamp(e.x);
+                        } else if (dragSelect._isMove(e.type) && st.active) {
+                            st.curX = clamp(e.x);
+                            if (e.native) e.native.target.style.cursor = 'col-resize';
+                            args.changed = true;
+                        } else if (st.active && (dragSelect._isUp(e.type) || e.type === 'mouseout')) {
+                            const { startX, curX } = st;
+                            st.active = false;
+                            st.startX = st.curX = null;
+                            args.changed = true;
+
+                            // A short drag (or leaving the chart) is treated as a click, not a zoom.
+                            if (e.type === 'mouseout' || startX === null || Math.abs(curX - startX) < 8) return;
+
+                            const xScale = chart.scales.x;
+                            const last = labels.length - 1;
+                            const idx = (px) => Math.max(0, Math.min(last, Math.round(xScale.getValueForPixel(px))));
+                            const i1 = idx(Math.min(startX, curX));
+                            const i2 = idx(Math.max(startX, curX));
+
+                            suppressClick = true; // the trailing click after a drag must not also open logs
+
+                            const start = new Date(labels[i1]);
+                            const end   = new Date(new Date(labels[i2]).getTime() + bucketMs);
+                            const qs = new URLSearchParams(window.location.search);
+                            qs.set('range', 'custom');
+                            qs.set('interval', interval);
+                            qs.set('from', start.toISOString());
+                            qs.set('to', end.toISOString());
+                            window.location = overviewBase + '?' + qs.toString();
+                        }
+                    },
+                    afterDraw(chart) {
+                        const st = chart.$drag;
+                        if (!st || !st.active || st.startX === null) return;
+                        const area = chart.chartArea;
+                        const ctx = chart.ctx;
+                        const x = Math.min(st.startX, st.curX);
+                        const w = Math.abs(st.curX - st.startX);
+                        ctx.save();
+                        ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
+                        ctx.strokeStyle = 'rgba(99, 102, 241, 0.5)';
+                        ctx.lineWidth = 1;
+                        ctx.fillRect(x, area.top, w, area.bottom - area.top);
+                        ctx.strokeRect(x, area.top, w, area.bottom - area.top);
+                        ctx.restore();
+                    },
+                };
+
                 // Click a bucket → open the log list filtered to that time window.
                 const onClick = (evt, els) => {
+                    if (suppressClick) { suppressClick = false; return; }
                     if (!els.length) return;
                     const i = els[0].index;
                     const start = new Date(labels[i]);
@@ -418,8 +503,15 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
+                    // mousedown/mouseup/touch* are needed so the dragSelect plugin sees the full gesture.
+                    events: ['mousemove', 'mouseout', 'click', 'mousedown', 'mouseup', 'touchstart', 'touchmove', 'touchend'],
                     onClick,
-                    onHover: (e, els) => { if (e.native) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+                    onHover: (e, els, chart) => {
+                        if (!e.native) return;
+                        e.native.target.style.cursor = (chart.$drag && chart.$drag.active)
+                            ? 'col-resize'
+                            : (els.length ? 'pointer' : 'default');
+                    },
                     plugins: {
                         legend: opts.legend
                             ? { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, color: '#64748b' } }
@@ -457,7 +549,7 @@
                         ],
                     },
                     options: baseOptions({ stacked: true, legend: true }),
-                    plugins: [crosshair, whiteBg],
+                    plugins: [crosshair, dragSelect, whiteBg],
                 });
 
                 // Latency — avg (filled) + p95 (dashed), in ms.
@@ -475,7 +567,7 @@
                         y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', precision: 0, callback: (v) => v + ' ms' } },
                         tooltipLabel: (ctx) => ctx.dataset.label + ': ' + (ctx.parsed.y == null ? '—' : ctx.parsed.y + ' ms'),
                     }),
-                    plugins: [crosshair, peakLabel, whiteBg],
+                    plugins: [crosshair, peakLabel, dragSelect, whiteBg],
                 });
 
                 // Error rate — % of 4xx + 5xx per bucket. (Absent when the window has no errors.)
@@ -493,7 +585,7 @@
                             y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } },
                             tooltipLabel: (ctx) => 'Error rate: ' + ctx.parsed.y + '%',
                         }),
-                        plugins: [crosshair, peakLabel, whiteBg],
+                        plugins: [crosshair, peakLabel, dragSelect, whiteBg],
                     });
                 }
 
