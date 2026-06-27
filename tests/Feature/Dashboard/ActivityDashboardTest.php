@@ -104,10 +104,11 @@ class ActivityDashboardTest extends TestCase
 
         $this->get(route('activity-logs.overview', [], false))
             ->assertOk()
+            ->assertSee('Activity trail')
             ->assertSee('Activity over time')
             ->assertSee('id="activityChart"', false)
-            ->assertSee('Interval:')
-            ->assertSee('Success Rate')
+            ->assertSee('Interval')
+            ->assertSee('Success rate')
             ->assertSee('80%');
     }
 }

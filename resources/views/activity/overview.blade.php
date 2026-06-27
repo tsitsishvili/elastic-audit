@@ -16,8 +16,6 @@
     $actionMax  = (int) ($topActions->max('doc_count') ?: 1);
     $actorMax   = (int) ($topActors->max('doc_count') ?: 1);
 
-    $withParams = fn (array $overrides) => request()->fullUrlWithQuery($overrides);
-
     // Time series feeding the "Activity over time" chart (success vs failed per bucket).
     $timeBuckets = $aggs['over_time']['buckets'] ?? [];
     $chartLabels = array_map(fn ($b) => $b['key_as_string'] ?? (string) ($b['key'] ?? ''), $timeBuckets);
@@ -29,61 +27,147 @@
     $seriesFailure = array_map(fn ($b) => $bucketSuccess($b, 'false'), $timeBuckets);
 
     $successRate = $total > 0 ? round($successCount / $total * 100, 1) : 0.0;
+    $failureRate = $total > 0 ? round($failureCount / $total * 100, 1) : 0.0;
 
     $hasData  = $total > 0;
     $perLabel = $interval === '1d' ? 'day' : 'hour';
+    $rangeLabel = $range === 'custom' ? 'Custom range' : ($ranges[$range]['label'] ?? 'Last 24 hours');
+    $rangeSub   = $range === 'custom' ? 'custom range' : ($ranges[$range]['sub'] ?? 'last 24h');
+
+    $window = array_filter([
+        'from' => $filters['from'] ?? null,
+        'to'   => $filters['to'] ?? null,
+    ], fn ($v) => $v !== null && $v !== '');
+
+    $logsLink = fn (array $params = []) => route('activity-logs.logs.index', $window + $params, false);
+
+    $fmtLocal = function (?string $ts) use ($timezone): string {
+        if (! $ts) {
+            return '';
+        }
+        try {
+            return \Illuminate\Support\Carbon::parse($ts)->timezone($timezone)->format('Y-m-d\TH:i');
+        } catch (\Throwable) {
+            return '';
+        }
+    };
+
+    $cards = [
+        ['label' => 'Total events', 'value' => number_format($total), 'sub' => $rangeSub, 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => $logsLink()],
+        ['label' => 'Success rate', 'value' => $successRate . '%', 'sub' => number_format($successCount) . ' ok', 'accent' => 'text-emerald-600', 'link' => $logsLink(['success' => 'true'])],
+        ['label' => 'Failed', 'value' => number_format($failureCount), 'sub' => $failureRate . '% of events', 'accent' => 'text-red-600', 'link' => $logsLink(['success' => 'false'])],
+        ['label' => 'Top actions', 'value' => number_format($topActions->count()), 'sub' => 'distinct actions', 'accent' => 'text-indigo-600', 'link' => $logsLink()],
+    ];
 @endphp
-
-<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex flex-wrap items-center gap-3">
-        <span class="text-sm text-slate-500 dark:text-slate-400">Range:</span>
-        @foreach($ranges as $key => $r)
-            <a href="{{ $withParams(['range' => $key]) }}"
-               class="rounded px-2.5 py-1 text-sm {{ $range === $key ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }} ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
-                {{ $r['label'] }}
-            </a>
-        @endforeach
-    </div>
-
-    <div class="flex flex-wrap items-center gap-3">
-        <span class="text-sm text-slate-500 dark:text-slate-400">Interval:</span>
-        @foreach($intervals as $key => $label)
-            <a href="{{ $withParams(['interval' => $key]) }}"
-               class="rounded px-2.5 py-1 text-sm {{ $interval === $key ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' }} ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
-                {{ $label }}
-            </a>
-        @endforeach
-    </div>
-</div>
 
 @if($error)
     <div class="mb-4 rounded bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
 @endif
 
-<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Events</div>
-        <div class="mt-1 text-3xl font-bold">{{ number_format($total) }}</div>
+<div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+        <div class="mb-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-900/70 dark:bg-indigo-950/40 dark:text-indigo-300">
+            {{ $rangeLabel }} · per {{ $perLabel }}
+        </div>
+        <h1 class="text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">Activity trail</h1>
+        <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Actor actions, model changes, failures, and entity history for the selected window.</p>
     </div>
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Success Rate</div>
-        <div class="mt-1 text-3xl font-bold text-indigo-600 dark:text-indigo-400">{{ $successRate }}%</div>
-    </div>
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Successful</div>
-        <div class="mt-1 text-3xl font-bold text-emerald-600 dark:text-emerald-400">{{ number_format($successCount) }}</div>
-    </div>
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Failed</div>
-        <div class="mt-1 text-3xl font-bold text-red-600 dark:text-red-400">{{ number_format($failureCount) }}</div>
+    <a href="{{ route('activity-logs.logs.index', [], false) }}"
+       class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700">
+        Browse activity →
+    </a>
+</div>
+
+<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    @foreach ($cards as $card)
+        <a href="{{ $card['link'] }}"
+           class="ea-focus ea-panel group min-h-[92px] rounded-lg border p-3.5 transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:hover:border-indigo-500">
+            <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $card['label'] }}</div>
+            <div class="mt-1.5 text-2xl font-semibold {{ $card['accent'] }}">{{ $card['value'] }}</div>
+            <div class="mt-1 text-xs text-slate-400 group-hover:text-indigo-500 dark:text-slate-500">{{ $card['sub'] }} →</div>
+        </a>
+    @endforeach
+</div>
+
+<div class="ea-panel mt-4 flex flex-wrap items-end justify-between gap-4 rounded-lg border p-4">
+    <form method="GET" action="{{ route('activity-logs.overview', [], false) }}"
+          class="flex flex-wrap items-end gap-4" x-data="{ range: @js($range) }">
+        <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="activity-range-select">Range</label>
+            <select id="activity-range-select" name="range" x-model="range"
+                    @change="$el.value !== 'custom' && $el.form.submit()"
+                    class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                @foreach ($ranges as $key => $meta)
+                    <option value="{{ $key }}" @selected($range === $key)>{{ $meta['label'] }}</option>
+                @endforeach
+                <option value="custom" @selected($range === 'custom')>Custom range</option>
+            </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="activity-interval-select">Interval</label>
+            <select id="activity-interval-select" name="interval" onchange="this.form.submit()"
+                    class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                @foreach ($intervals as $key => $label)
+                    <option value="{{ $key }}" @selected($interval === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <template x-if="range === 'custom'">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="activity-from-input">From</label>
+                    <input id="activity-from-input" type="datetime-local" name="from" value="{{ $fmtLocal(request('from')) }}"
+                           class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="activity-to-input">To</label>
+                    <input id="activity-to-input" type="datetime-local" name="to" value="{{ $fmtLocal(request('to')) }}"
+                           class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                </div>
+                <button type="submit" class="ea-focus h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700">Apply</button>
+            </div>
+        </template>
+
+        <noscript>
+            <button type="submit" class="ea-focus h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Apply</button>
+        </noscript>
+    </form>
+
+    <div class="flex items-center gap-2"
+         x-data="{
+            on: localStorage.getItem('tphl_live_activity_overview') === '1',
+            timer: null,
+            toggle() {
+                localStorage.setItem('tphl_live_activity_overview', this.on ? '1' : '0');
+                if (this.on) { this.timer = setInterval(() => location.reload(), 30000); }
+                else if (this.timer) { clearInterval(this.timer); this.timer = null; }
+            },
+         }"
+         x-init="if (on) { timer = setInterval(() => location.reload(), 30000); }">
+        <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+            <input type="checkbox" x-model="on" @change="toggle()"
+                   class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900">
+            <span class="flex items-center gap-1">
+                <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'"></span>
+                Live
+            </span>
+        </label>
+        <span x-show="on" x-cloak class="text-[11px] text-slate-400 dark:text-slate-500">every 30s</span>
     </div>
 </div>
 
 {{-- Activity over time --}}
-<div class="mb-6 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+<div class="ea-panel mt-4 rounded-lg border p-4">
     <div class="flex items-start justify-between gap-2">
         <div>
-            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Activity over time</h3>
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Activity over time
+                @if($hasData)
+                    <span class="ml-1 text-xs font-normal {{ $failureCount > 0 ? 'text-red-500' : 'text-emerald-500' }}">{{ number_format($failureCount) }} failed</span>
+                @endif
+            </h2>
             <p class="text-xs text-slate-400 dark:text-slate-500">Events by outcome · per {{ $perLabel }}</p>
         </div>
         @if($hasData)
@@ -93,7 +177,7 @@
             </button>
         @endif
     </div>
-    <div class="mt-3 h-72 sm:h-80">
+    <div class="mt-3 h-72 rounded-md bg-white p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700">
         @if($hasData)
             <canvas id="activityChart"></canvas>
         @else
@@ -105,33 +189,36 @@
     @endif
 </div>
 
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+<div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
     {{-- Top Actions --}}
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <h3 class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Top Actions</h3>
+    <div class="ea-panel rounded-lg border p-4">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Top actions</h2>
+        <div class="mt-4 space-y-3">
         @forelse($topActions as $bucket)
-            <div class="py-1.5">
-                <div class="mb-1 flex items-center justify-between text-xs">
+            <div>
+                <div class="mb-1 flex items-center justify-between gap-3 text-xs">
                     <a href="{{ route('activity-logs.logs.index', ['action' => $bucket['key']]) }}"
-                       class="font-mono text-indigo-600 hover:underline dark:text-indigo-400">
+                       class="min-w-0 truncate font-mono text-indigo-600 hover:underline dark:text-indigo-400">
                         {{ $bucket['key'] }}
                     </a>
                     <span class="font-medium text-slate-500 dark:text-slate-400">{{ number_format($bucket['doc_count']) }}</span>
                 </div>
                 <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                    <div class="h-full bg-indigo-500" style="width: {{ round($bucket['doc_count'] / $actionMax * 100, 1) }}%"></div>
+                    <div class="h-full rounded-full bg-indigo-500" style="width: {{ round($bucket['doc_count'] / $actionMax * 100, 1) }}%"></div>
                 </div>
             </div>
         @empty
             <p class="text-sm text-slate-400">No data yet.</p>
         @endforelse
+        </div>
     </div>
 
     {{-- Actor Types --}}
-    <div class="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <h3 class="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-300">By Actor Type</h3>
+    <div class="ea-panel rounded-lg border p-4">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">By actor type</h2>
+        <div class="mt-4 space-y-3">
         @forelse($topActors as $bucket)
-            <div class="py-1.5">
+            <div>
                 <div class="mb-1 flex items-center justify-between text-xs">
                     <a href="{{ route('activity-logs.logs.index', ['actor_type' => $bucket['key']]) }}"
                        class="text-indigo-600 hover:underline dark:text-indigo-400">
@@ -140,12 +227,13 @@
                     <span class="font-medium text-slate-500 dark:text-slate-400">{{ number_format($bucket['doc_count']) }}</span>
                 </div>
                 <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                    <div class="h-full bg-purple-500" style="width: {{ round($bucket['doc_count'] / $actorMax * 100, 1) }}%"></div>
+                    <div class="h-full rounded-full bg-violet-500" style="width: {{ round($bucket['doc_count'] / $actorMax * 100, 1) }}%"></div>
                 </div>
             </div>
         @empty
             <p class="text-sm text-slate-400">No data yet.</p>
         @endforelse
+        </div>
     </div>
 </div>
 @endsection
