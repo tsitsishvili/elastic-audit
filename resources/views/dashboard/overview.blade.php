@@ -102,21 +102,24 @@
 @endphp
 
 @section('content')
-    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Overview</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400">{{ $rangeLabel }} of third-party HTTP traffic, per {{ $perLabel }}.</p>
+            <div class="mb-2 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-900/70 dark:bg-indigo-950/40 dark:text-indigo-300">
+                {{ $rangeLabel }} · per {{ $perLabel }}
+            </div>
+            <h1 class="text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">Third-party HTTP traffic</h1>
+            <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Request volume, failures, latency, and provider behavior for the selected window.</p>
         </div>
         <a href="{{ route('http-logs.logs.index', [], false) }}"
-           class="inline-flex shrink-0 items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+           class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700">
             Browse logs →
         </a>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         @foreach ($cards as $card)
             <a href="{{ $card['link'] }}"
-               class="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow dark:border-slate-700 dark:bg-slate-800 dark:hover:border-indigo-500">
+               class="ea-focus ea-panel group min-h-[116px] rounded-lg border p-4 transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:hover:border-indigo-500">
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $card['label'] }}</div>
                 <div class="mt-2 text-2xl font-semibold {{ $card['accent'] }}">{{ $card['value'] }}</div>
                 <div class="mt-1 text-xs text-slate-400 group-hover:text-indigo-500 dark:text-slate-500">{{ $card['sub'] }} →</div>
@@ -124,14 +127,14 @@
         @endforeach
     </div>
 
-    <div class="mt-6 flex flex-wrap items-end justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="ea-panel mt-5 flex flex-wrap items-end justify-between gap-4 rounded-lg border p-4">
         <form method="GET" action="{{ route('http-logs.overview', [], false) }}"
               class="flex flex-wrap items-end gap-4" x-data="{ range: @js($range) }">
             <div class="flex flex-col gap-1">
                 <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="range-select">Range</label>
                 <select id="range-select" name="range" x-model="range"
                         @change="$el.value !== 'custom' && $el.form.submit()"
-                        class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                        class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     @foreach ($ranges as $key => $meta)
                         <option value="{{ $key }}" @selected($range === $key)>{{ $meta['label'] }}</option>
                     @endforeach
@@ -142,7 +145,7 @@
             <div class="flex flex-col gap-1">
                 <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="interval-select">Interval</label>
                 <select id="interval-select" name="interval" onchange="this.form.submit()"
-                        class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                        class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     @foreach ($intervals as $key => $label)
                         <option value="{{ $key }}" @selected($interval === $key)>{{ $label }}</option>
                     @endforeach
@@ -154,19 +157,19 @@
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="from-input">From</label>
                         <input id="from-input" type="datetime-local" name="from" value="{{ $fmtLocal(request('from')) }}"
-                               class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                               class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     </div>
                     <div class="flex flex-col gap-1">
                         <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="to-input">To</label>
                         <input id="to-input" type="datetime-local" name="to" value="{{ $fmtLocal(request('to')) }}"
-                               class="rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                               class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     </div>
-                    <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">Apply</button>
+                    <button type="submit" class="ea-focus h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700">Apply</button>
                 </div>
             </template>
 
             <noscript>
-                <button type="submit" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200">Apply</button>
+                <button type="submit" class="ea-focus h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Apply</button>
             </noscript>
         </form>
 
@@ -183,7 +186,7 @@
              x-init="if (on) { timer = setInterval(() => location.reload(), 30000); }">
             <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
                 <input type="checkbox" x-model="on" @change="toggle()"
-                       class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700">
+                       class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900">
                 <span class="flex items-center gap-1">
                     <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'"></span>
                     Live
@@ -209,7 +212,7 @@
                 $noErrors    = $isErrors && $hasData && $errorCount === 0;
                 $showCanvas  = $hasData && ! $noErrors;
             @endphp
-            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div class="ea-panel rounded-lg border p-4">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -222,12 +225,12 @@
                     </div>
                     @if ($showCanvas)
                         <button type="button" data-export="{{ $chart['id'] }}" data-export-name="{{ $chart['title'] }}"
-                                class="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200">
+                                class="ea-focus shrink-0 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200">
                             PNG
                         </button>
                     @endif
                 </div>
-                <div class="mt-3 h-72 sm:h-80">
+                <div class="mt-3 h-72 rounded-md bg-white p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700">
                     @if ($noErrors)
                         <div class="flex h-full flex-col items-center justify-center text-center">
                             <span class="text-3xl">✓</span>
@@ -248,7 +251,7 @@
     </div>
 
     <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="ea-panel rounded-lg border p-4">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">By status class</h2>
             <div class="mt-4 space-y-3">
                 @foreach ($statusOrder as $class => $count)
@@ -265,7 +268,7 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="ea-panel rounded-lg border p-4">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Direction</h2>
             <div class="mt-4 space-y-3">
                 @php $dirRows = [['outgoing', $dirOut, 'bg-slate-500'], ['incoming', $dirIn, 'bg-purple-500']]; @endphp
@@ -287,7 +290,7 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="ea-panel rounded-lg border p-4">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Top providers <span class="text-xs font-normal text-slate-400">by volume</span></h2>
             <div class="mt-4 space-y-3">
                 @forelse ($providerBuckets as $bucket)
@@ -307,7 +310,7 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="ea-panel rounded-lg border p-4">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Slowest providers <span class="text-xs font-normal text-slate-400">avg latency</span></h2>
             <div class="mt-4 space-y-3">
                 @forelse ($slowProviders as $bucket)

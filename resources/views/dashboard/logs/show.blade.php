@@ -19,11 +19,11 @@
 
     $statusBadge = function (?string $class): string {
         return match ($class) {
-            '2xx'   => 'bg-emerald-100 text-emerald-700',
-            '3xx'   => 'bg-sky-100 text-sky-700',
-            '4xx'   => 'bg-amber-100 text-amber-700',
-            '5xx'   => 'bg-red-100 text-red-700',
-            default => 'bg-slate-100 text-slate-600',
+            '2xx'   => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+            '3xx'   => 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
+            '4xx'   => 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+            '5xx'   => 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+            default => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
         };
     };
 
@@ -41,10 +41,10 @@
 
 @section('content')
     <a href="{{ url()->previous() !== url()->current() ? url()->previous() : route('http-logs.logs.index', [], false) }}"
-       class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">← Back to logs</a>
+       class="ea-focus mb-4 inline-flex h-9 items-center gap-1 rounded-md text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">← Back to logs</a>
 
     @if (! $log)
-        <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 p-12 text-center text-sm text-slate-400 dark:text-slate-500 shadow-sm">
+        <div class="ea-panel rounded-lg border p-12 text-center text-sm text-slate-400 dark:text-slate-500">
             Log not found.
         </div>
     @else
@@ -67,21 +67,36 @@
             $success = (bool) data_get($log, 'success');
         @endphp
 
-        <div class="mb-6 flex flex-wrap items-center gap-3">
-            <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">{{ data_get($log, 'provider') }} · {{ data_get($log, 'event_type') }}</h1>
-            <span class="rounded px-2 py-0.5 text-xs font-medium {{ $statusBadge(data_get($log, 'http.status_class')) }}">
-                {{ data_get($log, 'http.status_code') ?? data_get($log, 'http.status_class') ?? '—' }}
-            </span>
-            @if ($success)
-                <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">success</span>
-            @else
-                <span class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">failure</span>
-            @endif
-            <span class="text-sm text-slate-400">{{ data_get($log, 'http.latency_ms') !== null ? number_format((int) data_get($log, 'http.latency_ms')) . ' ms' : '' }}</span>
-            <span class="font-mono text-xs text-slate-400" title="{{ data_get($log, '@timestamp') }}">{{ $fmtTs(data_get($log, '@timestamp')) }}</span>
+        <div class="ea-panel mb-6 rounded-lg border p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ data_get($log, 'provider') ?: 'Unknown provider' }}</p>
+                    <h1 class="mt-1 break-words text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ data_get($log, 'event_type') ?: 'HTTP log detail' }}</h1>
+                    <div class="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm">
+                        @if (data_get($log, 'http.method'))
+                            <span class="rounded bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ data_get($log, 'http.method') }}</span>
+                        @endif
+                        <span class="min-w-0 break-all font-mono text-xs text-slate-500 dark:text-slate-400">{{ data_get($log, 'http.path') ?: data_get($log, 'http.host') ?: '—' }}</span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $statusBadge(data_get($log, 'http.status_class')) }}">
+                        {{ data_get($log, 'http.status_code') ?? data_get($log, 'http.status_class') ?? '—' }}
+                    </span>
+                    @if ($success)
+                        <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">success</span>
+                    @else
+                        <span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">failure</span>
+                    @endif
+                    @if (data_get($log, 'http.latency_ms') !== null)
+                        <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">{{ number_format((int) data_get($log, 'http.latency_ms')) }} ms</span>
+                    @endif
+                    <span class="font-mono text-xs text-slate-400" title="{{ data_get($log, '@timestamp') }}">{{ $fmtTs(data_get($log, '@timestamp')) }}</span>
+                </div>
+            </div>
         </div>
 
-        <div class="mb-6 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 p-5 shadow-sm">
+        <div class="ea-panel mb-6 rounded-lg border p-5">
             <dl class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
                 @foreach ($meta as $label => $value)
                     <div>
@@ -93,7 +108,7 @@
         </div>
 
         @if (data_get($log, 'error.class') || data_get($log, 'error.message'))
-            <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900 dark:bg-red-950">
+            <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900 dark:bg-red-950">
                 <h2 class="flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-300">
                     Error
                     @if (data_get($log, 'http.timed_out'))
@@ -113,7 +128,7 @@
                     $hash      = data_get($log, "$key.body_hash");
                     $truncated = (bool) data_get($log, "$key.body_truncated");
                 @endphp
-                <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 shadow-sm">
+                <div class="ea-panel rounded-lg border">
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-700">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ $title }}</h2>
                         @if ($truncated)
@@ -124,7 +139,14 @@
                         <div>
                             <h3 class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Headers</h3>
                             @if ($pretty($headers) !== '')
-                                <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">{{ $pretty($headers) }}</pre>
+                                <div x-data="{ copied: false }" class="overflow-hidden rounded-md bg-slate-950 ring-1 ring-slate-800">
+                                    <div class="flex items-center justify-end border-b border-slate-800 px-2 py-1">
+                                        <button type="button" @click="navigator.clipboard.writeText($refs.headers.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
+                                            <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
+                                        </button>
+                                    </div>
+                                    <pre x-ref="headers" class="max-h-96 overflow-auto p-3 font-mono text-xs leading-relaxed text-slate-100">{{ $pretty($headers) }}</pre>
+                                </div>
                             @else
                                 <p class="text-xs text-slate-400">—</p>
                             @endif
@@ -132,7 +154,14 @@
                         <div>
                             <h3 class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Body preview</h3>
                             @if ($pretty($preview) !== '')
-                                <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100">{{ $pretty($preview) }}</pre>
+                                <div x-data="{ copied: false }" class="overflow-hidden rounded-md bg-slate-950 ring-1 ring-slate-800">
+                                    <div class="flex items-center justify-end border-b border-slate-800 px-2 py-1">
+                                        <button type="button" @click="navigator.clipboard.writeText($refs.body.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
+                                            <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
+                                        </button>
+                                    </div>
+                                    <pre x-ref="body" class="max-h-96 overflow-auto p-3 font-mono text-xs leading-relaxed text-slate-100">{{ $pretty($preview) }}</pre>
+                                </div>
                             @else
                                 <p class="text-xs text-slate-400">—</p>
                             @endif

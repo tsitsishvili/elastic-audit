@@ -10,11 +10,11 @@
 
     $statusBadge = function (?string $class): string {
         return match ($class) {
-            '2xx'   => 'bg-emerald-100 text-emerald-700',
-            '3xx'   => 'bg-sky-100 text-sky-700',
-            '4xx'   => 'bg-amber-100 text-amber-700',
-            '5xx'   => 'bg-red-100 text-red-700',
-            default => 'bg-slate-100 text-slate-600',
+            '2xx'   => 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+            '3xx'   => 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
+            '4xx'   => 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+            '5xx'   => 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+            default => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
         };
     };
 
@@ -76,15 +76,15 @@
 
 @section('content')
     <div x-data="{ open: {{ $hasFilters ? 'true' : 'false' }} }">
-        <div class="mb-4 flex items-center justify-between gap-3">
+        <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-                <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Logs</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">
+                <h1 class="text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">HTTP log stream</h1>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {{ number_format($total) }} {{ \Illuminate\Support\Str::plural('result', $total) }}
                     @if ($total > 0) · showing {{ $from }}–{{ $to }} @endif
                 </p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 <button type="button"
                         x-data="{
                             on: localStorage.getItem('tphl_live_logs') === '1',
@@ -102,7 +102,7 @@
                             ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
                             : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'"
                         :title="on ? 'Live: refreshing every 10s' : 'Auto-refresh the list every 10s'"
-                        class="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition">
+                        class="ea-focus inline-flex h-10 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition">
                     <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'"></span>
                     Live
                     <span x-show="on" x-cloak class="text-[11px] opacity-70">10s</span>
@@ -110,12 +110,12 @@
                 <button type="button"
                         x-data="{ copied: false }"
                         @click="navigator.clipboard.writeText(location.href).then(() => { copied = true; setTimeout(() => copied = false, 1500); })"
-                        class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                        class="ea-focus inline-flex h-10 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
                     <span x-show="!copied">Copy link</span>
                     <span x-show="copied" x-cloak class="text-emerald-600 dark:text-emerald-400">Copied ✓</span>
                 </button>
                 <button type="button" @click="open = !open"
-                        class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                        class="ea-focus inline-flex h-10 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
                     <span x-show="!open">Show filters</span>
                     <span x-show="open" x-cloak>Hide filters</span>
                     @if ($hasFilters)<span class="ml-1 rounded-full bg-indigo-100 px-1.5 text-xs text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">{{ count($filters) }}</span>@endif
@@ -124,11 +124,11 @@
         </div>
 
         <form method="GET" action="{{ route('http-logs.logs.index', [], false) }}" x-show="open" x-cloak
-              class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              class="ea-panel mb-6 rounded-lg border p-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Provider</span>
-                    <select name="provider" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="provider" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['providers'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['provider'] ?? '') === $opt)>{{ $opt }}</option>
@@ -138,7 +138,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Event type</span>
-                    <select name="event_type" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="event_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['event_types'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['event_type'] ?? '') === $opt)>{{ $opt }}</option>
@@ -148,7 +148,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Direction</span>
-                    <select name="direction" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="direction" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach (['outgoing', 'incoming'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['direction'] ?? '') === $opt)>{{ $opt }}</option>
@@ -158,7 +158,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Status class</span>
-                    <select name="status_class" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="status_class" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach (['2xx', '3xx', '4xx', '5xx'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['status_class'] ?? '') === $opt)>{{ $opt }}</option>
@@ -168,7 +168,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Success</span>
-                    <select name="success" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="success" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         <option value="true" @selected(($filters['success'] ?? '') === 'true')>Success</option>
                         <option value="false" @selected(($filters['success'] ?? '') === 'false')>Failure</option>
@@ -177,7 +177,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Timeout</span>
-                    <select name="timeout" class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                    <select name="timeout" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         <option value="1" @selected(filter_var($filters['timeout'] ?? '', FILTER_VALIDATE_BOOL))>Timeouts only</option>
                     </select>
@@ -186,19 +186,19 @@
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Entity ID</span>
                     <input type="text" name="entity_id" value="{{ $filters['entity_id'] ?? '' }}"
-                           class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">From</span>
                     <input type="datetime-local" name="from" value="{{ $fmtLocal($filters['from'] ?? null) }}"
-                           class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">To</span>
                     <input type="datetime-local" name="to" value="{{ $fmtLocal($filters['to'] ?? null) }}"
-                           class="mt-1 w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
             </div>
 
@@ -208,11 +208,11 @@
             <input type="hidden" name="per_page" value="{{ $perPage }}">
 
             <div class="mt-4 flex items-center gap-2">
-                <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
+                <button type="submit" class="ea-focus h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700">
                     Apply filters
                 </button>
                 <a href="{{ route('http-logs.logs.index', [], false) }}"
-                   class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                   class="ea-focus inline-flex h-10 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
                     Reset
                 </a>
             </div>
@@ -224,21 +224,21 @@
             <span class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Filters</span>
             @foreach ($filters as $key => $value)
                 <a href="{{ $withParams([$key => null]) }}"
-                   class="group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:border-red-300 hover:text-red-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-red-500 dark:hover:text-red-400">
+                   class="ea-focus group inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:border-red-300 hover:text-red-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-red-500 dark:hover:text-red-400">
                     <span class="font-medium">{{ $filterLabels[$key] ?? $key }}:</span>
                     <span class="font-mono">{{ \Illuminate\Support\Str::limit((string) $value, 24) }}</span>
                     <span class="text-slate-400 group-hover:text-red-500">✕</span>
                 </a>
             @endforeach
             <a href="{{ route('http-logs.logs.index', [], false) }}"
-               class="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
+               class="ea-focus rounded-sm text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
         </div>
     @endif
 
-    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="ea-panel overflow-hidden rounded-lg border">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
-                <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-700/40 dark:text-slate-400">
+            <table class="min-w-[1120px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
+                <thead class="bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">
                             <a href="{{ $sortLink('time') }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === 'time' ? 'text-indigo-600 dark:text-indigo-400' : '' }}">Time <span>{{ $sortIcon('time') }}</span></a>
@@ -267,7 +267,7 @@
                             $timedOut  = (bool) data_get($log, 'http.timed_out');
                             $rowUrl    = $eventId ? route('http-logs.logs.show', $eventId, false) : null;
                         @endphp
-                        <tr class="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-700/40" @if ($rowUrl) onclick="window.location='{{ $rowUrl }}'" @endif>
+                        <tr class="cursor-pointer align-top transition hover:bg-indigo-50/50 dark:hover:bg-slate-900/60" @if ($rowUrl) onclick="window.location='{{ $rowUrl }}'" @endif>
                             <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, '@timestamp') }}" data-ts="{{ data_get($log, '@timestamp') }}">
                                 {{ $fmtTs(data_get($log, '@timestamp')) }}<span class="ml-1 text-slate-400 dark:text-slate-500" data-rel></span>
                             </td>
@@ -276,22 +276,28 @@
                                     <a href="{{ $withParams(['provider' => $provider]) }}" onclick="event.stopPropagation()" class="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ $provider }}</a>
                                 @else — @endif
                             </td>
-                            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ data_get($log, 'event_type', '—') }}</td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
+                                <span class="line-clamp-2">{{ data_get($log, 'event_type', '—') }}</span>
+                            </td>
                             <td class="px-4 py-3">
                                 @if ($direction)
                                     <a href="{{ $withParams(['direction' => $direction]) }}" onclick="event.stopPropagation()"
-                                       class="rounded px-1.5 py-0.5 text-xs {{ $direction === 'incoming' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }}">{{ $direction }}</a>
+                                       class="rounded-full px-2 py-0.5 text-xs font-medium {{ $direction === 'incoming' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $direction }}</a>
                                 @else <span class="text-slate-400">—</span> @endif
                             </td>
-                            <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">{{ data_get($log, 'http.method', '—') }}</td>
-                            <td class="max-w-xs truncate px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, 'http.path') }}">{{ data_get($log, 'http.path', '—') }}</td>
+                            <td class="whitespace-nowrap px-4 py-3">
+                                <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ data_get($log, 'http.method', '—') }}</span>
+                            </td>
+                            <td class="max-w-sm px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, 'http.path') }}">
+                                <span class="block truncate">{{ data_get($log, 'http.path', '—') }}</span>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-3">
                                 @if ($statusCls)
-                                    <a href="{{ $withParams(['status_class' => $statusCls]) }}" onclick="event.stopPropagation()" class="rounded px-1.5 py-0.5 text-xs font-medium {{ $statusBadge($statusCls) }}">
+                                    <a href="{{ $withParams(['status_class' => $statusCls]) }}" onclick="event.stopPropagation()" class="rounded-full px-2 py-0.5 text-xs font-semibold {{ $statusBadge($statusCls) }}">
                                         {{ data_get($log, 'http.status_code') ?? $statusCls }}
                                     </a>
                                 @elseif ($timedOut)
-                                    <a href="{{ $withParams(['timeout' => 1]) }}" onclick="event.stopPropagation()" class="rounded px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">timeout</a>
+                                    <a href="{{ $withParams(['timeout' => 1]) }}" onclick="event.stopPropagation()" class="rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">timeout</a>
                                 @else <span class="text-slate-400">—</span> @endif
                             </td>
                             <td class="whitespace-nowrap px-4 py-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
@@ -302,9 +308,13 @@
                             </td>
                             <td class="px-4 py-3">
                                 @if ($success)
-                                    <span class="inline-flex h-2 w-2 rounded-full bg-emerald-500" title="success"></span>
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" title="success">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>ok
+                                    </span>
                                 @else
-                                    <span class="inline-flex h-2 w-2 rounded-full bg-red-500" title="failure"></span>
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300" title="failure">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>fail
+                                    </span>
                                 @endif
                             </td>
                         </tr>
@@ -324,11 +334,11 @@
                 false,
             );
         @endphp
-        <div class="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm dark:border-slate-700">
+        <div class="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                 <label for="per-page" class="sr-only">Rows per page</label>
                 <select id="per-page" onchange="location.href=this.value"
-                        class="rounded-md border-slate-300 py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100">
+                        class="ea-focus rounded-md border-slate-300 bg-white py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     @foreach ($perPageOptions as $opt)
                         <option value="{{ $withParams(['per_page' => $opt]) }}" @selected($opt === $perPage)>{{ $opt }} / page</option>
                     @endforeach
@@ -338,11 +348,11 @@
             <div class="flex gap-2">
                 @if ($page > 1)
                     <a href="{{ $pageLink($page - 1) }}"
-                       class="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">← Prev</a>
+                       class="ea-focus rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">← Prev</a>
                 @endif
                 @if ($page < $totalPages)
                     <a href="{{ $pageLink($page + 1) }}"
-                       class="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">Next →</a>
+                       class="ea-focus rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Next →</a>
                 @endif
             </div>
         </div>

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-27
+
+### Changed
+
+- **Dashboard visual refresh** (presentation only — no routes, query params, config keys, or indexed document shapes change; affects the publishable `elastic-audit-views` assets). The shared nav/layout chrome and the HTTP dashboard views were restyled around a small set of shared design tokens (light/dark palettes, a panel surface, keyboard focus rings) for cleaner, more legible output.
+  - **Top navigation**: now sticky and light-themed (was solid dark slate), with an "Elastic Audit" wordmark, pill-style dashboard switcher and page tabs, and responsive stacking on small screens.
+  - **HTTP log list** (`http-logs.logs.index`): heading renamed "Logs" → "HTTP log stream"; status/direction as pill badges, method as a chip, success/failure as labeled "ok"/"fail" badges; responsive header and pagination.
+  - **HTTP log detail** (`http-logs.logs.show`): header regrouped into a panel; the Headers and Body preview blocks gain a copy button and a scrollable max-height area.
+  - **HTTP overview** (`http-logs.overview`): heading renamed "Overview" → "Third-party HTTP traffic"; charts render on a card backdrop so they stay legible in dark mode.
+
+> **Upgrading:** apps that previously published the views (`vendor:publish --tag=elastic-audit-views`) keep their own copies and must re-publish to pick up this refresh.
+
 ## [2.2.0] - 2026-06-25
 
 ### Added
@@ -56,3 +68,9 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
+
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v1.0.0...v2.1.0
+[1.0.0]: https://github.com/tsitsishvili/elastic-audit/releases/tag/v1.0.0

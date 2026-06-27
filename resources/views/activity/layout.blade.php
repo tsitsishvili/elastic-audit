@@ -22,12 +22,50 @@
             theme: { extend: { fontFamily: { mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'] } } },
         };
     </script>
-    <style>[x-cloak]{display:none!important;}</style>
+    <style>
+        [x-cloak]{display:none!important;}
+        :root {
+            color-scheme: light;
+            --ea-bg: #f6f7fb;
+            --ea-panel: #ffffff;
+            --ea-panel-soft: #f8fafc;
+            --ea-border: #d9e1ec;
+            --ea-text: #0f172a;
+            --ea-muted: #64748b;
+            --ea-muted-soft: #94a3b8;
+            --ea-accent: #4f46e5;
+        }
+        .dark {
+            color-scheme: dark;
+            --ea-bg: #101318;
+            --ea-panel: #171b24;
+            --ea-panel-soft: #202636;
+            --ea-border: #303849;
+            --ea-text: #f8fafc;
+            --ea-muted: #a5b4c7;
+            --ea-muted-soft: #768297;
+            --ea-accent: #818cf8;
+        }
+        body {
+            background:
+                linear-gradient(180deg, rgba(79, 70, 229, 0.08), transparent 280px),
+                var(--ea-bg);
+        }
+        .ea-panel {
+            background: var(--ea-panel);
+            border-color: var(--ea-border);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .ea-focus:focus-visible {
+            outline: 2px solid var(--ea-accent);
+            outline-offset: 2px;
+        }
+    </style>
 </head>
-<body class="h-full bg-slate-100 text-slate-800 antialiased dark:bg-slate-900 dark:text-slate-200">
+<body class="min-h-full text-slate-800 antialiased dark:text-slate-200">
     @include('elastic-audit::partials.nav', ['current' => 'activity'])
 
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
         @yield('content')
     </main>
 
