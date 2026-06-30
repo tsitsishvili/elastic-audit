@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Activity logs no longer depend on `EntityTypeContract`.** `ActivityLogContext::forActor()` now accepts a plain `string $entityType` instead of an `EntityTypeContract` instance — the activity subsystem already stored and indexed `entityType` as a free string (the `ActivityLoggable` trait never used the contract). The `EntityTypeContract` contract and its config-driven resolution remain in use by the HTTP logger; only the activity surface is decoupled. **Potentially breaking** for callers that passed an enum to `forActor()` — pass `$enum->value` (or a literal string) instead. No document-shape or mapping change.
+
 ## [2.4.0] - 2026-06-30
 
 ### Added

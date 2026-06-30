@@ -6,7 +6,6 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
-use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 
 class ActivityLogContextTest extends TestCase
 {
@@ -15,7 +14,7 @@ class ActivityLogContextTest extends TestCase
         $ctx = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 42,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '99',
         );
 
@@ -32,7 +31,7 @@ class ActivityLogContextTest extends TestCase
         $ctx = ActivityLogContext::forActor(
             actorType: 'cron',
             actorId: null,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '1',
         );
 
@@ -45,7 +44,7 @@ class ActivityLogContextTest extends TestCase
         $ctx = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 1,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '1',
             requestId: 'my-request-id',
         );
@@ -55,8 +54,8 @@ class ActivityLogContextTest extends TestCase
 
     public function test_for_actor_generates_request_id_when_not_provided(): void
     {
-        $ctx1 = ActivityLogContext::forActor('user', 1, TestEntityType::Order, '1');
-        $ctx2 = ActivityLogContext::forActor('user', 1, TestEntityType::Order, '1');
+        $ctx1 = ActivityLogContext::forActor('user', 1, 'order', '1');
+        $ctx2 = ActivityLogContext::forActor('user', 1, 'order', '1');
 
         $this->assertNotSame($ctx1->requestId, $ctx2->requestId);
     }

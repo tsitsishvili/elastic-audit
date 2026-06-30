@@ -18,7 +18,8 @@ Validate Composer metadata:
 composer validate --no-check-publish
 ```
 
-Run the package tests after a test runner is configured:
+Run the package tests after a test runner is configured (see
+[Development / Testing](AUDIT_LOGS.md#development--testing)):
 
 ```bash
 composer test
@@ -32,8 +33,8 @@ composer test
 - Do not resolve trusted log metadata from user-controlled request input.
 - Keep config keys backward-compatible when possible.
 - Add or update tests when changing logging behavior, redaction behavior, queue behavior, commands, or Elasticsearch mappings.
-- Update `README.md` when installation, configuration, or usage changes.
-- Update `CHANGELOG.md` for every notable change.
+- Update [`README.md`](README.md) when installation, configuration, or usage changes.
+- Update [`CHANGELOG.md`](CHANGELOG.md) for every notable change.
 
 ## Versioning
 

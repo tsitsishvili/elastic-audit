@@ -28,7 +28,7 @@ add it to the relevant `allow` list (see below).
 
 > Word matching is precise: built-in words only match on word boundaries (`key` does not match `monkey`
 > or `keyword`), and `token`/`key` match only as the final word (`access_token` is redacted, but the
-> non-secret `token_type` is kept). See [Redaction Notes](README.md#redaction-notes).
+> non-secret `token_type` is kept). See [Redaction Notes](AUDIT_LOGS.md#redaction-notes).
 
 ### New, optional: configurable redaction
 

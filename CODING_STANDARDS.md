@@ -91,7 +91,7 @@ Update documentation when changing:
 - Commands.
 - Versioning or release workflow.
 
-Update `CHANGELOG.md` under `[Unreleased]` for every notable change.
+Update [`CHANGELOG.md`](CHANGELOG.md) under `[Unreleased]` for every notable change.
 
 ## Git Hygiene
 

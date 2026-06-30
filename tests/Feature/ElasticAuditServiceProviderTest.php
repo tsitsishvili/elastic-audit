@@ -114,7 +114,7 @@ class ElasticAuditServiceProviderTest extends TestCase
             context: ActivityLogContext::forActor(
                 actorType: 'user',
                 actorId: 1,
-                entityType: TestEntityType::Order,
+                entityType: 'order',
                 entityId: '1',
             ),
             changes: [

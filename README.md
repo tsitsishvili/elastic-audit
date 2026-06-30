@@ -18,8 +18,15 @@ application can enable only what it needs.
 
 - [Audit Logs Guide](AUDIT_LOGS.md) — third-party HTTP request/callback logging, redaction, sampling, dashboards, and
   Elasticsearch queries.
+  - [Installation](AUDIT_LOGS.md#installation) · [Configuration reference](AUDIT_LOGS.md#configuration-reference) ·
+    [Logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-requests) ·
+    [Logging incoming callbacks](AUDIT_LOGS.md#logging-incoming-callbacks) · [Dashboard](AUDIT_LOGS.md#dashboard) ·
+    [Troubleshooting](AUDIT_LOGS.md#troubleshooting)
 - [Activity Logs Guide](ACTIVITY_LOGS.md) — actor/entity activity logging, automatic Eloquent change capture, and the
   activity dashboard.
+  - [Configuration](ACTIVITY_LOGS.md#activity-configuration) · [Manual logging](ACTIVITY_LOGS.md#manual-logging) ·
+    [Automatic model logging](ACTIVITY_LOGS.md#automatic-model-logging-the-activityloggable-trait) ·
+    [Dashboard](ACTIVITY_LOGS.md#activity-dashboard)
 
 ## Screenshots
 
@@ -29,32 +36,40 @@ application can enable only what it needs.
 
 ## Quick Start
 
-1. Add the package repository to the consuming application's `composer.json`.
+1. Add the package repository to the consuming application's `composer.json`
+   (see [Installation](AUDIT_LOGS.md#installation)).
 2. Install the package:
 
     ```bash
     composer require tsitsishvili/elastic-audit:^1.0
     ```
 
-3. Publish config files and enum stubs:
+3. Publish config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
 
     ```bash
     php artisan vendor:publish --tag=elastic-audit
     ```
 
-4. Configure Elasticsearch and enable the subsystem you need in `.env`.
-5. Create the Elasticsearch indices and aliases:
+4. Configure Elasticsearch and enable the subsystem you need in `.env`
+   (see [Environment Variables](AUDIT_LOGS.md#environment-variables) and
+   [Register Application Enums](AUDIT_LOGS.md#register-application-enums)).
+5. Create the Elasticsearch indices and aliases
+   ([HTTP](AUDIT_LOGS.md#create-elasticsearch-index) · [Activity](ACTIVITY_LOGS.md#create-the-activity-index)):
 
     ```bash
     php artisan http-logs:create-index
     php artisan activity-logs:create-index
     ```
 
-6. Run a queue worker for the configured logs queue:
+6. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
 
     ```bash
     php artisan queue:work --queue=default
     ```
+
+For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-requests),
+[logging incoming callbacks](AUDIT_LOGS.md#logging-incoming-callbacks), and
+[recording activity](ACTIVITY_LOGS.md#manual-logging).
 
 ## Requirements
 

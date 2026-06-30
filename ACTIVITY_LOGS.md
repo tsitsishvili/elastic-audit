@@ -6,6 +6,29 @@
 
 ![Activity logs list](docs/images/activity-logs-list.jpg)
 
+This guide is independent from the [Audit Logs](AUDIT_LOGS.md) subsystem and can be enabled on its own.
+
+## Project Documents
+
+- [Changelog](CHANGELOG.md)
+- [Upgrade Guide](UPGRADE.md)
+- [Contributing](CONTRIBUTING.md)
+- [Coding Standards](CODING_STANDARDS.md)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [How It Works](#how-it-works)
+- [Activity Configuration](#activity-configuration)
+- [Create the Activity Index](#create-the-activity-index)
+- [Manual Logging](#manual-logging)
+- [Automatic Model Logging (the `ActivityLoggable` trait)](#automatic-model-logging-the-activityloggable-trait)
+- [Actor Resolution](#actor-resolution)
+- [Document Shape](#document-shape)
+- [Activity Dashboard](#activity-dashboard)
+- [Pruning Activity Logs](#pruning-activity-logs)
+- [Guarantees](#guarantees)
+
 ## Overview
 
 An independent subsystem for recording **what actors did or changed** — user actions and Eloquent model
@@ -18,8 +41,12 @@ indexer, commands, and dashboard.
 The capture → queue → index pipeline mirrors the HTTP logger:
 
 ```text
-ActivityLogger::record()  →  ActivityLogData (immutable DTO)  →  LogActivityJob (queued)
-    →  ActivityLogIndexer  →  LogElasticsearchClientInterface  →  activity write alias
+ActivityLogger::record() 
+→ ActivityLogData (immutable DTO) 
+→ LogActivityJob (queued)
+→ ActivityLogIndexer 
+→ LogElasticsearchClientInterface 
+→ activity write alias
 ```
 
 Capture never throws and is gated by `activity_logs.enabled`. Indexing happens asynchronously on the
@@ -95,7 +122,6 @@ action with an optional field-level diff and metadata.
 ```php
 use Tsitsishvili\ElasticAudit\Facades\ActivityLog;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
-use App\Enums\ElasticAudit\EntityType;
 
 // User-driven change with a before/after diff
 ActivityLog::record(
@@ -103,7 +129,7 @@ ActivityLog::record(
     context: ActivityLogContext::forActor(
         actorType: 'user',
         actorId: $userId,
-        entityType: EntityType::Order,
+        entityType: 'order',
         entityId: (string) $order->id,
         requestId: $request->header('X-Request-ID'), // optional; auto-ULID if omitted
     ),
@@ -119,7 +145,7 @@ ActivityLog::record(
     context: ActivityLogContext::forActor(
         actorType: 'cron',
         actorId: null,
-        entityType: EntityType::Invoice,
+        entityType: 'invoice',
         entityId: (string) $invoice->id,
     ),
     metadata: ['reason' => 'payment_timeout'],
@@ -129,8 +155,9 @@ ActivityLog::record(
 );
 ```
 
-`entityType` accepts any `EntityTypeContract` (typically a backed enum published into your app).
-`actorType` is a free string — conventionally `user`, `system`, `cron`, or `job`. `retentionDays` defaults to
+`entityType` is a free string label for the entity being changed (e.g. `order`, `invoice`) — pass your own
+enum's `->value` if you keep one. `actorType` is a free string — conventionally `user`, `system`, `cron`, or
+`job`. `retentionDays` defaults to
 `360` and can be overridden per call via `ActivityLogContext::forActor(..., retentionDays: 90)`.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)

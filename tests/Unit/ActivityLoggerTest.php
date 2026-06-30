@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Bus;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
-use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ActivityLoggerTest extends TestCase
@@ -25,7 +24,7 @@ class ActivityLoggerTest extends TestCase
         $this->context = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 5,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '10',
         );
     }

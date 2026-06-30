@@ -8,7 +8,6 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
-use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class LogActivityJobTest extends TestCase
@@ -37,7 +36,7 @@ class LogActivityJobTest extends TestCase
         $context = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 1,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '1',
         );
 

@@ -6,7 +6,6 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
-use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ActivityLogDataTest extends TestCase
@@ -19,7 +18,7 @@ class ActivityLogDataTest extends TestCase
         $this->context = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 5,
-            entityType: TestEntityType::Order,
+            entityType: 'order',
             entityId: '10',
             requestId: 'req-abc',
         );
