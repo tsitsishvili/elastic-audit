@@ -51,7 +51,23 @@ trait ActivityLoggable
             action: $entityType . '.' . $event,
             context: $context,
             changes: $changes,
+            metadata: $this->activityMetadata($event, $changes),
         );
+    }
+
+    /**
+     * Extra contextual data attached to every auto-logged activity event.
+     *
+     * Override in the model to enrich events (e.g. request IP, tenant id,
+     * tags, arbitrary arrays). Redacted by key name like `changes` before
+     * queueing; stored but not indexed in Elasticsearch.
+     *
+     * @param  array<string, mixed>  $changes
+     * @return array<string, mixed>
+     */
+    protected function activityMetadata(string $event, array $changes): array
+    {
+        return [];
     }
 
     private function resolveActivityActor(): array

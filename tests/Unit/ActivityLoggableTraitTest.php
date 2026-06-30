@@ -173,4 +173,74 @@ class ActivityLoggableTraitTest extends TestCase
                 && ! array_key_exists('note', $job->data->changes);
         });
     }
+
+    public function test_metadata_defaults_to_empty_when_not_overridden(): void
+    {
+        Bus::fake();
+
+        TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->metadata === [];
+        });
+    }
+
+    public function test_activity_metadata_override_is_attached_to_event(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+            protected $table    = 'orders';
+            protected $fillable = ['status', 'amount', 'note'];
+            public $timestamps  = false;
+            protected string $activityEntityType = 'order';
+
+            protected function activityMetadata(string $event, array $changes): array
+            {
+                return [
+                    'event'   => $event,
+                    'tags'    => ['import', 'bulk'],
+                    'nested'  => ['source' => 'api', 'flags' => [1, 2, 3]],
+                ];
+            }
+        };
+
+        $model->fill(['status' => 'pending', 'amount' => 100])->save();
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->metadata['event'] === 'created'
+                && $job->data->metadata['tags'] === ['import', 'bulk']
+                && $job->data->metadata['nested']['flags'] === [1, 2, 3];
+        });
+    }
+
+    public function test_activity_metadata_receives_event_and_changes(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+            protected $table    = 'orders';
+            protected $fillable = ['status', 'amount', 'note'];
+            public $timestamps  = false;
+            protected string $activityEntityType = 'order';
+
+            protected function activityMetadata(string $event, array $changes): array
+            {
+                return [
+                    'event'          => $event,
+                    'changed_fields' => array_keys($changes),
+                ];
+            }
+        };
+
+        $model->fill(['status' => 'pending', 'amount' => 100])->save();
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->metadata['event'] === 'created'
+                && in_array('status', $job->data->metadata['changed_fields'], true)
+                && in_array('amount', $job->data->metadata['changed_fields'], true);
+        });
+    }
 }

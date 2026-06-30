@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `ActivityLoggable` trait now supports an overridable `activityMetadata(string $event, array $changes): array` hook, letting models attach arbitrary extra data (arrays, tags, request IP, tenant, etc.) to auto-logged `created`/`updated`/`deleted` events. It defaults to `[]`, is redacted by key name like `changes`, and populates the existing `metadata` map (stored but not indexed) — the same field already available via the `metadata:` argument of `ActivityLog::record()`. No document-shape or mapping change.
+
 ## [2.3.0] - 2026-06-27
 
 ### Changed

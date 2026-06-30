@@ -154,6 +154,19 @@ class Order extends Model
 
     // Optional — if non-empty, only these fields appear in the diff.
     protected array $activityLogOnly = [];
+
+    // Optional — extra contextual data attached to every auto-logged event.
+    // Override to enrich events with arbitrary arrays (request IP, tenant,
+    // tags, etc.). Receives the event name and computed diff; redacted by
+    // key name like `changes` before queueing.
+    protected function activityMetadata(string $event, array $changes): array
+    {
+        return [
+            'ip'     => request()->ip(),
+            'tenant' => $this->tenant_id,
+            'tags'   => ['billing', 'auto'],
+        ];
+    }
 }
 ```
 
@@ -164,7 +177,8 @@ class Order extends Model
 | `deleted`      | `{entity}.deleted` | `{}` (the entity itself is the event)                        |
 
 `$activityLogOnly` is applied first (whitelist), then `$activityLogExcept` (blacklist). The entity id is
-`(string) $model->getKey()`.
+`(string) $model->getKey()`. `activityMetadata()` defaults to `[]` and lands in the `metadata` map (stored
+but not indexed — see below), mirroring the `metadata:` argument of a manual `ActivityLog::record()` call.
 
 ### Actor Resolution
 
