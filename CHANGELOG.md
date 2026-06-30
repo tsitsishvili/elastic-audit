@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-06-30
+
 ### Added
 
 - The `ActivityLoggable` trait now supports an overridable `activityMetadata(string $event, array $changes): array` hook, letting models attach arbitrary extra data (arrays, tags, request IP, tenant, etc.) to auto-logged `created`/`updated`/`deleted` events. It defaults to `[]`, is redacted by key name like `changes`, and populates the existing `metadata` map (stored but not indexed) — the same field already available via the `metadata:` argument of `ActivityLog::record()`. No document-shape or mapping change.
@@ -73,7 +75,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v1.0.0...v2.1.0
