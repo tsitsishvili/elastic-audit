@@ -45,9 +45,28 @@ class ActivityLogDataTest extends TestCase
         $this->assertTrue($data->success);
         $this->assertNull($data->errorClass);
         $this->assertNull($data->errorMessage);
+        $this->assertNull($data->traceId);
+        $this->assertNull($data->spanId);
+        $this->assertNull($data->traceParent);
         $this->assertNotEmpty($data->eventId);
         $this->assertNotEmpty($data->timestamp);
-        $this->assertSame(1, ActivityLogData::SCHEMA_VERSION);
+        $this->assertSame(2, ActivityLogData::SCHEMA_VERSION);
+    }
+
+    public function test_make_parses_traceparent_from_context(): void
+    {
+        $context = ActivityLogContext::forActor(
+            actorType: 'user',
+            actorId: 5,
+            entityType: 'order',
+            entityId: '10',
+            traceParent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00',
+        );
+
+        $data = ActivityLogData::make('order.updated', $context);
+
+        $this->assertSame('4bf92f3577b34da6a3ce929d0e0e4736', $data->traceId);
+        $this->assertSame('00f067aa0ba902b7', $data->spanId);
     }
 
     public function test_make_defaults_to_empty_changes_and_metadata(): void

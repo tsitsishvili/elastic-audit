@@ -69,6 +69,7 @@
         'entity_id'    => 'Entity ID',
         'request_id'   => 'Request ID',
         'external_id'  => 'External ID',
+        'trace_id'     => 'Trace ID',
         'from'         => 'From',
         'to'           => 'To',
     ];
@@ -187,6 +188,12 @@
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Entity ID</span>
                     <input type="text" name="entity_id" value="{{ $filters['entity_id'] ?? '' }}"
                            class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                </label>
+
+                <label class="block">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Trace ID</span>
+                    <input type="text" name="trace_id" value="{{ $filters['trace_id'] ?? '' }}"
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">

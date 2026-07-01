@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\DataTransferObjects;
 
 use Illuminate\Support\Str;
+use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class ActivityLogData
 {
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     public function __construct(
         public string $eventId,
@@ -25,6 +26,9 @@ final readonly class ActivityLogData
         public int $retentionDays,
         public ?string $errorClass,
         public ?string $errorMessage,
+        public ?string $traceId = null,
+        public ?string $spanId = null,
+        public ?string $traceParent = null,
     ) {}
 
     public static function make(
@@ -36,6 +40,12 @@ final readonly class ActivityLogData
         ?string $errorClass = null,
         ?string $errorMessage = null,
     ): self {
+        $trace = TraceContext::merge(
+            traceId: $context->traceId,
+            spanId: $context->spanId,
+            traceParent: $context->traceParent,
+        );
+
         return new self(
             eventId: (string) Str::ulid(),
             timestamp: now()->toIso8601ZuluString(),
@@ -51,6 +61,9 @@ final readonly class ActivityLogData
             retentionDays: $context->retentionDays,
             errorClass: $errorClass,
             errorMessage: $errorMessage,
+            traceId: $trace->traceId,
+            spanId: $trace->spanId,
+            traceParent: $trace->traceParent,
         );
     }
 }

@@ -28,13 +28,21 @@ trait ActivityLoggable
         static::deleted(function (self $model): void {
             $model->logActivityEvent('deleted', []);
         });
+
+        if (in_array(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive(static::class), true)) {
+            static::restored(function (self $model): void {
+                $model->logActivityEvent('restored', []);
+            });
+
+            static::forceDeleted(function (self $model): void {
+                $model->logActivityEvent('force_deleted', []);
+            });
+        }
     }
 
     private function logActivityEvent(string $event, array $changes): void
     {
-        $entityType = property_exists($this, 'activityEntityType')
-            ? $this->activityEntityType
-            : Str::snake(class_basename($this));
+        $entityType = $this->activityEntityType();
 
         [$actorType, $actorId] = $this->resolveActivityActor();
 
@@ -42,9 +50,10 @@ trait ActivityLoggable
             actorType: $actorType,
             actorId: $actorId,
             entityType: $entityType,
-            entityId: (string) $this->getKey(),
+            entityId: $this->activityEntityId(),
             requestId: (string) Str::ulid(),
             retentionDays: (int) config('activity_logs.retention_days', 360),
+            traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
         );
 
         app(ActivityLogger::class)->record(
@@ -70,13 +79,35 @@ trait ActivityLoggable
         return [];
     }
 
-    private function resolveActivityActor(): array
+    protected function activityEntityType(): string
+    {
+        return property_exists($this, 'activityEntityType')
+            ? $this->activityEntityType
+            : Str::snake(class_basename($this));
+    }
+
+    protected function activityEntityId(): string
+    {
+        return (string) $this->getKey();
+    }
+
+    /**
+     * @return array{0: string, 1: int|null}
+     */
+    protected function activityActor(): array
     {
         if (Auth::check()) {
             return ['user', Auth::id()];
         }
 
         return ['system', null];
+    }
+
+    private function resolveActivityActor(): array
+    {
+        [$actorType, $actorId] = $this->activityActor();
+
+        return [(string) $actorType, is_numeric($actorId) ? (int) $actorId : null];
     }
 
     private function activityChangesForCreate(): array

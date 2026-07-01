@@ -8,6 +8,7 @@ use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
 
 class CreateHttpLogIndexCommand extends Command
 {
@@ -19,8 +20,8 @@ class CreateHttpLogIndexCommand extends Command
     {
         $prefix        = config('log_elasticsearch.index_prefix', 'app_logs');
         $physicalIndex = $prefix . '_http_logs_' . now()->format('Ymd_His');
-        $readAlias     = $prefix . '_http_logs';
-        $writeAlias    = $prefix . '_http_logs_write';
+        $readAlias     = config('http_logs.index_alias');
+        $writeAlias    = config('http_logs.index_alias_write');
 
         try {
             if (! $client->existsIndex($physicalIndex)) {
@@ -33,6 +34,7 @@ class CreateHttpLogIndexCommand extends Command
                         'settings' => [
                             'number_of_shards'   => 1,
                             'number_of_replicas' => config('log_elasticsearch.replicas', 1),
+                            ...ElasticsearchLifecycle::indexSettings($writeAlias),
                         ],
                     ],
                 ]);

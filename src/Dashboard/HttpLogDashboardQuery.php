@@ -189,6 +189,7 @@ class HttpLogDashboardQuery
             'entity_id'    => 'entity.id',
             'request_id'   => 'request_id',
             'external_id'  => 'external.id',
+            'trace_id'     => 'trace.id',
         ];
 
         foreach ($termFields as $key => $field) {

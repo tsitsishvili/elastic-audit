@@ -92,6 +92,24 @@ class ActivityLogIndexerTest extends TestCase
         $this->assertSame(42, $captured['actor']['id']);
     }
 
+    public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
+    {
+        $captured = null;
+
+        $this->client
+            ->expects($this->once())
+            ->method('bulk')
+            ->with($this->callback(function (array $p) use (&$captured) {
+                $captured = $p['body'];
+                return true;
+            }));
+
+        $this->indexer->bulk([$this->makeData(), $this->makeData()]);
+
+        $this->assertCount(4, $captured);
+        $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
+    }
+
     private function makeData(): ActivityLogData
     {
         $context = ActivityLogContext::forActor(

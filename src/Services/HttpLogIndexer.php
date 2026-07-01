@@ -25,6 +25,26 @@ class HttpLogIndexer
         ]);
     }
 
+    /**
+     * @param iterable<HttpLogData> $items
+     */
+    public function bulk(iterable $items): void
+    {
+        $body = [];
+
+        foreach ($items as $data) {
+            $id     = hash('sha256', $data->eventId);
+            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => $id]];
+            $body[] = $this->toDocument($data);
+        }
+
+        if ($body === []) {
+            return;
+        }
+
+        $this->client->bulk(['body' => $body]);
+    }
+
     private function toDocument(HttpLogData $d): array
     {
         return [
@@ -39,6 +59,11 @@ class HttpLogIndexer
             'attempt'        => $d->attempt,
             'success'        => $d->success,
             'retention_days' => $d->retentionDays,
+            'trace'          => [
+                'id'          => $d->traceId,
+                'span_id'     => $d->spanId,
+                'traceparent' => $d->traceParent,
+            ],
             'http'           => [
                 'method'       => $d->httpMethod,
                 'url'          => $d->httpUrl,

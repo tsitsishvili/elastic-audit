@@ -8,10 +8,11 @@ use Illuminate\Support\Str;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class HttpLogData
 {
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
 
     public function __construct(
         public string $eventId,
@@ -39,6 +40,9 @@ final readonly class HttpLogData
         public ?string $errorClass,
         public ?string $errorMessage,
         public bool $timedOut = false,
+        public ?string $traceId = null,
+        public ?string $spanId = null,
+        public ?string $traceParent = null,
     ) {}
 
     public static function make(
@@ -57,10 +61,16 @@ final readonly class HttpLogData
         ?string $errorClass = null,
         ?string $errorMessage = null,
         bool $timedOut = false,
+        ?string $traceParent = null,
     ): self {
         $parsed = parse_url($httpUrl);
         $host   = $parsed['host'] ?? $httpUrl;
         $path   = $parsed['path'] ?? '/';
+        $trace  = TraceContext::merge(
+            traceId: $context->traceId,
+            spanId: $context->spanId,
+            traceParent: $context->traceParent ?? $traceParent,
+        );
 
         $statusClass = $httpStatusCode !== null
             ? (string) (intdiv($httpStatusCode, 100)) . 'xx'
@@ -92,6 +102,9 @@ final readonly class HttpLogData
             errorClass: $errorClass,
             errorMessage: $errorMessage,
             timedOut: $timedOut,
+            traceId: $trace->traceId,
+            spanId: $trace->spanId,
+            traceParent: $trace->traceParent,
         );
     }
 }

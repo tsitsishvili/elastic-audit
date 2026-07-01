@@ -41,7 +41,7 @@ application can enable only what it needs.
 2. Install the package:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^1.0
+    composer require tsitsishvili/elastic-audit:^2.5
     ```
 
 3. Publish config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
@@ -105,7 +105,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^1.0"
+    "tsitsishvili/elastic-audit": "^2.5"
   }
 }
 ```

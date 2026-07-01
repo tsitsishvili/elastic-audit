@@ -162,7 +162,7 @@ class HttpLogDashboardController
     {
         $keys = [
             'provider', 'event_type', 'direction', 'status_class',
-            'success', 'timeout', 'entity_id', 'request_id', 'external_id', 'from', 'to',
+            'success', 'timeout', 'entity_id', 'request_id', 'external_id', 'trace_id', 'from', 'to',
         ];
 
         $filters = [];
