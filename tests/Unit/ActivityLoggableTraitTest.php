@@ -6,6 +6,7 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Bus;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
@@ -16,6 +17,19 @@ use Tsitsishvili\ElasticAudit\Traits\ActivityLoggable;
 class TraitTestOrder extends Model
 {
     use ActivityLoggable;
+
+    protected $table    = 'orders';
+    protected $fillable = ['status', 'amount', 'note'];
+    public $timestamps  = false;
+
+    protected string $activityEntityType = 'order';
+    protected array $activityLogExcept   = [];
+}
+
+class TraitTestSoftOrder extends Model
+{
+    use ActivityLoggable;
+    use SoftDeletes;
 
     protected $table    = 'orders';
     protected $fillable = ['status', 'amount', 'note'];
@@ -50,6 +64,7 @@ class ActivityLoggableTraitTest extends TestCase
             $table->string('status')->default('pending');
             $table->integer('amount')->default(100);
             $table->string('note')->nullable();
+            $table->timestamp('deleted_at')->nullable();
         });
     }
 
@@ -241,6 +256,53 @@ class ActivityLoggableTraitTest extends TestCase
             return $job->data->metadata['event'] === 'created'
                 && in_array('status', $job->data->metadata['changed_fields'], true)
                 && in_array('amount', $job->data->metadata['changed_fields'], true);
+        });
+    }
+
+    public function test_soft_deleted_model_dispatches_restored_and_force_deleted_events(): void
+    {
+        $order = TraitTestSoftOrder::create(['status' => 'pending', 'amount' => 100]);
+        $order->delete();
+        Bus::fake();
+
+        $order->restore();
+
+        Bus::assertDispatched(LogActivityJob::class, fn (LogActivityJob $job) => $job->data->action === 'order.restored');
+
+        Bus::fake();
+
+        $order->forceDelete();
+
+        Bus::assertDispatched(LogActivityJob::class, fn (LogActivityJob $job) => $job->data->action === 'order.force_deleted');
+    }
+
+    public function test_model_can_override_activity_actor_and_entity_id(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+            protected $table    = 'orders';
+            protected $fillable = ['status', 'amount', 'note'];
+            public $timestamps  = false;
+
+            protected function activityActor(): array
+            {
+                return ['job', 99];
+            }
+
+            protected function activityEntityId(): string
+            {
+                return 'custom-' . $this->getKey();
+            }
+        };
+
+        $model->fill(['status' => 'pending', 'amount' => 100])->save();
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->actorType === 'job'
+                && $job->data->actorId === 99
+                && str_starts_with($job->data->entityId, 'custom-');
         });
     }
 }

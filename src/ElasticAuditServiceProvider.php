@@ -10,8 +10,12 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Tsitsishvili\ElasticAudit\Console\CreateActivityLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateHttpLogIndexCommand;
+use Tsitsishvili\ElasticAudit\Console\CreateLogLifecyclePolicyCommand;
+use Tsitsishvili\ElasticAudit\Console\ElasticAuditHealthCommand;
 use Tsitsishvili\ElasticAudit\Console\PruneActivityLogCommand;
 use Tsitsishvili\ElasticAudit\Console\PruneHttpLogCommand;
+use Tsitsishvili\ElasticAudit\Console\RolloverActivityLogIndexCommand;
+use Tsitsishvili\ElasticAudit\Console\RolloverHttpLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
 use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
@@ -139,6 +143,10 @@ class ElasticAuditServiceProvider extends ServiceProvider
             PruneHttpLogCommand::class,
             CreateActivityLogIndexCommand::class,
             PruneActivityLogCommand::class,
+            CreateLogLifecyclePolicyCommand::class,
+            RolloverHttpLogIndexCommand::class,
+            RolloverActivityLogIndexCommand::class,
+            ElasticAuditHealthCommand::class,
         ]);
     }
 

@@ -74,6 +74,25 @@ class HttpLogIndexerTest extends TestCase
         $this->assertTrue($captured['http']['timed_out']);
     }
 
+    public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
+    {
+        $captured = null;
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('bulk')
+            ->with($this->callback(function (array $p) use (&$captured): bool {
+                $captured = $p['body'];
+
+                return true;
+            }));
+
+        $this->indexer->bulk([$this->makeLogData(), $this->makeLogData()]);
+
+        $this->assertCount(4, $captured);
+        $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
+    }
+
     private function makeLogData(bool $timedOut = false): HttpLogData
     {
         $empty   = new RedactedHttpPayload([], null, null, null, false);

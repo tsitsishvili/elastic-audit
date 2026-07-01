@@ -162,7 +162,8 @@ enum's `->value` if you keep one. `actorType` is a free string — conventionall
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 
-Add the trait to an Eloquent model to log `created` / `updated` / `deleted` automatically with a computed diff:
+Add the trait to an Eloquent model to log `created` / `updated` / `deleted` automatically with a computed diff.
+Models using Laravel's `SoftDeletes` also log `restored` and `force_deleted`:
 
 ```php
 use Illuminate\Database\Eloquent\Model;
@@ -181,6 +182,18 @@ class Order extends Model
 
     // Optional — if non-empty, only these fields appear in the diff.
     protected array $activityLogOnly = [];
+
+    // Optional — override when actor resolution is not the authenticated user.
+    protected function activityActor(): array
+    {
+        return ['job', 123];
+    }
+
+    // Optional — override when the audit entity id differs from the model key.
+    protected function activityEntityId(): string
+    {
+        return (string) $this->uuid;
+    }
 
     // Optional — extra contextual data attached to every auto-logged event.
     // Override to enrich events with arbitrary arrays (request IP, tenant,
@@ -202,10 +215,13 @@ class Order extends Model
 | `created`      | `{entity}.created` | `{field: {old: null, new: value}}` for all logged attributes |
 | `updated`      | `{entity}.updated` | `{field: {old, new}}` for dirty fields only                  |
 | `deleted`      | `{entity}.deleted` | `{}` (the entity itself is the event)                        |
+| `restored`     | `{entity}.restored` | `{}` (SoftDeletes models only)                              |
+| `forceDeleted` | `{entity}.force_deleted` | `{}` (SoftDeletes models only)                         |
 
-`$activityLogOnly` is applied first (whitelist), then `$activityLogExcept` (blacklist). The entity id is
-`(string) $model->getKey()`. `activityMetadata()` defaults to `[]` and lands in the `metadata` map (stored
-but not indexed — see below), mirroring the `metadata:` argument of a manual `ActivityLog::record()` call.
+`$activityLogOnly` is applied first (whitelist), then `$activityLogExcept` (blacklist). The entity id defaults to
+`(string) $model->getKey()` and can be overridden via `activityEntityId()`. `activityMetadata()` defaults to `[]` and
+lands in the `metadata` map (stored but not indexed — see below), mirroring the `metadata:` argument of a manual
+`ActivityLog::record()` call.
 
 ### Actor Resolution
 
@@ -216,14 +232,23 @@ The trait resolves the current actor automatically:
 
 For manual `ActivityLog::record()` calls you set the actor explicitly via the context.
 
+If an activity is recorded while an HTTP request with a W3C `traceparent` header is active, the trait stores
+`trace.id`, `trace.span_id`, and `trace.traceparent` automatically. Manual calls can pass `traceId`, `spanId`, or
+`traceParent` to `ActivityLogContext::forActor(...)`.
+
 ### Document Shape
 
 ```json
 {
   "@timestamp": "2026-06-04T10:00:00Z",
   "event_id": "01JX...",
-  "schema_version": 1,
+  "schema_version": 2,
   "request_id": "01JX...",
+  "trace": {
+    "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "span_id": "00f067aa0ba902b7",
+    "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
+  },
   "actor": {
     "type": "user",
     "id": 42
@@ -281,6 +306,18 @@ php artisan activity-logs:prune
 
 Deletes documents older than their own `retention_days` value (each document carries its retention, so different
 actions can have different lifetimes). Schedule it daily.
+
+If Elasticsearch lifecycle/rollover is enabled in `log_elasticsearch.php`, install the shared lifecycle policy and use
+the activity rollover command:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan activity-logs:rollover
+```
+
+Use `php artisan elastic-audit:health` to verify cluster reachability, aliases, queue names, and lifecycle state.
+For high-volume replays, `LogActivityBatchJob` accepts a list of `ActivityLogData` DTOs and indexes them through the
+Elasticsearch bulk API.
 
 ### Guarantees
 

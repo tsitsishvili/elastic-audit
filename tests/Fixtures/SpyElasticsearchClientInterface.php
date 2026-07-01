@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Fixtures;
 
 use Elastic\Elasticsearch\ClientInterface;
+use Elastic\Elasticsearch\Endpoints\Ilm;
 use Elastic\Elasticsearch\Endpoints\Indices;
 use Elastic\Elasticsearch\Response\Elasticsearch;
 
 interface SpyElasticsearchClientInterface extends ClientInterface
 {
+    public function ping(?array $params = null): Elasticsearch;
+
     public function index(?array $params = null): Elasticsearch;
 
     public function bulk(?array $params = null): Elasticsearch;
@@ -19,4 +22,6 @@ interface SpyElasticsearchClientInterface extends ClientInterface
     public function deleteByQuery(?array $params = null): Elasticsearch;
 
     public function indices(): Indices;
+
+    public function ilm(): Ilm;
 }

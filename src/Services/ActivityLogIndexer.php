@@ -25,6 +25,25 @@ class ActivityLogIndexer
         ]);
     }
 
+    /**
+     * @param iterable<ActivityLogData> $items
+     */
+    public function bulk(iterable $items): void
+    {
+        $body = [];
+
+        foreach ($items as $data) {
+            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => hash('sha256', $data->eventId)]];
+            $body[] = $this->toDocument($data);
+        }
+
+        if ($body === []) {
+            return;
+        }
+
+        $this->client->bulk(['body' => $body]);
+    }
+
     private function toDocument(ActivityLogData $d): array
     {
         return [
@@ -32,6 +51,11 @@ class ActivityLogIndexer
             'event_id'       => $d->eventId,
             'schema_version' => ActivityLogData::SCHEMA_VERSION,
             'request_id'     => $d->requestId,
+            'trace'          => [
+                'id'          => $d->traceId,
+                'span_id'     => $d->spanId,
+                'traceparent' => $d->traceParent,
+            ],
             'actor'          => [
                 'type' => $d->actorType,
                 'id'   => $d->actorId,

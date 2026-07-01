@@ -50,6 +50,50 @@ class HttpLogFacadeTest extends TestCase
         Bus::assertDispatched(LogHttpRequestJob::class);
     }
 
+    public function test_outgoing_request_headers_are_captured_and_redacted(): void
+    {
+        Bus::fake();
+        Http::fake(['https://provider.example/*' => Http::response(['ok' => true], 200)]);
+
+        HttpLog::make(
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryOrderCreate,
+            context: $this->context,
+        )
+            ->withHeaders([
+                'Authorization' => 'Bearer secret-token',
+                'X-Correlation-ID' => 'corr-1',
+            ])
+            ->post('https://provider.example/orders', ['order_id' => 1]);
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->request->headers['Authorization'] === '[REDACTED]'
+                && $job->data->request->headers['X-Correlation-ID'] === ['corr-1'];
+        });
+    }
+
+    public function test_outgoing_traceparent_is_indexed_as_trace_context(): void
+    {
+        Bus::fake();
+        Http::fake(['https://provider.example/*' => Http::response(['ok' => true], 200)]);
+
+        $traceParent = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00';
+
+        HttpLog::make(
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryOrderCreate,
+            context: $this->context,
+        )
+            ->withHeaders(['traceparent' => $traceParent])
+            ->get('https://provider.example/status');
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) use ($traceParent) {
+            return $job->data->traceId === '4bf92f3577b34da6a3ce929d0e0e4736'
+                && $job->data->spanId === '00f067aa0ba902b7'
+                && $job->data->traceParent === $traceParent;
+        });
+    }
+
     public function test_failed_http_call_dispatches_job_and_rethrows_exception(): void
     {
         Bus::fake();

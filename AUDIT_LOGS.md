@@ -48,7 +48,7 @@ status codes, entity context, and sanitized request/response payload previews. I
 2. Install the package:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^1.0
+    composer require tsitsishvili/elastic-audit:^2.4
     ```
 
 3. Publish the config files and enum stubs:
@@ -98,7 +98,7 @@ Add the package repository to the consuming application's `composer.json`.
 Install a tagged version:
 
 ```bash
-composer require tsitsishvili/elastic-audit:^1.0
+composer require tsitsishvili/elastic-audit:^2.4
 ```
 
 Laravel auto-discovers the package service provider.
@@ -134,7 +134,13 @@ HTTP_LOGS_PAYMENT_BODY_MODE=preview
 
 HTTP_LOGS_DASHBOARD_ENABLED=true
 ELASTIC_AUDIT_DASHBOARD_PREFIX=logger
-HTTP_LOGS_DASHBOARD_PATH=third-party
+HTTP_LOGS_DASHBOARD_PATH=http-logs
+
+LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false
+LOG_ELASTICSEARCH_LIFECYCLE_POLICY=my_app_elastic_audit_policy
+LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE=30d
+LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE=50gb
+LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER=
 
 LOG_ELASTICSEARCH_HOST=localhost
 LOG_ELASTICSEARCH_PORT=9200
@@ -152,10 +158,15 @@ LOG_ELASTICSEARCH_REPLICAS=1
 | `HTTP_LOGS_SAMPLE_RATE`          | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
 | `HTTP_LOGS_BODY_PREVIEW_BYTES`   | Max bytes stored as sanitized body preview.                                                                                        |
 | `HTTP_LOGS_BODY_MAX_BYTES`       | Max raw body size before truncation.                                                                                               |
-| `HTTP_LOGS_PAYMENT_BODY_MODE`    | Body handling mode for payment providers (`preview` or `omit`).                                                                    |
+| `HTTP_LOGS_PAYMENT_BODY_MODE`    | Body handling mode for payment providers (`preview` or `metadata`).                                                                |
 | `HTTP_LOGS_DASHBOARD_ENABLED`    | Set to `true` to register the web dashboard routes.                                                                                |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX` | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
-| `HTTP_LOGS_DASHBOARD_PATH`       | This dashboard's subpath under the group prefix (default `third-party`). Served at `/logger/third-party`.                          |
+| `HTTP_LOGS_DASHBOARD_PATH`       | This dashboard's subpath under the group prefix (default `http-logs`). Served at `/logger/http-logs`.                              |
+| `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED` | Enables ILM settings on newly created indexes.                                                                                |
+| `LOG_ELASTICSEARCH_LIFECYCLE_POLICY` | Shared ILM policy name for HTTP and activity log indexes.                                                                       |
+| `LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE` | Max index age condition used by rollover.                                                                                       |
+| `LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE` | Max primary shard size condition used by rollover.                                                                     |
+| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER` | Optional ILM delete phase age. Leave empty to rely on prune commands.                                                  |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`:
 
@@ -189,7 +200,7 @@ my_app_http_logs_write
 | `redaction.body.block`      | `[]`                       | Extra body keys to always redact, in addition to the defaults (whole-word match).                                                                                                       |
 | `dashboard.enabled`         | `true`                     | Registers the web dashboard routes. Set to `false` to hide the UI entirely.                                                                                                             |
 | `dashboard.prefix`          | `logger`                   | Shared group URL segment placed before every dashboard. Both dashboards read `ELASTIC_AUDIT_DASHBOARD_PREFIX`; changing it moves both at once. Set to `''` to serve at the root.        |
-| `dashboard.path`            | `third-party`              | This dashboard's own subpath under the group prefix. Composes with `prefix` as `{prefix}/{path}`, e.g. `/logger/third-party`.                                                           |
+| `dashboard.path`            | `http-logs`                | This dashboard's own subpath under the group prefix. Composes with `prefix` as `{prefix}/{path}`, e.g. `/logger/http-logs`.                                                             |
 | `dashboard.middleware`      | `['web']`                  | Middleware applied to dashboard routes. The package always appends its authorization middleware after this stack.                                                                       |
 | `dashboard.per_page`        | `25`                       | Number of log rows shown per page in the list view.                                                                                                                                     |
 
@@ -204,6 +215,11 @@ my_app_http_logs_write
 | `basicAuthentication.password` | empty string | Optional Elasticsearch basic auth password.                                                    |
 | `index_prefix`                 | `app_logs`   | Prefix used when creating physical indexes and aliases.                                        |
 | `replicas`                     | `1`          | Number of Elasticsearch replicas for the logs index. Use `0` for single-node staging clusters. |
+| `lifecycle.enabled`            | `false`      | Enables ILM settings on newly created indexes.                                                 |
+| `lifecycle.policy_name`        | `{prefix}_elastic_audit_policy` | ILM policy name used by both HTTP and activity log indexes.                    |
+| `lifecycle.rollover_max_age`   | `30d`        | Max index age condition passed to rollover.                                                     |
+| `lifecycle.rollover_max_shard_size` | `50gb` | Max primary shard size condition passed to rollover.                                            |
+| `lifecycle.delete_after`       | `null`       | Optional ILM delete phase age. Leave empty to keep using document-level prune commands.         |
 
 ## Register Application Enums
 
@@ -296,6 +312,8 @@ data, and failure information.
 | `event_id`          | Unique ULID for the log document.                                                         |
 | `@timestamp`        | Time the log data was created.                                                            |
 | `request_id`        | Correlation ULID shared by the log context.                                               |
+| `trace.id`          | Optional W3C trace id parsed from `traceparent` or provided by the context.               |
+| `trace.span_id`     | Optional W3C span id parsed from `traceparent` or provided by the context.                |
 | `provider`          | Provider enum value, for example `delivery` or `payment`.                                 |
 | `event_type`        | Event type enum value, for example `delivery_order_create`.                               |
 | `direction`         | `outgoing` for provider calls or `incoming` for callbacks.                                |
@@ -331,8 +349,29 @@ Create the physical index and attach read/write aliases:
 php artisan http-logs:create-index
 ```
 
-This command refuses to create the logs index when the configured logs Elasticsearch host matches the product-search
-Elasticsearch host.
+### Lifecycle, Rollover, and Health
+
+Document-level pruning remains the default retention mechanism. If you want Elasticsearch ILM/rollover as well, enable
+`log_elasticsearch.lifecycle.enabled`, install the policy, then create indexes:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan http-logs:create-index
+```
+
+Rollover can be run manually or scheduled:
+
+```bash
+php artisan http-logs:rollover
+```
+
+Use the health command during deploys or runbooks to validate cluster reachability, aliases, queue names, and lifecycle
+configuration:
+
+```bash
+php artisan elastic-audit:health
+php artisan elastic-audit:health --all
+```
 
 ## Logging Outgoing Requests
 
@@ -405,6 +444,10 @@ multipart, etc. are all redacted and stored uniformly, and no method call can by
 
 The original provider call behavior is preserved. If the provider request fails, the package dispatches the log job and
 rethrows the original exception.
+
+Outgoing request headers are captured and redacted alongside the body. If a request carries a W3C `traceparent` header,
+the log stores queryable `trace.id` / `trace.span_id` fields and the raw `trace.traceparent` value for correlation.
+You can also set `traceId`, `spanId`, or `traceParent` explicitly on `HttpLogContext::forEntity(...)`.
 
 ## Logging Incoming Callbacks
 
@@ -514,6 +557,9 @@ HTTP_LOGS_QUEUE=logs
 php artisan queue:work --queue=logs
 ```
 
+For high-volume backfills or replay tools, use `LogHttpRequestBatchJob` with a list of `HttpLogData` DTOs. It uses the
+Elasticsearch bulk API through `HttpLogIndexer::bulk(...)` and sends the batch in one ES request.
+
 ## Dashboard
 
 The package ships a Horizon-style web dashboard for browsing logged requests. It reads directly from the
@@ -523,7 +569,7 @@ step and no assets to compile or publish.
 Once the package is installed it is served (by default) at:
 
 ```text
-/logger/third-party
+/logger/http-logs
 ```
 
 It provides three views:
@@ -561,7 +607,7 @@ a `403`.
 'dashboard' => [
     'enabled'    => env('HTTP_LOGS_DASHBOARD_ENABLED', true),
     'prefix'     => env('ELASTIC_AUDIT_DASHBOARD_PREFIX', 'logger'),
-    'path'       => env('HTTP_LOGS_DASHBOARD_PATH', 'third-party'),
+    'path'       => env('HTTP_LOGS_DASHBOARD_PATH', 'http-logs'),
     'middleware' => ['web'],
     'per_page'   => 25,
 ],
@@ -725,8 +771,7 @@ LOG_ELASTICSEARCH_USERNAME=
 LOG_ELASTICSEARCH_PASSWORD=
 ```
 
-The `http-logs:create-index` command will fail if the logs Elasticsearch host matches the configured
-product-search Elasticsearch host.
+Run `php artisan elastic-audit:health --all` to confirm the configured aliases are reachable.
 
 ### Incoming callback logs are skipped
 

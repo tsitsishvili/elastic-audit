@@ -140,7 +140,7 @@ class ActivityDashboardController
      */
     private function filters(Request $request): array
     {
-        $keys = ['action', 'actor_type', 'actor_id', 'entity_type', 'entity_id', 'request_id', 'success', 'from', 'to'];
+        $keys = ['action', 'actor_type', 'actor_id', 'entity_type', 'entity_id', 'request_id', 'trace_id', 'success', 'from', 'to'];
 
         $filters = [];
 

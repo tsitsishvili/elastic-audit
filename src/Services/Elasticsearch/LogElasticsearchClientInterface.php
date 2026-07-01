@@ -6,6 +6,8 @@ namespace Tsitsishvili\ElasticAudit\Services\Elasticsearch;
 
 interface LogElasticsearchClientInterface
 {
+    public function ping(): bool;
+
     public function index(array $params): void;
 
     public function bulk(array $params): void;
@@ -22,5 +24,11 @@ interface LogElasticsearchClientInterface
 
     public function existsAlias(string $name): bool;
 
+    public function getAlias(string $name): array;
+
     public function updateAliases(array $actions): void;
+
+    public function putLifecyclePolicy(string $name, array $policy): void;
+
+    public function rollover(string $alias, array $conditions): array;
 }

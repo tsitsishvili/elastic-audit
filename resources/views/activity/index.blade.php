@@ -48,6 +48,10 @@
                class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
                onchange="this.form.submit()">
 
+        <input type="text" name="trace_id" value="{{ $filters['trace_id'] ?? '' }}" placeholder="Trace ID"
+               class="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
+               onchange="this.form.submit()">
+
         @if($hasFilters)
             <a href="{{ route('activity-logs.logs.index') }}" class="text-sm text-red-500 hover:underline">Clear filters</a>
         @endif

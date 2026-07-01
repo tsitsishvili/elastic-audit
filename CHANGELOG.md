@@ -7,9 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-07-01
+
+### Added
+
+- Outgoing HTTP logging now captures and redacts request headers, bringing outgoing logs to parity with incoming
+  callback logs.
+- HTTP and activity documents now include optional W3C trace context (`trace.id`, `trace.span_id`, and stored
+  `trace.traceparent`) parsed from `traceparent` headers or passed explicitly on the log context. Dashboard filters
+  accept `trace_id`.
+- Elasticsearch operations now include `elastic-audit:health`, `elastic-audit:lifecycle-policy`,
+  `http-logs:rollover`, and `activity-logs:rollover`. New indexes can opt into ILM settings through
+  `log_elasticsearch.lifecycle`.
+- Bulk replay support via `HttpLogIndexer::bulk(...)`, `ActivityLogIndexer::bulk(...)`, `LogHttpRequestBatchJob`, and
+  `LogActivityBatchJob`.
+- `ActivityLoggable` now logs `restored` and `force_deleted` events for SoftDeletes models and exposes
+  `activityActor()` / `activityEntityId()` hooks for model-specific context.
+
 ### Changed
 
 - **Activity logs no longer depend on `EntityTypeContract`.** `ActivityLogContext::forActor()` now accepts a plain `string $entityType` instead of an `EntityTypeContract` instance — the activity subsystem already stored and indexed `entityType` as a free string (the `ActivityLoggable` trait never used the contract). The `EntityTypeContract` contract and its config-driven resolution remain in use by the HTTP logger; only the activity surface is decoupled. **Potentially breaking** for callers that passed an enum to `forActor()` — pass `$enum->value` (or a literal string) instead. No document-shape or mapping change.
+- Documentation examples now use the current `^2.5` package line and the actual default HTTP dashboard path
+  `/logger/http-logs`.
 
 ## [2.4.0] - 2026-06-30
 
@@ -79,7 +98,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.1.0...v2.2.0

@@ -8,6 +8,7 @@ use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
 
 class CreateActivityLogIndexCommand extends Command
 {
@@ -33,6 +34,7 @@ class CreateActivityLogIndexCommand extends Command
                         'settings' => [
                             'number_of_shards'   => 1,
                             'number_of_replicas' => config('log_elasticsearch.replicas', 1),
+                            ...ElasticsearchLifecycle::indexSettings($writeAlias),
                         ],
                     ],
                 ]);

@@ -15,6 +15,9 @@ final readonly class ActivityLogContext
         public string $entityId,
         public string $requestId,
         public int $retentionDays,
+        public ?string $traceId = null,
+        public ?string $spanId = null,
+        public ?string $traceParent = null,
     ) {}
 
     public static function forActor(
@@ -24,6 +27,9 @@ final readonly class ActivityLogContext
         string $entityId,
         ?string $requestId = null,
         int $retentionDays = 360,
+        ?string $traceId = null,
+        ?string $spanId = null,
+        ?string $traceParent = null,
     ): self {
         return new self(
             actorType: $actorType,
@@ -32,6 +38,9 @@ final readonly class ActivityLogContext
             entityId: $entityId,
             requestId: $requestId ?? (string) Str::ulid(),
             retentionDays: $retentionDays,
+            traceId: $traceId,
+            spanId: $spanId,
+            traceParent: $traceParent,
         );
     }
 }

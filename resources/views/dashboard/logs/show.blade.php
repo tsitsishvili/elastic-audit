@@ -62,6 +62,8 @@
                 'Attempt'        => data_get($log, 'attempt'),
                 'Retention days' => data_get($log, 'retention_days'),
                 'Request ID'     => data_get($log, 'request_id'),
+                'Trace ID'       => data_get($log, 'trace.id'),
+                'Span ID'        => data_get($log, 'trace.span_id'),
                 'Event ID'       => data_get($log, 'event_id'),
             ];
             $success = (bool) data_get($log, 'success');

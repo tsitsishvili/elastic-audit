@@ -59,6 +59,14 @@
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Request ID</div>
                 <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ $log['request_id'] ?? '—' }}</div>
             </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Trace ID</div>
+                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.id', '—') }}</div>
+            </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Span ID</div>
+                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.span_id', '—') }}</div>
+            </div>
         </div>
     </div>
 

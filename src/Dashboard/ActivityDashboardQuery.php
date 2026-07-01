@@ -142,6 +142,7 @@ class ActivityDashboardQuery
             'entity_type' => 'entity.type',
             'entity_id'   => 'entity.id',
             'request_id'  => 'request_id',
+            'trace_id'    => 'trace.id',
         ];
 
         foreach ($termFields as $key => $field) {

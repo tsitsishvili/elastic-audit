@@ -15,6 +15,17 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
         private readonly ClientInterface $client,
     ) {}
 
+    public function ping(): bool
+    {
+        try {
+            return $this->client->ping()->asBool();
+        } catch (Throwable $e) {
+            $this->logError('LogES: ping failed', $e);
+
+            return false;
+        }
+    }
+
     public function index(array $params): void
     {
         try {
@@ -94,9 +105,36 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
         }
     }
 
+    public function getAlias(string $name): array
+    {
+        try {
+            return $this->client->indices()->getAlias(['name' => $name])->asArray();
+        } catch (Throwable $e) {
+            $this->logError('LogES: get alias failed', $e);
+
+            throw $e;
+        }
+    }
+
     public function updateAliases(array $actions): void
     {
         $this->client->indices()->updateAliases(['body' => ['actions' => $actions]]);
+    }
+
+    public function putLifecyclePolicy(string $name, array $policy): void
+    {
+        $this->client->ilm()->putLifecycle([
+            'name' => $name,
+            'body' => ['policy' => $policy],
+        ]);
+    }
+
+    public function rollover(string $alias, array $conditions): array
+    {
+        return $this->client->indices()->rollover([
+            'alias' => $alias,
+            'body'  => ['conditions' => $conditions],
+        ])->asArray();
     }
 
     private function logError(string $message, Throwable $e): void

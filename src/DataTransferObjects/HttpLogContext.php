@@ -16,6 +16,9 @@ final readonly class HttpLogContext
         public ?int $userId,
         public string $requestId,
         public int $retentionDays,
+        public ?string $traceId = null,
+        public ?string $spanId = null,
+        public ?string $traceParent = null,
     ) {}
 
     public static function forEntity(
@@ -25,6 +28,9 @@ final readonly class HttpLogContext
         ?int $userId = null,
         int $retentionDays = 360,
         ?string $requestId = null,
+        ?string $traceId = null,
+        ?string $spanId = null,
+        ?string $traceParent = null,
     ): self {
         return new self(
             entityType: $entityType,
@@ -33,6 +39,9 @@ final readonly class HttpLogContext
             userId: $userId,
             requestId: $requestId ?? (string) Str::ulid(),
             retentionDays: $retentionDays,
+            traceId: $traceId,
+            spanId: $spanId,
+            traceParent: $traceParent,
         );
     }
 }

@@ -87,6 +87,7 @@ class HttpLogger
                 response: $responsePayload,
                 httpStatusCode: $httpStatusCode,
                 success: $success,
+                traceParent: $request->headers->get('traceparent'),
             );
 
             LogHttpRequestJob::dispatch($data);

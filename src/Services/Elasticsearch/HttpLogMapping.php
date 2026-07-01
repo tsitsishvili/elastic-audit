@@ -22,6 +22,13 @@ class HttpLogMapping
                 'attempt'        => ['type' => 'short'],
                 'success'        => ['type' => 'boolean'],
                 'retention_days' => ['type' => 'short'],
+                'trace'          => [
+                    'properties' => [
+                        'id'           => ['type' => 'keyword'],
+                        'span_id'      => ['type' => 'keyword'],
+                        'traceparent' => ['type' => 'keyword', 'index' => false],
+                    ],
+                ],
                 'http'           => [
                     'properties' => [
                         'method'       => ['type' => 'keyword'],

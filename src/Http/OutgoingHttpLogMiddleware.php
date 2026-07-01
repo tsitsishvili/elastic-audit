@@ -46,6 +46,7 @@ final class OutgoingHttpLogMiddleware
 
             $method  = $request->getMethod();
             $url     = (string) $request->getUri();
+            $headers = $request->getHeaders();
             $bodyRaw = '';
 
             try {
@@ -60,23 +61,23 @@ final class OutgoingHttpLogMiddleware
                 // Http::fake() callbacks that throw surface here synchronously.
                 $promise = $handler($request, $options);
             } catch (Throwable $e) {
-                $this->dispatch($method, $url, $bodyRaw, null, $e, $startTime);
+                $this->dispatch($method, $url, $headers, $bodyRaw, null, $e, $startTime);
 
                 throw $e;
             }
 
             return $promise->then(
-                function (ResponseInterface $response) use ($method, $url, $bodyRaw, $startTime) {
-                    $this->dispatch($method, $url, $bodyRaw, $response, null, $startTime);
+                function (ResponseInterface $response) use ($method, $url, $headers, $bodyRaw, $startTime) {
+                    $this->dispatch($method, $url, $headers, $bodyRaw, $response, null, $startTime);
 
                     return $response;
                 },
-                function ($reason) use ($method, $url, $bodyRaw, $startTime) {
+                function ($reason) use ($method, $url, $headers, $bodyRaw, $startTime) {
                     $exception = $reason instanceof Throwable
                         ? $reason
                         : new RuntimeException(is_string($reason) ? $reason : 'Request rejected');
 
-                    $this->dispatch($method, $url, $bodyRaw, null, $exception, $startTime);
+                    $this->dispatch($method, $url, $headers, $bodyRaw, null, $exception, $startTime);
 
                     // Re-reject with the original reason so the caller sees the real failure.
                     return Create::rejectionFor($reason);
@@ -145,6 +146,7 @@ final class OutgoingHttpLogMiddleware
     private function dispatch(
         string $method,
         string $url,
+        array $requestHeaders,
         string $requestBodyRaw,
         ?ResponseInterface $response,
         ?Throwable $exception,
@@ -157,7 +159,7 @@ final class OutgoingHttpLogMiddleware
             $previewBytes = (int) config('http_logs.body_preview_bytes', 4096);
 
             $requestPayload = $this->redactor->buildPayload(
-                headers: [],
+                headers: $requestHeaders,
                 rawBody: $requestBodyRaw,
                 maxBytes: $maxBytes,
                 previewBytes: $previewBytes,
@@ -200,12 +202,30 @@ final class OutgoingHttpLogMiddleware
                 errorClass: $exception !== null ? $exception::class : null,
                 errorMessage: $errorMessage,
                 timedOut: $timedOut,
+                traceParent: $this->firstHeader($requestHeaders, 'traceparent'),
             );
 
             LogHttpRequestJob::dispatch($data);
         } catch (Throwable) {
             // Never let logging failures affect the provider call result
         }
+    }
+
+    private function firstHeader(array $headers, string $name): ?string
+    {
+        foreach ($headers as $headerName => $values) {
+            if (strcasecmp((string) $headerName, $name) !== 0) {
+                continue;
+            }
+
+            if (is_array($values)) {
+                return isset($values[0]) ? (string) $values[0] : null;
+            }
+
+            return (string) $values;
+        }
+
+        return null;
     }
 
     /**
