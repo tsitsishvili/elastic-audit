@@ -90,7 +90,7 @@ final readonly class HttpLogData
             httpStatusCode: $httpStatusCode,
             httpStatusClass: $statusClass,
             latencyMs: $latencyMs,
-            entityType: $context->entityType->getValue(),
+            entityType: (string) $context->entityType->value,
             entityId: $context->entityId,
             externalId: $context->externalId,
             userId: $context->userId,

@@ -5,6 +5,77 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 2.x to 3.x
+
+### High impact: lifecycle is now the default retention path
+
+Newly published `log_elasticsearch.php` configs default `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=true` and
+`LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER=360d`. New indexes created with lifecycle enabled receive ILM rollover/delete
+settings. The prune commands remain available when ILM is disabled, when you need per-document `retention_days`, or as
+a manual cleanup fallback.
+
+**What you need to do:** run `php artisan elastic-audit:lifecycle-policy` before creating new HTTP/activity indexes.
+If your cluster does not support ILM or you intentionally rely on prune commands, set
+`LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false` and continue scheduling `http-logs:prune` / `activity-logs:prune`.
+
+### Medium impact: health checks are stricter
+
+`elastic-audit:health` now fails when enabled HTTP logs have missing/invalid enum classes, when log job retry settings
+are invalid, or when lifecycle is enabled without rollover/delete configuration.
+
+**What you need to do:** add the health command to deploy checks after publishing config. Register valid
+`http_logs.enums.*` classes if HTTP logging is enabled.
+
+### Low impact: log job retry settings are configurable
+
+HTTP and activity jobs now read attempts, backoff, timeout, and batch timeout from config. Defaults match previous
+behavior: `tries=3`, `backoff=10,30,120`, single job timeout `30`, batch job timeout `60`.
+
+**What you need to do:** usually nothing. Tune `HTTP_LOGS_JOB_*` or `ACTIVITY_LOGS_JOB_*` env values if your
+Elasticsearch cluster needs longer indexing timeouts or different retry pacing.
+
+### Low impact: HTTP enum contracts now use BackedEnum values directly
+
+`ProviderContract`, `EventTypeContract`, and `EntityTypeContract` now extend PHP's `BackedEnum` and no longer require a
+`getValue()` method. The package reads enum `->value` directly.
+
+**What you need to do:** if your application enums already define `getValue()`, they can keep it. New enums only need
+to be string-backed enums implementing the package contract. Non-enum classes can no longer implement these contracts.
+
+### Medium impact: prune commands now fail loudly
+
+`http-logs:prune` and `activity-logs:prune` now return a non-zero exit code when Elasticsearch cannot fetch
+`retention_days` buckets or a `delete_by_query` operation fails. Previously those failures were logged but the command
+could still exit successfully.
+
+**What you need to do:** if these commands are scheduled in CI, cron, or a deploy pipeline, treat a failure as a real
+retention problem and inspect the command output/application logs.
+
+### Medium impact: HTTP log document IDs changed
+
+HTTP log indexing now uses `event_id` as the Elasticsearch document id. This prevents separate provider calls with the
+same correlation `request_id` from overwriting each other.
+
+**What you need to do:** usually nothing. Existing documents remain unchanged. If you have external tooling that
+derived Elasticsearch ids from `request_id|attempt`, update it to use `event_id`.
+
+### Low impact: enum config defaults are now null
+
+The default `http_logs.enums.*` config values are now `null`, matching the documentation. Missing or invalid enum
+classes make incoming callback logging skip the event instead of throwing.
+
+**What you need to do:** published configs should explicitly register your application enum classes if you use
+`IncomingHttpLogMiddleware`.
+
+### Low impact: lifecycle policy command works with Elasticsearch PHP v9
+
+`elastic-audit:lifecycle-policy` now sends the ILM policy name using the Elasticsearch client's required `policy`
+parameter. The command can be run while `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false`; it will warn, but still creates or
+updates the policy. New indexes only use the policy when lifecycle is enabled before index creation.
+
+**What you need to do:** update the package in CI/tester repositories that failed with `The parameter policy is
+required`, then rerun `php artisan elastic-audit:lifecycle-policy`.
+
 ## Upgrading from 1.0.0
 
 ### High impact: more data is redacted from logs

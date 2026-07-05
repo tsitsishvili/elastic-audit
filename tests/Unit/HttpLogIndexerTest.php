@@ -42,18 +42,17 @@ class HttpLogIndexerTest extends TestCase
         $this->indexer->index($this->makeLogData());
     }
 
-    public function test_generates_deterministic_id_from_request_id_and_attempt(): void
+    public function test_generates_deterministic_id_from_event_id(): void
     {
         $data       = $this->makeLogData();
-        $attempt    = 2;
-        $expectedId = hash('sha256', $data->requestId . '|' . $attempt);
+        $expectedId = hash('sha256', $data->eventId);
 
         $this->logClient
             ->expects($this->once())
             ->method('index')
             ->with($this->callback(fn (array $p) => $p['id'] === $expectedId));
 
-        $this->indexer->index($data, $attempt);
+        $this->indexer->index($data, 2);
     }
 
     public function test_document_includes_http_timed_out_flag(): void

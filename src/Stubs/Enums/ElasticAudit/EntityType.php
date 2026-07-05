@@ -10,9 +10,4 @@ use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
 enum EntityType: string implements EntityTypeContract
 {
     case None = 'none';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }

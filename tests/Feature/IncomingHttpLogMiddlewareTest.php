@@ -118,6 +118,23 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         Bus::assertNotDispatched(LogHttpRequestJob::class);
     }
 
+    public function test_middleware_skips_when_provider_enum_class_does_not_exist(): void
+    {
+        config(['http_logs.enums.provider' => 'App\\Enums\\ElasticAudit\\MissingProvider']);
+        Bus::fake();
+
+        Route::post('/_test/callback-missing-provider-class', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-missing-provider-class', [])->assertOk();
+
+        Bus::assertNotDispatched(LogHttpRequestJob::class);
+    }
+
     public function test_middleware_skips_when_event_type_enum_class_not_configured(): void
     {
         config(['http_logs.enums.event_type' => null]);
@@ -261,6 +278,35 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
             return $job->data->response->body === ['received' => true, 'id' => 123]
                 && str_contains((string) $job->data->response->bodyPreview, 'received');
+        });
+    }
+
+    public function test_middleware_logs_failed_callback_before_rethrowing_exception(): void
+    {
+        Bus::fake();
+        $this->withoutExceptionHandling();
+
+        Route::post('/_test/callback-throws', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_entity_type', TestEntityType::Order->value);
+            request()->attributes->set('third_party_entity_id', '99');
+
+            throw new \RuntimeException('Handler failed at https://example.com/callback?token=secret');
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        try {
+            $this->postJson('/_test/callback-throws', ['status' => 'failed']);
+            $this->fail('Expected callback exception to be rethrown.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Handler failed at https://example.com/callback?token=secret', $e->getMessage());
+        }
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->success === false
+                && $job->data->httpStatusCode === 500
+                && $job->data->errorClass === \RuntimeException::class
+                && ! str_contains((string) $job->data->errorMessage, 'token=secret');
         });
     }
 }

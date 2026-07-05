@@ -89,6 +89,34 @@ class HttpLoggerTest extends TestCase
         });
     }
 
+    public function test_log_incoming_redacts_form_urlencoded_request_body(): void
+    {
+        config(['http_logs.enabled' => true]);
+        Bus::fake();
+
+        $request = Request::create(
+            'https://example.com/callback',
+            'POST',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'],
+            'password=super-secret-password&order_id=123',
+        );
+
+        $this->logger->logIncoming(
+            request: $request,
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryStatusCallback,
+            context: $this->context,
+        );
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->request->body === ['password' => '[REDACTED]', 'order_id' => '123']
+                && ! str_contains((string) $job->data->request->bodyPreview, 'super-secret-password');
+        });
+    }
+
     public function test_log_incoming_is_no_op_when_sample_rate_is_zero(): void
     {
         config(['http_logs.enabled' => true]);

@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Services\Elasticsearch;
 use Elastic\Elasticsearch\ClientInterface;
 use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 class LogElasticsearchClient implements LogElasticsearchClientInterface
@@ -40,7 +41,11 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
     public function bulk(array $params): void
     {
         try {
-            $this->client->bulk($params);
+            $result = $this->client->bulk($params)->asArray();
+
+            if (($result['errors'] ?? false) === true) {
+                throw new RuntimeException($this->bulkErrorMessage($result));
+            }
         } catch (Throwable $e) {
             $this->logError('LogES: bulk failed', $e);
 
@@ -124,8 +129,8 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
     public function putLifecyclePolicy(string $name, array $policy): void
     {
         $this->client->ilm()->putLifecycle([
-            'name' => $name,
-            'body' => ['policy' => $policy],
+            'policy' => $name,
+            'body'   => ['policy' => $policy],
         ]);
     }
 
@@ -143,5 +148,24 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
             'error' => $e->getMessage(),
             'code'  => $e->getCode(),
         ]);
+    }
+
+    private function bulkErrorMessage(array $result): string
+    {
+        foreach ($result['items'] ?? [] as $item) {
+            foreach ($item as $operation => $details) {
+                if (! isset($details['error'])) {
+                    continue;
+                }
+
+                $error = $details['error'];
+                $type  = is_array($error) ? ($error['type'] ?? 'unknown') : 'unknown';
+                $reason = is_array($error) ? ($error['reason'] ?? '') : (string) $error;
+
+                return trim("Bulk {$operation} failed: {$type} {$reason}");
+            }
+        }
+
+        return 'Bulk request failed for one or more items.';
     }
 }

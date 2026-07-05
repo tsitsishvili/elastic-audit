@@ -33,6 +33,65 @@ class ElasticAuditOperationsCommandTest extends TestCase
         $this->artisan('elastic-audit:health')->assertFailed();
     }
 
+    public function test_health_command_fails_when_http_enum_config_is_invalid(): void
+    {
+        config([
+            'http_logs.enabled' => true,
+            'http_logs.enums.provider' => null,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('HTTP logs: enums.provider')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_job_options_are_invalid(): void
+    {
+        config([
+            'activity_logs.enabled' => true,
+            'activity_logs.job.tries' => 0,
+            'activity_logs.job.backoff' => ['10', '-1'],
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('Activity logs: job.tries')
+            ->expectsOutputToContain('Activity logs: job.backoff')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_alias_config_is_invalid(): void
+    {
+        config([
+            'activity_logs.enabled' => true,
+            'activity_logs.index_alias' => 'same_alias',
+            'activity_logs.index_alias_write' => 'same_alias',
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('Activity logs: read and write aliases must be different.')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_lifecycle_delete_phase_is_missing(): void
+    {
+        config([
+            'log_elasticsearch.lifecycle.enabled' => true,
+            'log_elasticsearch.lifecycle.delete_after' => null,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('lifecycle.delete_after is empty')
+            ->assertFailed();
+    }
+
     public function test_lifecycle_policy_command_puts_configured_policy(): void
     {
         $fake = new class extends FakeLogElasticsearchClient {

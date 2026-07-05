@@ -10,8 +10,4 @@ use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 // Adding a new case requires bumping HttpLogData::SCHEMA_VERSION.
 enum Provider: string implements ProviderContract
 {
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }

@@ -21,6 +21,12 @@ class PruneHttpLogCommand extends Command
 
         $retentionValues = $this->fetchDistinctRetentionDays($client, $readAlias);
 
+        if ($retentionValues === null) {
+            $this->error('Failed to fetch retention_days values from Elasticsearch.');
+
+            return self::FAILURE;
+        }
+
         if (empty($retentionValues)) {
             $this->info('No retention_days values found. Nothing to prune.');
 
@@ -28,13 +34,15 @@ class PruneHttpLogCommand extends Command
         }
 
         foreach ($retentionValues as $days) {
-            $this->pruneForRetention($client, $readAlias, (int) $days);
+            if (! $this->pruneForRetention($client, $readAlias, (int) $days)) {
+                return self::FAILURE;
+            }
         }
 
         return self::SUCCESS;
     }
 
-    private function fetchDistinctRetentionDays(LogElasticsearchClientInterface $client, string $alias): array
+    private function fetchDistinctRetentionDays(LogElasticsearchClientInterface $client, string $alias): ?array
     {
         try {
             $result = $client->search([
@@ -60,11 +68,11 @@ class PruneHttpLogCommand extends Command
                 'error' => $e->getMessage(),
             ]);
 
-            return [];
+            return null;
         }
     }
 
-    private function pruneForRetention(LogElasticsearchClientInterface $client, string $alias, int $days): void
+    private function pruneForRetention(LogElasticsearchClientInterface $client, string $alias, int $days): bool
     {
         $cutoff = now()->subDays($days)->toIso8601ZuluString();
 
@@ -94,11 +102,17 @@ class PruneHttpLogCommand extends Command
             ]);
 
             $this->info("Deleted {$deleted} documents.");
+
+            return true;
         } catch (Throwable $e) {
             Log::error('PruneHttpLogCommand: delete_by_query failed', [
                 'retention_days' => $days,
                 'error'          => $e->getMessage(),
             ]);
+
+            $this->error("Failed to prune documents with retention_days={$days}: {$e->getMessage()}");
+
+            return false;
         }
     }
 }

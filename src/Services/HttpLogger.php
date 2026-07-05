@@ -31,6 +31,7 @@ class HttpLogger
         int $httpStatusCode = 200,
         bool $success = true,
         ?Response $response = null,
+        ?Throwable $exception = null,
     ): void {
         if (! config('http_logs.enabled', false)) {
             return;
@@ -87,6 +88,8 @@ class HttpLogger
                 response: $responsePayload,
                 httpStatusCode: $httpStatusCode,
                 success: $success,
+                errorClass: $exception !== null ? $exception::class : null,
+                errorMessage: $exception !== null ? $this->redactor->sanitizeErrorMessage($exception->getMessage()) : null,
                 traceParent: $request->headers->get('traceparent'),
             );
 

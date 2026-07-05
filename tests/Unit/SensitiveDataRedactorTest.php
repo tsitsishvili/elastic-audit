@@ -486,6 +486,20 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame($expectedHash, $payload->bodyHash);
     }
 
+    public function test_form_urlencoded_payloads_are_redacted_before_preview_and_hash(): void
+    {
+        $payload = $this->redactor->buildPayload(
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            'password=super-secret-password&order_id=123',
+            32768,
+            4096,
+        );
+
+        $this->assertSame(['password' => '[REDACTED]', 'order_id' => '123'], $payload->body);
+        $this->assertStringNotContainsString('super-secret-password', (string) $payload->bodyPreview);
+        $this->assertStringContainsString('[REDACTED]', (string) $payload->bodyPreview);
+    }
+
     public function test_build_payload_skips_binary_bodies(): void
     {
         $payload = $this->redactor->buildPayload([], "binary\0data", 32768, 4096);

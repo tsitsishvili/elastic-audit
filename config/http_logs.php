@@ -3,6 +3,12 @@
 return [
     'enabled'            => env('HTTP_LOGS_ENABLED', false),
     'queue'              => env('HTTP_LOGS_QUEUE', 'default'),
+    'job'                => [
+        'tries'         => env('HTTP_LOGS_JOB_TRIES', 3),
+        'backoff'       => explode(',', (string) env('HTTP_LOGS_JOB_BACKOFF', '10,30,120')),
+        'timeout'       => env('HTTP_LOGS_JOB_TIMEOUT', 30),
+        'batch_timeout' => env('HTTP_LOGS_BATCH_JOB_TIMEOUT', 60),
+    ],
     'sample_rate'        => env('HTTP_LOGS_SAMPLE_RATE', 1.0),
     'body_preview_bytes' => env('HTTP_LOGS_BODY_PREVIEW_BYTES', 4096),
     'body_max_bytes'     => env('HTTP_LOGS_BODY_MAX_BYTES', 32768),
@@ -52,9 +58,9 @@ return [
      * 'entity_type_default' is the fallback string value when no entity type attribute is set.
      */
     'enums' => [
-        'provider'            => \App\Enums\ElasticAudit\Provider::class,
-        'event_type'          => \App\Enums\ElasticAudit\EventType::class,
-        'entity_type'         => \App\Enums\ElasticAudit\EntityType::class,
+        'provider'            => null,
+        'event_type'          => null,
+        'entity_type'         => null,
         'entity_type_default' => 'none',
     ],
 

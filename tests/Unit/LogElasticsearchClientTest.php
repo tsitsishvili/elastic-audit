@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Elastic\Elasticsearch\Endpoints\Indices;
+use Elastic\Elasticsearch\Endpoints\Ilm;
 use Elastic\Elasticsearch\Response\Elasticsearch;
 use Elastic\Transport\Exception\NoNodeAvailableException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
@@ -62,6 +63,8 @@ class LogElasticsearchClientTest extends TestCase
         $params   = ['body' => []];
         $esClient = $this->createMock(SpyElasticsearchClientInterface::class);
         $esClient->method('indices')->willReturn($this->indices);
+        $this->esResponse->method('asArray')->willReturn(['errors' => false, 'items' => []]);
+        $esClient->method('bulk')->willReturn($this->esResponse);
         $client = new LogElasticsearchClient($esClient);
 
         $esClient->expects($this->once())->method('bulk')->with($params);
@@ -76,6 +79,30 @@ class LogElasticsearchClientTest extends TestCase
         $this->expectException(RuntimeException::class);
 
         $this->client->bulk([]);
+    }
+
+    public function test_bulk_throws_when_response_contains_item_errors(): void
+    {
+        $this->esResponse->method('asArray')->willReturn([
+            'errors' => true,
+            'items'  => [
+                [
+                    'index' => [
+                        'status' => 400,
+                        'error'  => [
+                            'type'   => 'mapper_parsing_exception',
+                            'reason' => 'failed to parse field',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $this->esClient->method('bulk')->willReturn($this->esResponse);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('mapper_parsing_exception');
+
+        $this->client->bulk(['body' => []]);
     }
 
     public function test_search_returns_array(): void
@@ -214,5 +241,23 @@ class LogElasticsearchClientTest extends TestCase
         $client = new LogElasticsearchClient($esClient);
 
         $client->updateAliases($actions);
+    }
+
+    public function test_put_lifecycle_policy_uses_elasticsearch_policy_parameter(): void
+    {
+        $policy = ['phases' => ['hot' => ['actions' => []]]];
+
+        $ilm = $this->createMock(Ilm::class);
+        $ilm->expects($this->once())->method('putLifecycle')->with($this->callback(
+            fn (array $p): bool => $p['policy'] === 'audit-policy'
+                && ! array_key_exists('name', $p)
+                && $p['body'] === ['policy' => $policy]
+        ));
+
+        $esClient = $this->createStub(SpyElasticsearchClientInterface::class);
+        $esClient->method('ilm')->willReturn($ilm);
+        $client = new LogElasticsearchClient($esClient);
+
+        $client->putLifecyclePolicy('audit-policy', $policy);
     }
 }

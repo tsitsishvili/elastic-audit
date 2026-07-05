@@ -301,7 +301,7 @@ class SensitiveDataRedactor
 
         // Decode → redact → re-encode so preview and hash are derived from redacted content,
         // ensuring no raw PII/secrets appear in bodyPreview or bodyHash.
-        $decoded        = json_decode($rawBody, true);
+        $decoded        = $this->decodeBody($headers, $rawBody);
         $redactedArray  = is_array($decoded) ? $this->redactBody($decoded) : null;
         $redactedString = $redactedArray !== null ? (string)json_encode($redactedArray) : $rawBody;
 
@@ -314,6 +314,32 @@ class SensitiveDataRedactor
             bodyHash: $payload->bodyHash,
             bodyTruncated: $payload->bodyTruncated,
         );
+    }
+
+    private function decodeBody(array $headers, string $rawBody): mixed
+    {
+        if ($this->isFormUrlEncoded($headers)) {
+            parse_str($rawBody, $parsed);
+
+            return $parsed;
+        }
+
+        return json_decode($rawBody, true);
+    }
+
+    private function isFormUrlEncoded(array $headers): bool
+    {
+        foreach ($headers as $name => $value) {
+            if (strcasecmp((string) $name, 'Content-Type') !== 0) {
+                continue;
+            }
+
+            $line = is_array($value) ? implode(';', array_map('strval', $value)) : (string) $value;
+
+            return str_contains(strtolower($line), 'application/x-www-form-urlencoded');
+        }
+
+        return false;
     }
 
     /**

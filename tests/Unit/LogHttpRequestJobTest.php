@@ -8,6 +8,7 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestBatchJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
@@ -44,6 +45,26 @@ class LogHttpRequestJobTest extends TestCase
         $this->assertSame(3, $this->job->tries);
         $this->assertSame([10, 30, 120], $this->job->backoff);
         $this->assertSame(30, $this->job->timeout);
+    }
+
+    public function test_job_uses_retry_policy_from_config(): void
+    {
+        config([
+            'http_logs.job.tries' => 5,
+            'http_logs.job.backoff' => '1,5,20',
+            'http_logs.job.timeout' => 45,
+            'http_logs.job.batch_timeout' => 90,
+        ]);
+
+        $job = new LogHttpRequestJob($this->makeLogData());
+        $batchJob = new LogHttpRequestBatchJob([$this->makeLogData()]);
+
+        $this->assertSame(5, $job->tries);
+        $this->assertSame([1, 5, 20], $job->backoff);
+        $this->assertSame(45, $job->timeout);
+        $this->assertSame(5, $batchJob->tries);
+        $this->assertSame([1, 5, 20], $batchJob->backoff);
+        $this->assertSame(90, $batchJob->timeout);
     }
 
     private function makeLogData(): HttpLogData

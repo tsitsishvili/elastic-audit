@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 use Throwable;
 
 class LogActivityBatchJob implements ShouldQueue
@@ -31,6 +32,9 @@ class LogActivityBatchJob implements ShouldQueue
         public readonly array $items,
     ) {
         $this->queue = config('activity_logs.queue', 'default');
+        $this->tries = LogJobOptions::tries('activity_logs.job');
+        $this->backoff = LogJobOptions::backoff('activity_logs.job');
+        $this->timeout = LogJobOptions::timeout('activity_logs.job.batch', (int) config('activity_logs.job.batch_timeout', 60));
     }
 
     public function handle(ActivityLogIndexer $indexer): void

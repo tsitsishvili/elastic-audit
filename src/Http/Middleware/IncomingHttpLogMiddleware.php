@@ -12,6 +12,7 @@ use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Services\HttpLogger;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class IncomingHttpLogMiddleware
 {
@@ -37,8 +38,15 @@ class IncomingHttpLogMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $start    = hrtime(true);
-        $response = $next($request);
+        $start = hrtime(true);
+
+        try {
+            $response = $next($request);
+        } catch (Throwable $e) {
+            $this->logException($request, $start, $e);
+
+            throw $e;
+        }
 
         if (! config('http_logs.enabled', false)) {
             return $response;
@@ -84,12 +92,50 @@ class IncomingHttpLogMiddleware
         return $response;
     }
 
+    private function logException(Request $request, int $start, Throwable $e): void
+    {
+        if (! config('http_logs.enabled', false)) {
+            return;
+        }
+
+        $provider  = $this->resolveProvider($request->attributes->get('third_party_provider'));
+        $eventType = $this->resolveEventType($request->attributes->get('third_party_event_type'));
+
+        if ($provider === null || $eventType === null) {
+            return;
+        }
+
+        $entityType = $this->resolveEntityType(
+            $request->attributes->get('third_party_entity_type')
+        );
+
+        if ($entityType === null) {
+            return;
+        }
+
+        $this->logger->logIncoming(
+            request: $request,
+            provider: $provider,
+            eventType: $eventType,
+            context: HttpLogContext::forEntity(
+                entityType: $entityType,
+                entityId: (string) $request->attributes->get('third_party_entity_id', 'unknown'),
+                externalId: $this->resolveExternalId($request->attributes->get('third_party_external_id')),
+                userId: $this->resolveUserId($request->attributes->get('third_party_user_id')),
+            ),
+            latencyMs: (int) round((hrtime(true) - $start) / 1_000_000),
+            httpStatusCode: 500,
+            success: false,
+            exception: $e,
+        );
+    }
+
     private function resolveProvider(mixed $value): ?ProviderContract
     {
         /** @var class-string<\BackedEnum&ProviderContract>|null $class */
         $class = config('http_logs.enums.provider');
 
-        if ($class === null || $value === null) {
+        if (! $this->isBackedEnumContract($class, ProviderContract::class) || $value === null) {
             return null;
         }
 
@@ -103,7 +149,7 @@ class IncomingHttpLogMiddleware
         /** @var class-string<\BackedEnum&EventTypeContract>|null $class */
         $class = config('http_logs.enums.event_type');
 
-        if ($class === null || $value === null) {
+        if (! $this->isBackedEnumContract($class, EventTypeContract::class) || $value === null) {
             return null;
         }
 
@@ -117,7 +163,7 @@ class IncomingHttpLogMiddleware
         /** @var class-string<\BackedEnum&EntityTypeContract>|null $class */
         $class = config('http_logs.enums.entity_type');
 
-        if ($class === null) {
+        if (! $this->isBackedEnumContract($class, EntityTypeContract::class)) {
             return null;
         }
 
@@ -129,6 +175,17 @@ class IncomingHttpLogMiddleware
         }
 
         return $resolved instanceof EntityTypeContract ? $resolved : null;
+    }
+
+    /**
+     * @param class-string $contract
+     */
+    private function isBackedEnumContract(mixed $class, string $contract): bool
+    {
+        return is_string($class)
+            && enum_exists($class)
+            && is_subclass_of($class, \BackedEnum::class)
+            && is_subclass_of($class, $contract);
     }
 
     private function resolveExternalId(mixed $value): ?string
