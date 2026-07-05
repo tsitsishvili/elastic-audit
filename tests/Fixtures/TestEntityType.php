@@ -10,9 +10,4 @@ enum TestEntityType: string implements EntityTypeContract
 {
     case Order = 'order';
     case None  = 'none';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }

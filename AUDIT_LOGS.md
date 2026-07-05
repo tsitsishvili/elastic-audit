@@ -44,11 +44,11 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Quick Start
 
-1. Add the GitLab repository to the consuming application's `composer.json`.
+1. Add the package repository to the consuming application's `composer.json`.
 2. Install the package:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^2.4
+    composer require tsitsishvili/elastic-audit:^3.0
     ```
 
 3. Publish the config files and enum stubs:
@@ -59,9 +59,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 4. Register the application's provider, event type, and entity type enums in `config/http_logs.php`.
 5. Configure Elasticsearch and enable logging in `.env`.
-6. Create the Elasticsearch index and aliases:
+6. Install the lifecycle policy, then create the Elasticsearch index and aliases:
 
     ```bash
+    php artisan elastic-audit:lifecycle-policy
     php artisan http-logs:create-index
     ```
 
@@ -89,7 +90,7 @@ Add the package repository to the consuming application's `composer.json`.
   "repositories": [
     {
       "type": "vcs",
-      "url": "git@gitlab.tsitsishvili.ge:laravel-packages/http-logs.git"
+      "url": "https://github.com/tsitsishvili/elastic-audit.git"
     }
   ]
 }
@@ -98,7 +99,7 @@ Add the package repository to the consuming application's `composer.json`.
 Install a tagged version:
 
 ```bash
-composer require tsitsishvili/elastic-audit:^2.4
+composer require tsitsishvili/elastic-audit:^3.0
 ```
 
 Laravel auto-discovers the package service provider.
@@ -127,6 +128,10 @@ event types used by the application.
 ```dotenv
 HTTP_LOGS_ENABLED=true
 HTTP_LOGS_QUEUE=default
+HTTP_LOGS_JOB_TRIES=3
+HTTP_LOGS_JOB_BACKOFF=10,30,120
+HTTP_LOGS_JOB_TIMEOUT=30
+HTTP_LOGS_BATCH_JOB_TIMEOUT=60
 HTTP_LOGS_SAMPLE_RATE=1.0
 HTTP_LOGS_BODY_PREVIEW_BYTES=4096
 HTTP_LOGS_BODY_MAX_BYTES=32768
@@ -136,11 +141,11 @@ HTTP_LOGS_DASHBOARD_ENABLED=true
 ELASTIC_AUDIT_DASHBOARD_PREFIX=logger
 HTTP_LOGS_DASHBOARD_PATH=http-logs
 
-LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false
+LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=true
 LOG_ELASTICSEARCH_LIFECYCLE_POLICY=my_app_elastic_audit_policy
 LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE=30d
 LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE=50gb
-LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER=
+LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER=360d
 
 LOG_ELASTICSEARCH_HOST=localhost
 LOG_ELASTICSEARCH_PORT=9200
@@ -148,13 +153,17 @@ LOG_ELASTICSEARCH_SCHEME=http
 LOG_ELASTICSEARCH_USERNAME=
 LOG_ELASTICSEARCH_PASSWORD=
 LOG_ELASTICSEARCH_INDEX_PREFIX=my_app
-LOG_ELASTICSEARCH_REPLICAS=1
+LOG_ELASTICSEARCH_REPLICAS=0
 ```
 
 | Variable                         | Description                                                                                                                        |
 |----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `HTTP_LOGS_ENABLED`              | Set to `true` to enable logging.                                                                                                   |
 | `HTTP_LOGS_QUEUE`                | Queue name for log jobs.                                                                                                           |
+| `HTTP_LOGS_JOB_TRIES`            | Attempts for each queued HTTP log job.                                                                                             |
+| `HTTP_LOGS_JOB_BACKOFF`          | Comma-separated retry backoff seconds for HTTP log jobs.                                                                           |
+| `HTTP_LOGS_JOB_TIMEOUT`          | Timeout in seconds for single HTTP log jobs.                                                                                        |
+| `HTTP_LOGS_BATCH_JOB_TIMEOUT`    | Timeout in seconds for HTTP bulk replay jobs.                                                                                       |
 | `HTTP_LOGS_SAMPLE_RATE`          | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
 | `HTTP_LOGS_BODY_PREVIEW_BYTES`   | Max bytes stored as sanitized body preview.                                                                                        |
 | `HTTP_LOGS_BODY_MAX_BYTES`       | Max raw body size before truncation.                                                                                               |
@@ -162,11 +171,11 @@ LOG_ELASTICSEARCH_REPLICAS=1
 | `HTTP_LOGS_DASHBOARD_ENABLED`    | Set to `true` to register the web dashboard routes.                                                                                |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX` | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
 | `HTTP_LOGS_DASHBOARD_PATH`       | This dashboard's subpath under the group prefix (default `http-logs`). Served at `/logger/http-logs`.                              |
-| `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED` | Enables ILM settings on newly created indexes.                                                                                |
+| `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED` | Attaches ILM settings to newly created indexes. Defaults to `true` for v3 configs.                                           |
 | `LOG_ELASTICSEARCH_LIFECYCLE_POLICY` | Shared ILM policy name for HTTP and activity log indexes.                                                                       |
 | `LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE` | Max index age condition used by rollover.                                                                                       |
 | `LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE` | Max primary shard size condition used by rollover.                                                                     |
-| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER` | Optional ILM delete phase age. Leave empty to rely on prune commands.                                                  |
+| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER` | ILM delete phase age. Set empty only if prune commands are your retention fallback.                                  |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`:
 
@@ -183,6 +192,10 @@ my_app_http_logs_write
 |-----------------------------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `enabled`                   | `false`                    | Enables or disables third-party HTTP logging. When disabled, no log jobs are dispatched.                                                                                                |
 | `queue`                     | `default`                  | Queue name used by `LogHttpRequestJob`.                                                                                                                                                 |
+| `job.tries`                 | `3`                        | Attempts for single and batch HTTP log jobs.                                                                                                                                            |
+| `job.backoff`               | `[10, 30, 120]`            | Retry backoff seconds for single and batch HTTP log jobs.                                                                                                                               |
+| `job.timeout`               | `30`                       | Timeout in seconds for `LogHttpRequestJob`.                                                                                                                                             |
+| `job.batch_timeout`         | `60`                       | Timeout in seconds for `LogHttpRequestBatchJob`.                                                                                                                                        |
 | `sample_rate`               | `1.0`                      | Float between `0.0` and `1.0`. `1.0` logs every request, `0.0` logs none, intermediate values use probabilistic sampling (e.g. `0.1` logs ~10%). Controlled by `HTTP_LOGS_SAMPLE_RATE`. |
 | `body_preview_bytes`        | `4096`                     | Maximum number of sanitized body bytes stored as preview.                                                                                                                               |
 | `body_max_bytes`            | `32768`                    | Maximum raw body size considered before truncation handling.                                                                                                                            |
@@ -214,17 +227,18 @@ my_app_http_logs_write
 | `basicAuthentication.username` | empty string | Optional Elasticsearch basic auth username.                                                    |
 | `basicAuthentication.password` | empty string | Optional Elasticsearch basic auth password.                                                    |
 | `index_prefix`                 | `app_logs`   | Prefix used when creating physical indexes and aliases.                                        |
-| `replicas`                     | `1`          | Number of Elasticsearch replicas for the logs index. Use `0` for single-node staging clusters. |
-| `lifecycle.enabled`            | `false`      | Enables ILM settings on newly created indexes.                                                 |
+| `replicas`                     | `0`          | Number of Elasticsearch replicas for the logs index. Increase for multi-node production clusters. |
+| `lifecycle.enabled`            | `true`       | Attaches ILM settings to newly created indexes. The policy command can still create/update the policy while this is false. |
 | `lifecycle.policy_name`        | `{prefix}_elastic_audit_policy` | ILM policy name used by both HTTP and activity log indexes.                    |
 | `lifecycle.rollover_max_age`   | `30d`        | Max index age condition passed to rollover.                                                     |
 | `lifecycle.rollover_max_shard_size` | `50gb` | Max primary shard size condition passed to rollover.                                            |
-| `lifecycle.delete_after`       | `null`       | Optional ILM delete phase age. Leave empty to keep using document-level prune commands.         |
+| `lifecycle.delete_after`       | `360d`       | ILM delete phase age for index-level retention. Leave empty only when prune commands are the retention fallback. |
 
 ## Register Application Enums
 
 Each application defines its own provider, event type, and entity type enums. These enums must implement the package
-contracts.
+contracts. The package config defaults these classes to `null`; incoming callback logging is skipped until valid enum
+classes are registered. A missing or invalid enum class is treated as not configured instead of crashing the request.
 
 ```php
 <?php
@@ -237,11 +251,6 @@ enum Provider: string implements ProviderContract
 {
     case Delivery = 'delivery';
     case Payment = 'payment';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }
 ```
 
@@ -257,11 +266,6 @@ enum EventType: string implements EventTypeContract
     case DeliveryOrderCreate = 'delivery_order_create';
     case DeliveryStatusCallback = 'delivery_status_callback';
     case PaymentCallback = 'payment_callback';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }
 ```
 
@@ -277,11 +281,6 @@ enum EntityType: string implements EntityTypeContract
     case Order = 'order';
     case Payment = 'payment';
     case None = 'none';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }
 ```
 
@@ -333,8 +332,8 @@ data, and failure information.
 | `retention_days`    | Retention window used by `http-logs:prune`.                                               |
 | `request`           | Sanitized request headers, body preview, body hash, and truncation flag.                  |
 | `response`          | Sanitized response headers, body preview, body hash, and truncation flag.                 |
-| `error.class`       | Exception class for failed outgoing calls when available.                                 |
-| `error.message`     | Sanitized exception message for failed outgoing calls when available.                     |
+| `error.class`       | Exception class for failed outgoing calls or failed incoming callbacks when available.    |
+| `error.message`     | Sanitized exception message for failed outgoing calls or incoming callbacks.              |
 
 Both incoming callback logs and outgoing request logs store request **and** response payloads. For incoming callbacks
 the
@@ -351,13 +350,20 @@ php artisan http-logs:create-index
 
 ### Lifecycle, Rollover, and Health
 
-Document-level pruning remains the default retention mechanism. If you want Elasticsearch ILM/rollover as well, enable
-`log_elasticsearch.lifecycle.enabled`, install the policy, then create indexes:
+Elasticsearch ILM/rollover is the default retention path for new v3 configs. Install the shared policy before creating
+indexes so new indexes receive lifecycle settings:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
 php artisan http-logs:create-index
 ```
+
+`elastic-audit:lifecycle-policy` creates or updates the shared ILM policy named by
+`LOG_ELASTICSEARCH_LIFECYCLE_POLICY`. You may run it even while `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false`; the command
+will warn, but still creates the policy so CI/deploy pipelines can prepare the cluster ahead of time. New indexes only
+receive ILM settings when `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=true` at `http-logs:create-index` /
+`activity-logs:create-index` time. Use prune commands as a fallback when ILM is disabled or when you need per-document
+retention based on `retention_days`.
 
 Rollover can be run manually or scheduled:
 
@@ -365,8 +371,8 @@ Rollover can be run manually or scheduled:
 php artisan http-logs:rollover
 ```
 
-Use the health command during deploys or runbooks to validate cluster reachability, aliases, queue names, and lifecycle
-configuration:
+Use the health command during deploys or runbooks to validate cluster reachability, aliases, HTTP enum classes, queue
+retry options, and lifecycle configuration:
 
 ```bash
 php artisan elastic-audit:health
@@ -438,12 +444,13 @@ HttpLog::make($provider, $eventType, $context)
     ->post('https://provider.example/oauth/token', ['grant_type' => 'client_credentials']);
 ```
 
-Because logging happens at the transport (Guzzle middleware) layer, the wire format is irrelevant to logging: JSON,
-form,
-multipart, etc. are all redacted and stored uniformly, and no method call can bypass logging.
+Because logging happens at the transport (Guzzle middleware) layer, no method call can bypass logging. JSON and
+`application/x-www-form-urlencoded` request/response bodies are parsed and redacted before previews and hashes are
+stored. Multipart request bodies are not read, so uploaded file contents are not pulled into memory; headers and the
+rest of the request metadata are still logged.
 
-The original provider call behavior is preserved. If the provider request fails, the package dispatches the log job and
-rethrows the original exception.
+The original provider call behavior is preserved. If the provider request fails, the package dispatches the log job with
+sanitized exception details and rethrows the original exception.
 
 Outgoing request headers are captured and redacted alongside the body. If a request carries a W3C `traceparent` header,
 the log stores queryable `trace.id` / `trace.span_id` fields and the raw `trace.traceparent` value for correlation.
@@ -497,7 +504,8 @@ Do not resolve provider or event type from URL segments or request input. Set th
 user-controlled data cannot spoof log metadata.
 
 The middleware automatically logs the response it returns (status code, headers, and sanitized body) alongside the
-request — no extra code is required.
+request — no extra code is required. If the callback handler throws after the trusted attributes have been set, the
+middleware queues a failed log entry with sanitized exception details, then rethrows the original exception.
 
 ## Manual Incoming Logging
 
@@ -508,6 +516,7 @@ use App\Enums\EntityType;
 use App\Enums\EventType;
 use App\Enums\Provider;
 use Illuminate\Http\Request;
+use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
 
@@ -537,6 +546,27 @@ public function webhook(Request $request)
 }
 ```
 
+For failed manual incoming logs, pass the caught exception with `success: false`; the package stores the exception class
+and a sanitized message:
+
+```php
+try {
+    // Handle the webhook...
+} catch (Throwable $e) {
+    HttpLog::logIncoming(
+        request: $request,
+        provider: Provider::Payment,
+        eventType: EventType::PaymentCallback,
+        context: $context,
+        httpStatusCode: 500,
+        success: false,
+        exception: $e,
+    );
+
+    throw $e;
+}
+```
+
 ## Queues
 
 Logs are dispatched through `LogHttpRequestJob`.
@@ -557,8 +587,18 @@ HTTP_LOGS_QUEUE=logs
 php artisan queue:work --queue=logs
 ```
 
+Tune retry behavior from config or env:
+
+```dotenv
+HTTP_LOGS_JOB_TRIES=5
+HTTP_LOGS_JOB_BACKOFF=5,30,120
+HTTP_LOGS_JOB_TIMEOUT=45
+HTTP_LOGS_BATCH_JOB_TIMEOUT=120
+```
+
 For high-volume backfills or replay tools, use `LogHttpRequestBatchJob` with a list of `HttpLogData` DTOs. It uses the
-Elasticsearch bulk API through `HttpLogIndexer::bulk(...)` and sends the batch in one ES request.
+Elasticsearch bulk API through `HttpLogIndexer::bulk(...)` and sends the batch in one ES request. Bulk responses with
+per-item Elasticsearch failures are treated as job failures, even when Elasticsearch returns HTTP 200.
 
 ## Dashboard
 
@@ -628,7 +668,9 @@ This publishes the views to `resources/views/vendor/elastic-audit`.
 
 ## Pruning Old Logs
 
-Each log document stores `retention_days` from `HttpLogContext`.
+Each log document stores `retention_days` from `HttpLogContext`. In v3, ILM is the preferred default retention path for
+new indexes. Use this command when ILM is disabled, when you need per-document retention windows, or as a manual cleanup
+fallback.
 
 Run pruning manually:
 
@@ -644,10 +686,16 @@ use Illuminate\Support\Facades\Schedule;
 Schedule::command('http-logs:prune')->dailyAt('03:00');
 ```
 
+The command exits with a non-zero status when Elasticsearch cannot fetch retention buckets or a `delete_by_query`
+operation fails. This is intentional so CI, cron, and monitoring can detect retention failures instead of treating them
+as "nothing to prune."
+
 ## Redaction Notes
 
 The package sanitizes headers, request bodies, response bodies, and exception messages before indexing. Query strings
 are stripped from stored URLs because they can contain API keys or tokens.
+JSON and `application/x-www-form-urlencoded` bodies are decoded before redaction, so `password=secret` is stored as a
+redacted payload preview rather than as raw form text.
 
 ### How matching works
 
@@ -785,6 +833,20 @@ $request->attributes->set('third_party_entity_id', $orderId);
 ```
 
 Provider, event type, and entity type enum classes must also be registered in `config/http_logs.php`.
+If one of these classes is `null`, missing, not a backed enum, or does not implement the required package contract, the
+middleware skips logging for that callback instead of throwing.
+
+### Lifecycle policy command fails in CI
+
+Run the package version that includes the Elasticsearch v9 ILM parameter fix, then retry:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+```
+
+The command uses the configured `LOG_ELASTICSEARCH_LIFECYCLE_POLICY` name and can be run while
+`LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false`. In that disabled state it creates/updates the policy but does not make new
+indexes use it until lifecycle is enabled before index creation.
 
 ### Payment data appears too detailed
 

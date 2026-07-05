@@ -32,7 +32,7 @@ class HttpLogClientFactory
     ): PendingRequest {
         $paymentProviderValues = config('http_logs.payment_provider_values', []);
 
-        $redactor = in_array($provider->getValue(), $paymentProviderValues, true)
+        $redactor = in_array((string) $provider->value, $paymentProviderValues, true)
             ? $this->paymentRedactor
             : $this->sensitiveDataRedactor;
 

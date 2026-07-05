@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
@@ -37,7 +38,8 @@ class HttpLogManager
         int $httpStatusCode = 200,
         bool $success = true,
         ?Response $response = null,
+        ?Throwable $exception = null,
     ): void {
-        $this->logger->logIncoming($request, $provider, $eventType, $context, $latencyMs, $httpStatusCode, $success, $response);
+        $this->logger->logIncoming($request, $provider, $eventType, $context, $latencyMs, $httpStatusCode, $success, $response, $exception);
     }
 }

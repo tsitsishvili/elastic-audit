@@ -120,12 +120,6 @@ final class OutgoingHttpLogMiddleware
         $raw = (string) $body;
         $body->rewind();
 
-        if (str_contains($contentType, 'application/x-www-form-urlencoded')) {
-            parse_str($raw, $parsed);
-
-            return (string) json_encode($parsed);
-        }
-
         return $raw;
     }
 

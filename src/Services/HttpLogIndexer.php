@@ -16,7 +16,7 @@ class HttpLogIndexer
 
     public function index(HttpLogData $data, int $attempt = 1): void
     {
-        $id = hash('sha256', $data->requestId . '|' . $attempt);
+        $id = hash('sha256', $data->eventId);
 
         $this->client->index([
             'index' => $this->writeAlias,
@@ -52,8 +52,8 @@ class HttpLogIndexer
             'event_id'       => $d->eventId,
             'schema_version' => HttpLogData::SCHEMA_VERSION,
             'request_id'     => $d->requestId,
-            'provider'       => $d->provider->getValue(),
-            'event_type'     => $d->eventType->getValue(),
+            'provider'       => (string) $d->provider->value,
+            'event_type'     => (string) $d->eventType->value,
             'direction'      => $d->direction->value,
             'user_id'        => $d->userId,
             'attempt'        => $d->attempt,

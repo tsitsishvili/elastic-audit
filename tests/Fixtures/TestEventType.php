@@ -11,9 +11,4 @@ enum TestEventType: string implements EventTypeContract
     case DeliveryOrderCreate    = 'delivery_order_create';
     case DeliveryStatusCallback = 'delivery_status_callback';
     case PaymentCallback        = 'payment_callback';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }

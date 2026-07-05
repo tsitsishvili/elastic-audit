@@ -66,17 +66,19 @@ class PruneHttpLogCommandTest extends TestCase
             ->expectsOutputToContain('Deleted 5 documents');
     }
 
-    public function test_handles_search_exception_gracefully(): void
+    public function test_returns_failure_when_search_fails(): void
     {
         $this->esClient->method('search')->willThrowException(new RuntimeException('ES down'));
 
         $this->esClient->expects($this->never())->method('deleteByQuery');
 
-        $this->artisan('http-logs:prune')->assertSuccessful();
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to fetch retention_days values');
     }
 
     #[AllowMockObjectsWithoutExpectations]
-    public function test_handles_delete_by_query_exception_gracefully(): void
+    public function test_returns_failure_when_delete_by_query_fails(): void
     {
         $this->esClient->method('search')->willReturn([
             'aggregations' => ['retention_buckets' => ['buckets' => [['key' => 30]]]],
@@ -84,6 +86,8 @@ class PruneHttpLogCommandTest extends TestCase
 
         $this->esClient->method('deleteByQuery')->willThrowException(new RuntimeException('delete failed'));
 
-        $this->artisan('http-logs:prune')->assertSuccessful();
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
     }
 }

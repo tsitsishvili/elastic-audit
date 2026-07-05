@@ -3,6 +3,12 @@
 return [
     'enabled'           => env('ACTIVITY_LOGS_ENABLED', true),
     'queue'             => env('ACTIVITY_LOGS_QUEUE', 'default'),
+    'job'               => [
+        'tries'         => env('ACTIVITY_LOGS_JOB_TRIES', 3),
+        'backoff'       => explode(',', (string) env('ACTIVITY_LOGS_JOB_BACKOFF', '10,30,120')),
+        'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
+        'batch_timeout' => env('ACTIVITY_LOGS_BATCH_JOB_TIMEOUT', 60),
+    ],
     'retention_days'    => 360,
 
     'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',

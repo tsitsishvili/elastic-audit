@@ -41,7 +41,7 @@ application can enable only what it needs.
 2. Install the package:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^2.5
+    composer require tsitsishvili/elastic-audit:^3.0
     ```
 
 3. Publish config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
@@ -53,10 +53,11 @@ application can enable only what it needs.
 4. Configure Elasticsearch and enable the subsystem you need in `.env`
    (see [Environment Variables](AUDIT_LOGS.md#environment-variables) and
    [Register Application Enums](AUDIT_LOGS.md#register-application-enums)).
-5. Create the Elasticsearch indices and aliases
+5. Install the lifecycle policy, then create the Elasticsearch indices and aliases
    ([HTTP](AUDIT_LOGS.md#create-elasticsearch-index) · [Activity](ACTIVITY_LOGS.md#create-the-activity-index)):
 
     ```bash
+    php artisan elastic-audit:lifecycle-policy
     php artisan http-logs:create-index
     php artisan activity-logs:create-index
     ```
@@ -105,7 +106,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^2.5"
+    "tsitsishvili/elastic-audit": "^3.0"
   }
 }
 ```

@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 use Throwable;
 
 class LogHttpRequestBatchJob implements ShouldQueue
@@ -31,6 +32,9 @@ class LogHttpRequestBatchJob implements ShouldQueue
         public readonly array $items,
     ) {
         $this->queue = config('http_logs.queue', 'default');
+        $this->tries = LogJobOptions::tries('http_logs.job');
+        $this->backoff = LogJobOptions::backoff('http_logs.job');
+        $this->timeout = LogJobOptions::timeout('http_logs.job.batch', (int) config('http_logs.job.batch_timeout', 60));
     }
 
     public function handle(HttpLogIndexer $indexer): void

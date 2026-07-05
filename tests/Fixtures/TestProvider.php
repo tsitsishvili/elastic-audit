@@ -10,9 +10,4 @@ enum TestProvider: string implements ProviderContract
 {
     case Delivery = 'delivery';
     case Payment  = 'payment';
-
-    public function getValue(): string
-    {
-        return $this->value;
-    }
 }

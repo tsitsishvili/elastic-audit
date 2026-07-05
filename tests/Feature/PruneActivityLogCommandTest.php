@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
+use RuntimeException;
 
 class PruneActivityLogCommandTest extends TestCase
 {
@@ -60,5 +61,44 @@ class PruneActivityLogCommandTest extends TestCase
         $this->app->instance(LogElasticsearchClientInterface::class, $fake);
 
         $this->artisan('activity-logs:prune')->assertExitCode(0);
+    }
+
+    public function test_returns_failure_when_search_fails(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                throw new RuntimeException('ES down');
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertExitCode(1)
+            ->expectsOutputToContain('Failed to fetch retention_days values');
+    }
+
+    public function test_returns_failure_when_delete_by_query_fails(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    'aggregations' => ['retention_buckets' => ['buckets' => [['key' => 30]]]],
+                ];
+            }
+
+            public function deleteByQuery(array $params): array
+            {
+                throw new RuntimeException('delete failed');
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertExitCode(1)
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
     }
 }

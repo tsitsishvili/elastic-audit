@@ -66,6 +66,12 @@ php artisan vendor:publish --tag=elastic-audit
 return [
     'enabled'           => env('ACTIVITY_LOGS_ENABLED', true),
     'queue'             => env('ACTIVITY_LOGS_QUEUE', 'default'),
+    'job'               => [
+        'tries'         => env('ACTIVITY_LOGS_JOB_TRIES', 3),
+        'backoff'       => explode(',', (string) env('ACTIVITY_LOGS_JOB_BACKOFF', '10,30,120')),
+        'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
+        'batch_timeout' => env('ACTIVITY_LOGS_BATCH_JOB_TIMEOUT', 60),
+    ],
     'retention_days'    => 360,
 
     'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',
@@ -101,6 +107,10 @@ Relevant environment variables:
 |-----------------------------------|------------|---------------------------------------------------------------------------------------------------|
 | `ACTIVITY_LOGS_ENABLED`           | `true`     | Master on/off switch for capture                                                                  |
 | `ACTIVITY_LOGS_QUEUE`             | `default`  | Queue the indexing job is dispatched to                                                           |
+| `ACTIVITY_LOGS_JOB_TRIES`         | `3`        | Attempts for each queued activity log job                                                         |
+| `ACTIVITY_LOGS_JOB_BACKOFF`       | `10,30,120`| Comma-separated retry backoff seconds for activity log jobs                                       |
+| `ACTIVITY_LOGS_JOB_TIMEOUT`       | `30`       | Timeout in seconds for single activity log jobs                                                   |
+| `ACTIVITY_LOGS_BATCH_JOB_TIMEOUT` | `60`       | Timeout in seconds for activity bulk replay jobs                                                  |
 | `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`     | Register the dashboard routes                                                                     |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`   | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
 | `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity` | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
@@ -112,7 +122,12 @@ php artisan activity-logs:create-index
 ```
 
 Creates the physical index (`<prefix>_activity_logs_<timestamp>`) with a `dynamic: strict` mapping and
-attaches the read/write aliases.
+attaches the read/write aliases. With the v3 default lifecycle config, create or update the shared ILM policy first:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan activity-logs:create-index
+```
 
 ### Manual Logging
 
@@ -304,20 +319,28 @@ By default (no callback registered) access is restricted to the `local` environm
 php artisan activity-logs:prune
 ```
 
-Deletes documents older than their own `retention_days` value (each document carries its retention, so different
-actions can have different lifetimes). Schedule it daily.
+Deletes documents older than their own `retention_days` value. In v3, ILM is the preferred default retention path for
+new indexes. Use pruning when ILM is disabled, when different actions need different lifetimes, or as a manual cleanup
+fallback.
 
-If Elasticsearch lifecycle/rollover is enabled in `log_elasticsearch.php`, install the shared lifecycle policy and use
-the activity rollover command:
+The command exits with a non-zero status when Elasticsearch cannot fetch retention buckets or a `delete_by_query`
+operation fails. This is intentional so CI, cron, and monitoring can detect retention failures.
+
+For ILM/rollover, install the shared lifecycle policy and use the activity rollover command:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
 php artisan activity-logs:rollover
 ```
 
-Use `php artisan elastic-audit:health` to verify cluster reachability, aliases, queue names, and lifecycle state.
+`elastic-audit:lifecycle-policy` may be run while `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false`; it warns, but still
+creates or updates the shared policy named by `LOG_ELASTICSEARCH_LIFECYCLE_POLICY`. New indexes only receive lifecycle
+settings when lifecycle is enabled before `activity-logs:create-index` runs.
+
+Use `php artisan elastic-audit:health` to verify cluster reachability, aliases, job retry options, and lifecycle state.
 For high-volume replays, `LogActivityBatchJob` accepts a list of `ActivityLogData` DTOs and indexes them through the
-Elasticsearch bulk API.
+Elasticsearch bulk API. Bulk responses with per-item Elasticsearch failures are treated as job failures, even when
+Elasticsearch returns HTTP 200.
 
 ### Guarantees
 

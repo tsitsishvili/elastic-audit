@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-07-04
+
+### Changed
+
+- HTTP log documents are now indexed by `event_id` instead of `request_id|queue_attempt`, preventing multiple provider
+  calls that share one correlation request id from overwriting each other.
+- New published configs default Elasticsearch lifecycle management to enabled with a `360d` delete phase; prune
+  commands remain available for per-document retention or manual fallback cleanup.
+- HTTP and activity log jobs now read attempts, retry backoff, single-job timeout, and batch-job timeout from config.
+- HTTP enum contracts now extend PHP's `BackedEnum` and no longer require application enums to implement `getValue()`.
+- `http_logs.enums.provider`, `.event_type`, and `.entity_type` now default to `null`. Missing or invalid enum classes
+  are treated as not configured and cause incoming callback logging to be skipped instead of throwing.
+- `http-logs:prune` and `activity-logs:prune` now return a failure exit code when Elasticsearch search/delete
+  operations fail, so schedulers and CI can detect retention failures.
+- `elastic-audit:health` now validates HTTP enum classes, job retry settings, lifecycle delete configuration, and
+  rollover conditions in addition to cluster reachability and aliases.
+
+### Fixed
+
+- Fixed `elastic-audit:lifecycle-policy` for Elasticsearch PHP client v9 by sending the required ILM `policy`
+  parameter instead of `name`.
+- Fixed a sensitive-data leak where incoming `application/x-www-form-urlencoded` bodies could be stored in
+  `body_preview` before redaction.
+- Incoming callback middleware now records a failed log entry with sanitized exception details when the callback
+  handler throws, then rethrows the original exception.
+- Elasticsearch bulk indexing now treats per-item failures as job failures even when Elasticsearch returns HTTP 200.
+
 ## [2.5.0] - 2026-07-01
 
 ### Added
@@ -98,7 +125,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.5.0...v3.0.0
 [2.5.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.2.0...v2.3.0
