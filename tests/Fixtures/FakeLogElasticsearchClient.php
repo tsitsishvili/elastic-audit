@@ -74,14 +74,20 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
 
     public function getAlias(string $name): array
     {
-        return [];
+        return [
+            "{$name}-000001" => [
+                'aliases' => [
+                    $name => ['is_write_index' => true],
+                ],
+            ],
+        ];
     }
 
     public function updateAliases(array $actions): void {}
 
     public function putLifecyclePolicy(string $name, array $policy): void {}
 
-    public function rollover(string $alias, array $conditions): array
+    public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
     {
         return [];
     }

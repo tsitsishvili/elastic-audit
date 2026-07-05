@@ -8,6 +8,7 @@ use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
 
 class CreateActivityLogIndexCommand extends Command
@@ -18,10 +19,9 @@ class CreateActivityLogIndexCommand extends Command
 
     public function handle(LogElasticsearchClientInterface $client): int
     {
-        $prefix        = config('log_elasticsearch.index_prefix', 'app_logs');
-        $physicalIndex = $prefix . '_activity_logs_' . now()->format('Ymd_His');
-        $readAlias     = config('activity_logs.index_alias');
-        $writeAlias    = config('activity_logs.index_alias_write');
+        $readAlias     = (string) config('activity_logs.index_alias');
+        $writeAlias    = (string) config('activity_logs.index_alias_write');
+        $physicalIndex = ElasticsearchIndexNames::initialRolloverIndex($readAlias);
 
         try {
             if (! $client->existsIndex($physicalIndex)) {

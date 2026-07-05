@@ -118,11 +118,13 @@ class ElasticAuditOperationsCommandTest extends TestCase
         $fake = new class extends FakeLogElasticsearchClient {
             public ?string $alias = null;
             public array $conditions = [];
+            public ?string $newIndex = 'unset';
 
-            public function rollover(string $alias, array $conditions): array
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
             {
                 $this->alias      = $alias;
                 $this->conditions = $conditions;
+                $this->newIndex   = $newIndex;
 
                 return ['rolled_over' => true];
             }
@@ -134,5 +136,42 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
         $this->assertSame(config('http_logs.index_alias_write'), $fake->alias);
         $this->assertArrayHasKey('max_age', $fake->conditions);
+        $this->assertNull($fake->newIndex);
+    }
+
+    public function test_http_rollover_command_explicitly_names_next_index_for_legacy_write_index(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public ?string $newIndex = null;
+
+            public function getAlias(string $name): array
+            {
+                return [
+                    'app_http_logs_20260627_084222' => [
+                        'aliases' => [
+                            $name => ['is_write_index' => true],
+                        ],
+                    ],
+                ];
+            }
+
+            public function existsIndex(string $index): bool
+            {
+                return false;
+            }
+
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
+            {
+                $this->newIndex = $newIndex;
+
+                return ['rolled_over' => true];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('http-logs:rollover')->assertSuccessful();
+
+        $this->assertSame(config('http_logs.index_alias') . '-000001', $fake->newIndex);
     }
 }

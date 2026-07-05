@@ -260,4 +260,25 @@ class LogElasticsearchClientTest extends TestCase
 
         $client->putLifecyclePolicy('audit-policy', $policy);
     }
+
+    public function test_rollover_passes_alias_conditions_and_optional_new_index(): void
+    {
+        $indices = $this->createMock(Indices::class);
+        $indices->expects($this->once())->method('rollover')->with($this->callback(
+            fn (array $p): bool => $p['alias'] === 'logs_write'
+                && $p['new_index'] === 'logs-000001'
+                && $p['body']['conditions'] === ['max_age' => '30d']
+        ))->willReturn($this->esResponse);
+
+        $this->esResponse->method('asArray')->willReturn(['rolled_over' => true]);
+
+        $esClient = $this->createStub(SpyElasticsearchClientInterface::class);
+        $esClient->method('indices')->willReturn($indices);
+        $client = new LogElasticsearchClient($esClient);
+
+        $this->assertSame(
+            ['rolled_over' => true],
+            $client->rollover('logs_write', ['max_age' => '30d'], 'logs-000001')
+        );
+    }
 }

@@ -27,7 +27,9 @@ class CreateHttpLogIndexCommandTest extends TestCase
         $this->esClient->method('existsIndex')->willReturn(false);
         $this->esClient->method('existsAlias')->willReturn(false);
 
-        $this->esClient->expects($this->once())->method('createIndex');
+        $this->esClient->expects($this->once())->method('createIndex')->with($this->callback(
+            fn (array $params): bool => $params['index'] === config('http_logs.index_alias') . '-000001'
+        ));
         $this->esClient->expects($this->exactly(2))->method('putAlias');
 
         $this->artisan('http-logs:create-index')->assertSuccessful();

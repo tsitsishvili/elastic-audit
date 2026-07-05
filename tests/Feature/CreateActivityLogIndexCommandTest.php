@@ -41,6 +41,7 @@ class CreateActivityLogIndexCommandTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertNotEmpty($fake->createdIndexes);
+        $this->assertSame(config('activity_logs.index_alias') . '-000001', $fake->createdIndexes[0]);
         $this->assertContains(config('activity_logs.index_alias'), $fake->createdAliases);
         $this->assertContains(config('activity_logs.index_alias_write'), $fake->createdAliases);
     }
