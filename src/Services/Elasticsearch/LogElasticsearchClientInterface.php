@@ -30,5 +30,5 @@ interface LogElasticsearchClientInterface
 
     public function putLifecyclePolicy(string $name, array $policy): void;
 
-    public function rollover(string $alias, array $conditions): array;
+    public function rollover(string $alias, array $conditions, ?string $newIndex = null): array;
 }

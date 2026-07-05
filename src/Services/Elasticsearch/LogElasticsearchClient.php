@@ -134,12 +134,18 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
         ]);
     }
 
-    public function rollover(string $alias, array $conditions): array
+    public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
     {
-        return $this->client->indices()->rollover([
+        $params = [
             'alias' => $alias,
             'body'  => ['conditions' => $conditions],
-        ])->asArray();
+        ];
+
+        if ($newIndex !== null) {
+            $params['new_index'] = $newIndex;
+        }
+
+        return $this->client->indices()->rollover($params)->asArray();
     }
 
     private function logError(string $message, Throwable $e): void
