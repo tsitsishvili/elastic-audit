@@ -1,4 +1,6 @@
-@extends('elastic-audit::dashboard.layout')
+@extends('elastic-audit::layout')
+
+@section('dashboard', 'http')
 
 @section('title', 'Overview · Third-Party HTTP Logs')
 
@@ -78,19 +80,6 @@
 
     $timeoutCount = (int) ($aggs['timeouts']['doc_count'] ?? 0);
 
-    // datetime-local inputs only accept `YYYY-MM-DDTHH:MM` (no seconds/zone), so normalize
-    // any incoming value (e.g. an ISO `...Z` written by the chart drag-to-zoom) to the app timezone.
-    $fmtLocal = function (?string $ts) use ($timezone): string {
-        if (! $ts) {
-            return '';
-        }
-        try {
-            return \Illuminate\Support\Carbon::parse($ts)->timezone($timezone)->format('Y-m-d\TH:i');
-        } catch (\Throwable) {
-            return '';
-        }
-    };
-
     $cards = [
         ['label' => 'Total requests', 'value' => number_format($total), 'sub' => $rangeSub, 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => $logsLink()],
         ['label' => 'Success rate', 'value' => $successRate . '%', 'sub' => number_format($successCount) . ' ok', 'accent' => 'text-emerald-600', 'link' => $logsLink(['success' => 'true'])],
@@ -116,85 +105,18 @@
         </a>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        @foreach ($cards as $card)
-            <a href="{{ $card['link'] }}"
-               class="ea-focus ea-panel group min-h-[116px] rounded-lg border p-4 transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md dark:hover:border-indigo-500">
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $card['label'] }}</div>
-                <div class="mt-2 text-2xl font-semibold {{ $card['accent'] }}">{{ $card['value'] }}</div>
-                <div class="mt-1 text-xs text-slate-400 group-hover:text-indigo-500 dark:text-slate-500">{{ $card['sub'] }} →</div>
-            </a>
-        @endforeach
-    </div>
+    @include('elastic-audit::partials.stat-cards', ['cards' => $cards])
 
-    <div class="ea-panel mt-5 flex flex-wrap items-end justify-between gap-4 rounded-lg border p-4">
-        <form method="GET" action="{{ route('http-logs.overview', [], false) }}"
-              class="flex flex-wrap items-end gap-4" x-data="{ range: @js($range) }">
-            <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="range-select">Range</label>
-                <select id="range-select" name="range" x-model="range"
-                        @change="$el.value !== 'custom' && $el.form.submit()"
-                        class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-                    @foreach ($ranges as $key => $meta)
-                        <option value="{{ $key }}" @selected($range === $key)>{{ $meta['label'] }}</option>
-                    @endforeach
-                    <option value="custom" @selected($range === 'custom')>Custom range</option>
-                </select>
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="interval-select">Interval</label>
-                <select id="interval-select" name="interval" onchange="this.form.submit()"
-                        class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-                    @foreach ($intervals as $key => $label)
-                        <option value="{{ $key }}" @selected($interval === $key)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            <template x-if="range === 'custom'">
-                <div class="flex flex-wrap items-end gap-4">
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="from-input">From</label>
-                        <input id="from-input" type="datetime-local" name="from" value="{{ $fmtLocal(request('from')) }}"
-                               class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="to-input">To</label>
-                        <input id="to-input" type="datetime-local" name="to" value="{{ $fmtLocal(request('to')) }}"
-                               class="ea-focus h-10 rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-                    </div>
-                    <button type="submit" class="ea-focus h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700">Apply</button>
-                </div>
-            </template>
-
-            <noscript>
-                <button type="submit" class="ea-focus h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Apply</button>
-            </noscript>
-        </form>
-
-        <div class="flex items-center gap-2"
-             x-data="{
-                on: localStorage.getItem('tphl_live') === '1',
-                timer: null,
-                toggle() {
-                    localStorage.setItem('tphl_live', this.on ? '1' : '0');
-                    if (this.on) { this.timer = setInterval(() => location.reload(), 30000); }
-                    else if (this.timer) { clearInterval(this.timer); this.timer = null; }
-                },
-             }"
-             x-init="if (on) { timer = setInterval(() => location.reload(), 30000); }">
-            <label class="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                <input type="checkbox" x-model="on" @change="toggle()"
-                       class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900">
-                <span class="flex items-center gap-1">
-                    <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'"></span>
-                    Live
-                </span>
-            </label>
-            <span x-show="on" x-cloak class="text-[11px] text-slate-400 dark:text-slate-500">every 30s</span>
-        </div>
-    </div>
+    @include('elastic-audit::partials.overview-controls', [
+        'action' => route('http-logs.overview', [], false),
+        'idPrefix' => 'http-overview',
+        'range' => $range,
+        'ranges' => $ranges,
+        'interval' => $interval,
+        'intervals' => $intervals,
+        'timezone' => $timezone,
+        'liveKey' => 'tphl_live',
+    ])
 
     @php
         $miniCharts = [

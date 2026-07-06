@@ -16,7 +16,14 @@
         "guzzle",
         "redaction"
     ],
-    "license": "proprietary",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "tsitsishvili",
+            "email": "torniketsitsishvili@gmail.com",
+            "role": "Maintainer"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0 || ^13.0",
