@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-07-06
+
+### Fixed
+
+- `http-logs:create-index` and `activity-logs:create-index` now create the next available rollover-compatible physical
+  index (`-000002`, `-000003`, etc.) when the initial `-000001` index already exists, instead of repeatedly targeting
+  the first generation.
+- Create-index commands now install matching Elasticsearch index templates so ILM-created rollover indexes inherit the
+  package mappings, lifecycle settings, replica settings, and read aliases.
+
 ## [3.0.1] - 2026-07-05
 
 ### Fixed
@@ -132,7 +142,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.5.0...v3.0.0
 [2.5.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.4.0...v2.5.0

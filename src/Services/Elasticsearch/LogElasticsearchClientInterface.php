@@ -18,6 +18,8 @@ interface LogElasticsearchClientInterface
 
     public function createIndex(array $params): array;
 
+    public function putIndexTemplate(string $name, array $template): void;
+
     public function existsIndex(string $index): bool;
 
     public function putAlias(string $index, string $name, array $params = []): void;
