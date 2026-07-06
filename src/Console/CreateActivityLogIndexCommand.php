@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
 
 class CreateActivityLogIndexCommand extends Command
@@ -21,28 +22,32 @@ class CreateActivityLogIndexCommand extends Command
     {
         $readAlias     = (string) config('activity_logs.index_alias');
         $writeAlias    = (string) config('activity_logs.index_alias_write');
-        $physicalIndex = ElasticsearchIndexNames::initialRolloverIndex($readAlias);
 
         try {
-            if (! $client->existsIndex($physicalIndex)) {
-                $this->info("Creating index: {$physicalIndex}");
+            $mappings = ActivityLogMapping::get();
 
-                $client->createIndex([
-                    'index' => $physicalIndex,
-                    'body'  => [
-                        'mappings' => ActivityLogMapping::get(),
-                        'settings' => [
-                            'number_of_shards'   => 1,
-                            'number_of_replicas' => config('log_elasticsearch.replicas', 1),
-                            ...ElasticsearchLifecycle::indexSettings($writeAlias),
-                        ],
+            $client->putIndexTemplate(
+                ElasticsearchIndexTemplate::name($readAlias),
+                ElasticsearchIndexTemplate::body($readAlias, $writeAlias, $mappings),
+            );
+
+            $physicalIndex = ElasticsearchIndexNames::nextAvailableRolloverIndex($client, $readAlias);
+
+            $this->info("Creating index: {$physicalIndex}");
+
+            $client->createIndex([
+                'index' => $physicalIndex,
+                'body'  => [
+                    'mappings' => $mappings,
+                    'settings' => [
+                        'number_of_shards'   => 1,
+                        'number_of_replicas' => config('log_elasticsearch.replicas', 1),
+                        ...ElasticsearchLifecycle::indexSettings($writeAlias),
                     ],
-                ]);
+                ],
+            ]);
 
-                $this->info('Index created.');
-            } else {
-                $this->info("Index already exists: {$physicalIndex}");
-            }
+            $this->info('Index created.');
 
             $this->attachAlias($client, $physicalIndex, $readAlias, [], exclusive: false);
             $this->attachAlias($client, $physicalIndex, $writeAlias, ['is_write_index' => true], exclusive: true);

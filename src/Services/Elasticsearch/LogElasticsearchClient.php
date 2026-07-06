@@ -80,6 +80,14 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
         return $this->client->indices()->create($params)->asArray();
     }
 
+    public function putIndexTemplate(string $name, array $template): void
+    {
+        $this->client->indices()->putIndexTemplate([
+            'name' => $name,
+            'body' => $template,
+        ]);
+    }
+
     public function existsIndex(string $index): bool
     {
         try {

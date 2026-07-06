@@ -153,6 +153,28 @@ class LogElasticsearchClientTest extends TestCase
         $this->assertSame($expected, $this->client->createIndex(['index' => 'test']));
     }
 
+    public function test_put_index_template_delegates_to_indices(): void
+    {
+        $template = [
+            'index_patterns' => ['logs-*'],
+            'template'       => [
+                'settings' => ['number_of_shards' => 1],
+                'mappings' => ['dynamic' => 'strict'],
+            ],
+        ];
+
+        $indices = $this->createMock(Indices::class);
+        $indices->expects($this->once())->method('putIndexTemplate')->with($this->callback(
+            fn (array $p): bool => $p['name'] === 'logs_template' && $p['body'] === $template
+        ));
+
+        $esClient = $this->createStub(SpyElasticsearchClientInterface::class);
+        $esClient->method('indices')->willReturn($indices);
+        $client = new LogElasticsearchClient($esClient);
+
+        $client->putIndexTemplate('logs_template', $template);
+    }
+
     public function test_exists_index_returns_true(): void
     {
         $this->esResponse->method('asBool')->willReturn(true);

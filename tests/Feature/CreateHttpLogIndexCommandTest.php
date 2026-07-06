@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Elastic\Transport\Exception\NoNodeAvailableException;
-use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
-use Tsitsishvili\ElasticAudit\Tests\TestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
+use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class CreateHttpLogIndexCommandTest extends TestCase
 {
@@ -24,24 +25,37 @@ class CreateHttpLogIndexCommandTest extends TestCase
 
     public function test_creates_index_and_attaches_aliases_when_index_does_not_exist(): void
     {
+        $expectedIndex = config('http_logs.index_alias') . '-000001';
+
         $this->esClient->method('existsIndex')->willReturn(false);
         $this->esClient->method('existsAlias')->willReturn(false);
 
+        $this->esClient->expects($this->once())->method('putIndexTemplate')->with(
+            config('http_logs.index_alias') . '_template',
+            $this->callback(fn (array $template): bool => $this->templateMatchesHttpLogs($template))
+        );
         $this->esClient->expects($this->once())->method('createIndex')->with($this->callback(
-            fn (array $params): bool => $params['index'] === config('http_logs.index_alias') . '-000001'
+            fn (array $params): bool => $params['index'] === $expectedIndex
         ));
-        $this->esClient->expects($this->exactly(2))->method('putAlias');
+        $this->esClient->expects($this->exactly(2))->method('putAlias')->with($expectedIndex);
 
         $this->artisan('http-logs:create-index')->assertSuccessful();
     }
 
-    public function test_skips_index_creation_when_index_already_exists(): void
+    public function test_creates_next_available_index_when_initial_index_already_exists(): void
     {
-        $this->esClient->method('existsIndex')->willReturn(true);
+        $baseName      = config('http_logs.index_alias');
+        $expectedIndex = $baseName . '-000002';
+
+        $this->esClient->method('existsIndex')->willReturnCallback(
+            fn (string $index): bool => $index === $baseName . '-000001'
+        );
         $this->esClient->method('existsAlias')->willReturn(false);
 
-        $this->esClient->expects($this->never())->method('createIndex');
-        $this->esClient->expects($this->exactly(2))->method('putAlias');
+        $this->esClient->expects($this->once())->method('createIndex')->with($this->callback(
+            fn (array $params): bool => $params['index'] === $expectedIndex
+        ));
+        $this->esClient->expects($this->exactly(2))->method('putAlias')->with($expectedIndex);
 
         $this->artisan('http-logs:create-index')->assertSuccessful();
     }
@@ -87,5 +101,16 @@ class CreateHttpLogIndexCommandTest extends TestCase
         $this->esClient->method('existsAlias')->willReturn(false);
 
         $this->artisan('http-logs:create-index')->assertSuccessful();
+    }
+
+    private function templateMatchesHttpLogs(array $template): bool
+    {
+        $readAlias  = config('http_logs.index_alias');
+        $writeAlias = config('http_logs.index_alias_write');
+
+        return $template['index_patterns'] === ["{$readAlias}-*"]
+            && $template['template']['mappings'] === HttpLogMapping::get()
+            && ($template['template']['settings']['index.lifecycle.rollover_alias'] ?? null) === $writeAlias
+            && array_key_exists($readAlias, $template['template']['aliases']);
     }
 }

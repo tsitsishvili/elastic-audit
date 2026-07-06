@@ -98,22 +98,23 @@ product-search cluster.
 
 The `changes` and `metadata` maps are redacted by key name before queueing, using the same rules as the HTTP logger
 (so a model's `password` / `email` attribute diffs never reach Elasticsearch in clear text). Tune it with
-`activity_logs.redaction.block` / `.allow` — same semantics as the HTTP [Redaction Notes](AUDIT_LOGS.md#redaction-notes), but a
+`activity_logs.redaction.block` / `.allow` — same semantics as the
+HTTP [Redaction Notes](AUDIT_LOGS.md#redaction-notes), but a
 single flat list since activity events have no headers.
 
 Relevant environment variables:
 
-| Variable                          | Default    | Purpose                                                                                           |
-|-----------------------------------|------------|---------------------------------------------------------------------------------------------------|
-| `ACTIVITY_LOGS_ENABLED`           | `true`     | Master on/off switch for capture                                                                  |
-| `ACTIVITY_LOGS_QUEUE`             | `default`  | Queue the indexing job is dispatched to                                                           |
-| `ACTIVITY_LOGS_JOB_TRIES`         | `3`        | Attempts for each queued activity log job                                                         |
-| `ACTIVITY_LOGS_JOB_BACKOFF`       | `10,30,120`| Comma-separated retry backoff seconds for activity log jobs                                       |
-| `ACTIVITY_LOGS_JOB_TIMEOUT`       | `30`       | Timeout in seconds for single activity log jobs                                                   |
-| `ACTIVITY_LOGS_BATCH_JOB_TIMEOUT` | `60`       | Timeout in seconds for activity bulk replay jobs                                                  |
-| `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`     | Register the dashboard routes                                                                     |
-| `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`   | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
-| `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity` | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
+| Variable                          | Default     | Purpose                                                                                           |
+|-----------------------------------|-------------|---------------------------------------------------------------------------------------------------|
+| `ACTIVITY_LOGS_ENABLED`           | `true`      | Master on/off switch for capture                                                                  |
+| `ACTIVITY_LOGS_QUEUE`             | `default`   | Queue the indexing job is dispatched to                                                           |
+| `ACTIVITY_LOGS_JOB_TRIES`         | `3`         | Attempts for each queued activity log job                                                         |
+| `ACTIVITY_LOGS_JOB_BACKOFF`       | `10,30,120` | Comma-separated retry backoff seconds for activity log jobs                                       |
+| `ACTIVITY_LOGS_JOB_TIMEOUT`       | `30`        | Timeout in seconds for single activity log jobs                                                   |
+| `ACTIVITY_LOGS_BATCH_JOB_TIMEOUT` | `60`        | Timeout in seconds for activity bulk replay jobs                                                  |
+| `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`      | Register the dashboard routes                                                                     |
+| `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`    | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
+| `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity`  | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
 
 ### Create the Activity Index
 
@@ -121,8 +122,14 @@ Relevant environment variables:
 php artisan activity-logs:create-index
 ```
 
-Creates the physical index (`<prefix>_activity_logs_<timestamp>`) with a `dynamic: strict` mapping and
-attaches the read/write aliases. With the v3 default lifecycle config, create or update the shared ILM policy first:
+Creates the physical index with a `dynamic: strict` mapping and attaches the read/write aliases. In `v3.0.2` and newer,
+the command uses rollover-compatible names: a fresh setup starts with `<prefix>_activity_logs-000001`; if that index
+already exists, the command advances to `-000002`, `-000003`, and so on.
+
+The command also installs an index template for `<prefix>_activity_logs-*` so Elasticsearch-created rollover indexes
+inherit the activity log mapping, lifecycle settings, replica settings, and read alias.
+
+With the v3 default lifecycle config, create or update the shared ILM policy first:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
@@ -225,13 +232,13 @@ class Order extends Model
 }
 ```
 
-| Eloquent event | Action logged      | `changes` content                                            |
-|----------------|--------------------|--------------------------------------------------------------|
-| `created`      | `{entity}.created` | `{field: {old: null, new: value}}` for all logged attributes |
-| `updated`      | `{entity}.updated` | `{field: {old, new}}` for dirty fields only                  |
-| `deleted`      | `{entity}.deleted` | `{}` (the entity itself is the event)                        |
-| `restored`     | `{entity}.restored` | `{}` (SoftDeletes models only)                              |
-| `forceDeleted` | `{entity}.force_deleted` | `{}` (SoftDeletes models only)                         |
+| Eloquent event | Action logged            | `changes` content                                            |
+|----------------|--------------------------|--------------------------------------------------------------|
+| `created`      | `{entity}.created`       | `{field: {old: null, new: value}}` for all logged attributes |
+| `updated`      | `{entity}.updated`       | `{field: {old, new}}` for dirty fields only                  |
+| `deleted`      | `{entity}.deleted`       | `{}` (the entity itself is the event)                        |
+| `restored`     | `{entity}.restored`      | `{}` (SoftDeletes models only)                               |
+| `forceDeleted` | `{entity}.force_deleted` | `{}` (SoftDeletes models only)                               |
 
 `$activityLogOnly` is applied first (whitelist), then `$activityLogExcept` (blacklist). The entity id defaults to
 `(string) $model->getKey()` and can be overridden via `activityEntityId()`. `activityMetadata()` defaults to `[]` and

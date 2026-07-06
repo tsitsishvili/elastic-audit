@@ -48,7 +48,7 @@ status codes, entity context, and sanitized request/response payload previews. I
 2. Install the package:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^3.0
+    composer require tsitsishvili/elastic-audit
     ```
 
 3. Publish the config files and enum stubs:
@@ -99,7 +99,7 @@ Add the package repository to the consuming application's `composer.json`.
 Install a tagged version:
 
 ```bash
-composer require tsitsishvili/elastic-audit:^3.0
+composer require tsitsishvili/elastic-audit
 ```
 
 Laravel auto-discovers the package service provider.
@@ -156,26 +156,26 @@ LOG_ELASTICSEARCH_INDEX_PREFIX=my_app
 LOG_ELASTICSEARCH_REPLICAS=0
 ```
 
-| Variable                         | Description                                                                                                                        |
-|----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `HTTP_LOGS_ENABLED`              | Set to `true` to enable logging.                                                                                                   |
-| `HTTP_LOGS_QUEUE`                | Queue name for log jobs.                                                                                                           |
-| `HTTP_LOGS_JOB_TRIES`            | Attempts for each queued HTTP log job.                                                                                             |
-| `HTTP_LOGS_JOB_BACKOFF`          | Comma-separated retry backoff seconds for HTTP log jobs.                                                                           |
-| `HTTP_LOGS_JOB_TIMEOUT`          | Timeout in seconds for single HTTP log jobs.                                                                                        |
-| `HTTP_LOGS_BATCH_JOB_TIMEOUT`    | Timeout in seconds for HTTP bulk replay jobs.                                                                                       |
-| `HTTP_LOGS_SAMPLE_RATE`          | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
-| `HTTP_LOGS_BODY_PREVIEW_BYTES`   | Max bytes stored as sanitized body preview.                                                                                        |
-| `HTTP_LOGS_BODY_MAX_BYTES`       | Max raw body size before truncation.                                                                                               |
-| `HTTP_LOGS_PAYMENT_BODY_MODE`    | Body handling mode for payment providers (`preview` or `metadata`).                                                                |
-| `HTTP_LOGS_DASHBOARD_ENABLED`    | Set to `true` to register the web dashboard routes.                                                                                |
-| `ELASTIC_AUDIT_DASHBOARD_PREFIX` | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
-| `HTTP_LOGS_DASHBOARD_PATH`       | This dashboard's subpath under the group prefix (default `http-logs`). Served at `/logger/http-logs`.                              |
-| `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED` | Attaches ILM settings to newly created indexes. Defaults to `true` for v3 configs.                                           |
-| `LOG_ELASTICSEARCH_LIFECYCLE_POLICY` | Shared ILM policy name for HTTP and activity log indexes.                                                                       |
-| `LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE` | Max index age condition used by rollover.                                                                                       |
-| `LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE` | Max primary shard size condition used by rollover.                                                                     |
-| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER` | ILM delete phase age. Set empty only if prune commands are your retention fallback.                                  |
+| Variable                                    | Description                                                                                                                        |
+|---------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `HTTP_LOGS_ENABLED`                         | Set to `true` to enable logging.                                                                                                   |
+| `HTTP_LOGS_QUEUE`                           | Queue name for log jobs.                                                                                                           |
+| `HTTP_LOGS_JOB_TRIES`                       | Attempts for each queued HTTP log job.                                                                                             |
+| `HTTP_LOGS_JOB_BACKOFF`                     | Comma-separated retry backoff seconds for HTTP log jobs.                                                                           |
+| `HTTP_LOGS_JOB_TIMEOUT`                     | Timeout in seconds for single HTTP log jobs.                                                                                       |
+| `HTTP_LOGS_BATCH_JOB_TIMEOUT`               | Timeout in seconds for HTTP bulk replay jobs.                                                                                      |
+| `HTTP_LOGS_SAMPLE_RATE`                     | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
+| `HTTP_LOGS_BODY_PREVIEW_BYTES`              | Max bytes stored as sanitized body preview.                                                                                        |
+| `HTTP_LOGS_BODY_MAX_BYTES`                  | Max raw body size before truncation.                                                                                               |
+| `HTTP_LOGS_PAYMENT_BODY_MODE`               | Body handling mode for payment providers (`preview` or `metadata`).                                                                |
+| `HTTP_LOGS_DASHBOARD_ENABLED`               | Set to `true` to register the web dashboard routes.                                                                                |
+| `ELASTIC_AUDIT_DASHBOARD_PREFIX`            | Shared URL prefix for both dashboards (default `logger`). Composes as `{prefix}/{path}`. Set to empty string to serve at the root. |
+| `HTTP_LOGS_DASHBOARD_PATH`                  | This dashboard's subpath under the group prefix (default `http-logs`). Served at `/logger/http-logs`.                              |
+| `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED`       | Attaches ILM settings to newly created indexes. Defaults to `true` for v3 configs.                                                 |
+| `LOG_ELASTICSEARCH_LIFECYCLE_POLICY`        | Shared ILM policy name for HTTP and activity log indexes.                                                                          |
+| `LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE`        | Max index age condition used by rollover.                                                                                          |
+| `LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE` | Max primary shard size condition used by rollover.                                                                                 |
+| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER`  | ILM delete phase age. Set empty only if prune commands are your retention fallback.                                                |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`:
 
@@ -219,20 +219,20 @@ my_app_http_logs_write
 
 ### `log_elasticsearch.php`
 
-| Key                            | Default      | Description                                                                                    |
-|--------------------------------|--------------|------------------------------------------------------------------------------------------------|
-| `hosts.0.host`                 | `localhost`  | Elasticsearch host used for log indexing.                                                      |
-| `hosts.0.port`                 | `9200`       | Elasticsearch port.                                                                            |
-| `hosts.0.scheme`               | `http`       | Elasticsearch scheme, usually `http` or `https`.                                               |
-| `basicAuthentication.username` | empty string | Optional Elasticsearch basic auth username.                                                    |
-| `basicAuthentication.password` | empty string | Optional Elasticsearch basic auth password.                                                    |
-| `index_prefix`                 | `app_logs`   | Prefix used when creating physical indexes and aliases.                                        |
-| `replicas`                     | `0`          | Number of Elasticsearch replicas for the logs index. Increase for multi-node production clusters. |
-| `lifecycle.enabled`            | `true`       | Attaches ILM settings to newly created indexes. The policy command can still create/update the policy while this is false. |
-| `lifecycle.policy_name`        | `{prefix}_elastic_audit_policy` | ILM policy name used by both HTTP and activity log indexes.                    |
-| `lifecycle.rollover_max_age`   | `30d`        | Max index age condition passed to rollover.                                                     |
-| `lifecycle.rollover_max_shard_size` | `50gb` | Max primary shard size condition passed to rollover.                                            |
-| `lifecycle.delete_after`       | `360d`       | ILM delete phase age for index-level retention. Leave empty only when prune commands are the retention fallback. |
+| Key                                 | Default                         | Description                                                                                                                |
+|-------------------------------------|---------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| `hosts.0.host`                      | `localhost`                     | Elasticsearch host used for log indexing.                                                                                  |
+| `hosts.0.port`                      | `9200`                          | Elasticsearch port.                                                                                                        |
+| `hosts.0.scheme`                    | `http`                          | Elasticsearch scheme, usually `http` or `https`.                                                                           |
+| `basicAuthentication.username`      | empty string                    | Optional Elasticsearch basic auth username.                                                                                |
+| `basicAuthentication.password`      | empty string                    | Optional Elasticsearch basic auth password.                                                                                |
+| `index_prefix`                      | `app_logs`                      | Prefix used when creating physical indexes and aliases.                                                                    |
+| `replicas`                          | `0`                             | Number of Elasticsearch replicas for the logs index. Increase for multi-node production clusters.                          |
+| `lifecycle.enabled`                 | `true`                          | Attaches ILM settings to newly created indexes. The policy command can still create/update the policy while this is false. |
+| `lifecycle.policy_name`             | `{prefix}_elastic_audit_policy` | ILM policy name used by both HTTP and activity log indexes.                                                                |
+| `lifecycle.rollover_max_age`        | `30d`                           | Max index age condition passed to rollover.                                                                                |
+| `lifecycle.rollover_max_shard_size` | `50gb`                          | Max primary shard size condition passed to rollover.                                                                       |
+| `lifecycle.delete_after`            | `360d`                          | ILM delete phase age for index-level retention. Leave empty only when prune commands are the retention fallback.           |
 
 ## Register Application Enums
 
@@ -347,6 +347,13 @@ Create the physical index and attach read/write aliases:
 ```bash
 php artisan http-logs:create-index
 ```
+
+In `v3.0.2` and newer, the command creates the next available rollover-compatible physical index. A fresh setup starts
+with `<prefix>_http_logs-000001`; if that index already exists, the command advances to `-000002`, `-000003`, and so on
+before attaching the read and write aliases.
+
+The command also installs an index template for `<prefix>_http_logs-*` so Elasticsearch-created rollover indexes inherit
+the HTTP log mapping, lifecycle settings, replica settings, and read alias.
 
 ### Lifecycle, Rollover, and Health
 

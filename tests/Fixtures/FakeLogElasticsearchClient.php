@@ -60,6 +60,8 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
         return [];
     }
 
+    public function putIndexTemplate(string $name, array $template): void {}
+
     public function existsIndex(string $index): bool
     {
         return true;
