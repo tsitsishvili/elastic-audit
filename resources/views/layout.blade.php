@@ -1,9 +1,13 @@
+@php
+    $currentDashboard = trim($__env->yieldContent('dashboard', 'http'));
+    $defaultTitle = $currentDashboard === 'activity' ? 'Activity Logs' : 'Third-Party HTTP Logs';
+@endphp
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'Third-Party HTTP Logs')</title>
+    <title>@yield('title', $defaultTitle)</title>
     {{-- Apply the saved/system theme before paint to avoid a flash of the wrong mode. --}}
     <script>
         (function () {
@@ -70,7 +74,7 @@
     </style>
 </head>
 <body class="min-h-full text-slate-800 antialiased dark:text-slate-200">
-    @include('elastic-audit::partials.nav', ['current' => 'http'])
+    @include('elastic-audit::partials.nav', ['current' => $currentDashboard])
 
     <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
         @isset($error)

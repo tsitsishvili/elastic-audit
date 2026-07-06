@@ -1,4 +1,6 @@
-@extends('elastic-audit::dashboard.layout')
+@extends('elastic-audit::layout')
+
+@section('dashboard', 'http')
 
 @section('title', 'Log detail · Third-Party HTTP Logs')
 

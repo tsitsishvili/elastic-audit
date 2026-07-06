@@ -1,4 +1,6 @@
-@extends('elastic-audit::activity.layout')
+@extends('elastic-audit::layout')
+
+@section('dashboard', 'activity')
 
 @section('title', 'Activity Logs')
 
