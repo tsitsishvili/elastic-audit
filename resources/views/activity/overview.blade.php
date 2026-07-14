@@ -164,10 +164,8 @@
 
 @push('scripts')
     @if ($hasData)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
-                integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
-                crossorigin="anonymous"></script>
-        <script>
+        <script type="module" src="{{ asset('vendor/elastic-audit/' . $elasticAuditAssets['resources/js/chart.js']['file']) }}"></script>
+        <script type="module">
             (function () {
                 const tz       = @json($timezone);
                 const interval = @json($interval);

@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, v3.x]
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, v3.x]
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -25,7 +25,7 @@ jobs:
         # composer update resolves Laravel/Elasticsearch within the constraints
         # in composer.json for each PHP version. "lowest" pins the declared
         # floor so the minimum supported versions stay verified.
-        php: ['8.2', '8.3', '8.4']
+        php: ['8.2', '8.3', '8.4', '8.5']
         dependencies: [highest, lowest]
 
     steps:
@@ -51,3 +51,25 @@ jobs:
 
       - name: Run tests
         run: composer test
+
+  dashboard-assets:
+    name: Dashboard asset build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify generated assets
+        run: |
+          npm run build
+          git diff --exit-code -- public/vendor/elastic-audit

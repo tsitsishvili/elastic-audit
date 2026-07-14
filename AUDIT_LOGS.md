@@ -115,9 +115,11 @@ This publishes:
 ```text
 config/http_logs.php
 config/log_elasticsearch.php
+config/activity_logs.php
 app/Enums/ElasticAudit/Provider.php
 app/Enums/ElasticAudit/EventType.php
 app/Enums/ElasticAudit/EntityType.php
+public/vendor/elastic-audit/*
 ```
 
 The enum stubs are starting-point implementations of the three package contracts. Edit them to match the providers and
@@ -610,8 +612,15 @@ per-item Elasticsearch failures are treated as job failures, even when Elasticse
 ## Dashboard
 
 The package ships a Horizon-style web dashboard for browsing logged requests. It reads directly from the
-Elasticsearch read alias and is rendered with server-side Blade (Tailwind + Alpine via CDN) — there is no build
-step and no assets to compile or publish.
+Elasticsearch read alias and is rendered with server-side Blade. Production-ready Tailwind CSS, Alpine.js, and
+Chart.js bundles are included in the Composer package; consuming applications do not need Node.js.
+
+The main installation publish command installs the dashboard assets. Existing applications upgrading from `v3.0.3`
+or older should refresh them once:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-assets --force
+```
 
 Once the package is installed it is served (by default) at:
 
@@ -672,6 +681,9 @@ php artisan vendor:publish --tag=elastic-audit-views
 ```
 
 This publishes the views to `resources/views/vendor/elastic-audit`.
+
+If customized views introduce new Tailwind classes or JavaScript dependencies, the application must provide its own
+asset build. The package's precompiled assets only cover the bundled templates.
 
 ## Pruning Old Logs
 

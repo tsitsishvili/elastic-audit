@@ -44,7 +44,7 @@ application can enable only what it needs.
     composer require tsitsishvili/elastic-audit
     ```
 
-3. Publish config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
+3. Publish config files, enum stubs, and dashboard assets (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
 
     ```bash
     php artisan vendor:publish --tag=elastic-audit

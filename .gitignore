@@ -1,6 +1,9 @@
 /vendor/
 /node_modules/
 
+# Generated dashboard assets are intentionally committed for Composer consumers.
+!/public/vendor/elastic-audit/
+
 # Composer lock files are usually not committed for reusable libraries.
 /composer.lock
 

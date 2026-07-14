@@ -6,6 +6,8 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\ServiceProvider;
+use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
@@ -21,6 +23,21 @@ use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ElasticAuditServiceProviderTest extends TestCase
 {
+    public function test_dashboard_assets_have_a_dedicated_publish_tag(): void
+    {
+        $paths = ServiceProvider::pathsToPublish(
+            ElasticAuditServiceProvider::class,
+            'elastic-audit-assets',
+        );
+
+        $this->assertCount(1, $paths);
+        $this->assertSame(
+            public_path('vendor/elastic-audit'),
+            array_values($paths)[0],
+        );
+        $this->assertFileExists(array_keys($paths)[0] . '/manifest.json');
+    }
+
     public function test_registers_log_elasticsearch_client_as_singleton(): void
     {
         $a = $this->app->make(LogElasticsearchClientInterface::class);

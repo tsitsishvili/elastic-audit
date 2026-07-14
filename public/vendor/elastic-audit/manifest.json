@@ -1,0 +1,23 @@
+{
+  "resources/css/elastic-audit.css": {
+    "file": "styles-VWg0uzco.css",
+    "src": "resources/css/elastic-audit.css",
+    "isEntry": true,
+    "name": "styles",
+    "names": [
+      "styles.css"
+    ]
+  },
+  "resources/js/alpine.js": {
+    "file": "alpine-CzI1vhkK.js",
+    "name": "alpine",
+    "src": "resources/js/alpine.js",
+    "isEntry": true
+  },
+  "resources/js/chart.js": {
+    "file": "chart-Ct78DFbm.js",
+    "name": "chart",
+    "src": "resources/js/chart.js",
+    "isEntry": true
+  }
+}
