@@ -27,6 +27,8 @@ application can enable only what it needs.
   - [Configuration](ACTIVITY_LOGS.md#activity-configuration) · [Manual logging](ACTIVITY_LOGS.md#manual-logging) ·
     [Automatic model logging](ACTIVITY_LOGS.md#automatic-model-logging-the-activityloggable-trait) ·
     [Dashboard](ACTIVITY_LOGS.md#activity-dashboard)
+- [Agent Guide](AGENTS.md) — condensed rules, examples, and safety invariants for AI coding agents integrating the
+  package. See [AI Agents](#ai-agents) for how to deliver it to an agent.
 
 ## Screenshots
 
@@ -143,8 +145,8 @@ Published files are copies. Re-run the command with `--force` after upgrading th
 
 - [Changelog](CHANGELOG.md)
 - [Upgrade Guide](UPGRADE.md)
-- [Contributing](CONTRIBUTING.md)
-- [Coding Standards](CODING_STANDARDS.md)
+- [Contributing](https://github.com/tsitsishvili/elastic-audit/blob/main/CONTRIBUTING.md)
+- [Coding Standards](https://github.com/tsitsishvili/elastic-audit/blob/main/CODING_STANDARDS.md)
 
 ## Internal Versioning
 

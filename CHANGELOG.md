@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded `.gitattributes` with explicit text/binary handling, generated-asset metadata, and Composer archive rules.
   Distribution archives now exclude development dependencies, tests, CI/editor files, caches, and frontend build
   sources while retaining runtime assets, package guides, and Laravel Boost resources.
+- Indexed the agent guide from the README and both subsystem guides so it is discoverable from any entry point.
+
+### Fixed
+
+- Fixed links to `CONTRIBUTING.md` and `CODING_STANDARDS.md` resolving to missing files in the Composer distribution,
+  where both documents are intentionally excluded. The README and both subsystem guides now link to them on GitHub, so
+  every link in a published package resolves.
 
 ## [3.1.1] - 2026-07-16
 

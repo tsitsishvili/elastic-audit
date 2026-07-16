@@ -5,8 +5,8 @@ This file ships inside the Composer distribution, so it is readable at
 `vendor/tsitsishvili/elastic-audit/AGENTS.md` without any extra tooling.
 
 If the application uses [Laravel Boost](https://laravel.com/docs/boost), the same guidance is delivered automatically —
-see [Laravel Boost and AI Agents](README.md#laravel-boost-and-ai-agents). This file is the equivalent for applications
-that do not use Boost.
+see [With Laravel Boost](README.md#with-laravel-boost). This file is the equivalent for applications that do not use
+Boost.
 
 ## What this package does
 
