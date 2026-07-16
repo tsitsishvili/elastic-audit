@@ -27,6 +27,8 @@ application can enable only what it needs.
   - [Configuration](ACTIVITY_LOGS.md#activity-configuration) · [Manual logging](ACTIVITY_LOGS.md#manual-logging) ·
     [Automatic model logging](ACTIVITY_LOGS.md#automatic-model-logging-the-activityloggable-trait) ·
     [Dashboard](ACTIVITY_LOGS.md#activity-dashboard)
+- [Agent Guide](AGENTS.md) — condensed rules, examples, and safety invariants for AI coding agents integrating the
+  package. See [AI Agents](#ai-agents) for how to deliver it to an agent.
 
 ## Screenshots
 
@@ -79,12 +81,72 @@ For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-reques
 - Elasticsearch PHP client `^8.5 || ^9.0`
 - A queue worker, because logs are indexed through queued jobs
 
+## AI Agents
+
+Elastic Audit ships package-owned agent resources that teach coding agents how to configure the package, use its HTTP
+and activity APIs, preserve trusted audit metadata, apply redaction, and verify queued logging without a live
+Elasticsearch cluster. They work with or without [Laravel Boost](https://laravel.com/docs/boost).
+
+| Resource                                          | Purpose                                            |
+| ------------------------------------------------- | -------------------------------------------------- |
+| `resources/boost/guidelines/core.blade.php`       | Always-on rules, injected by Boost                 |
+| `resources/boost/skills/elastic-audit-development` | Agent Skill loaded on demand for integration work  |
+| `AGENTS.md`                                       | Standalone guide for agents, no tooling required   |
+
+### With Laravel Boost
+
+Boost is optional and is not a runtime dependency. In a consuming Laravel application, install it normally:
+
+```bash
+composer require laravel/boost --dev
+php artisan boost:install
+```
+
+Boost discovers the package's guidelines and skill automatically and writes them to the application's configured
+coding-agent files. If Boost was installed before Elastic Audit, pick up the newly available resources with:
+
+```bash
+php artisan boost:update --discover
+```
+
+Select `tsitsishvili/elastic-audit (guidelines, skills)` when prompted.
+
+> Discovery requires `tsitsishvili/elastic-audit` to be a direct entry in the application's `composer.json`. Boost does
+> not scan transitive dependencies.
+
+### Without Laravel Boost
+
+Every agent resource is plain Markdown, so no tooling is required. Either point the agent at the guide in place:
+
+```
+vendor/tsitsishvili/elastic-audit/AGENTS.md
+```
+
+…or copy the resources into the application so they sit alongside its own agent configuration:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-ai
+```
+
+This publishes:
+
+- `.ai/skills/elastic-audit-development/` — the Agent Skill, ready to move to `.claude/skills/`, `.cursor/skills/`,
+  `.github/skills/`, or wherever the application's agent reads skills from.
+- `AGENTS.elastic-audit.md` — the standalone guide, to reference from or paste into the application's root `AGENTS.md`
+  or `CLAUDE.md`.
+
+Published files are copies. Re-run the command with `--force` after upgrading the package to refresh them.
+
+> If the application later adopts Laravel Boost, Boost treats `.ai/skills/elastic-audit-development` as a user-owned
+> skill and prefers it over the package's own copy. Either keep the published copy refreshed with `--force`, or delete
+> it and let Boost read the skill straight from the package.
+
 ## Project Documents
 
 - [Changelog](CHANGELOG.md)
 - [Upgrade Guide](UPGRADE.md)
-- [Contributing](CONTRIBUTING.md)
-- [Coding Standards](CODING_STANDARDS.md)
+- [Contributing](https://github.com/tsitsishvili/elastic-audit/blob/main/CONTRIBUTING.md)
+- [Coding Standards](https://github.com/tsitsishvili/elastic-audit/blob/main/CODING_STANDARDS.md)
 
 ## Internal Versioning
 

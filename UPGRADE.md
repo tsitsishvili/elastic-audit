@@ -5,6 +5,25 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 3.1.1
+
+### Low impact: agent resources are available
+
+No action is required. The package now ships Laravel Boost guidelines, an `elastic-audit-development` Agent Skill, and
+a standalone `AGENTS.md` guide. Nothing is enabled automatically and no runtime behavior changes.
+
+To use them, see [AI Agents](README.md#ai-agents). Applications using Laravel Boost can run
+`php artisan boost:update --discover` and select `tsitsishvili/elastic-audit (guidelines, skills)`. Applications not
+using Boost can read `vendor/tsitsishvili/elastic-audit/AGENTS.md` directly, or run:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-ai
+```
+
+If you publish that tag **and** use Laravel Boost, Boost treats the published `.ai/skills/elastic-audit-development`
+copy as a user-owned skill and prefers it over the package's own copy. Refresh it with `--force` after upgrades, or
+remove it and let Boost read the skill from the package.
+
 ## Upgrading from 3.1.0
 
 ### Low impact: dashboard asset publishing is optional

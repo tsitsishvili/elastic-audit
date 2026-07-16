@@ -10,10 +10,11 @@ This guide is independent from the [Audit Logs](AUDIT_LOGS.md) subsystem and can
 
 ## Project Documents
 
+- [Agent Guide](AGENTS.md)
 - [Changelog](CHANGELOG.md)
 - [Upgrade Guide](UPGRADE.md)
-- [Contributing](CONTRIBUTING.md)
-- [Coding Standards](CODING_STANDARDS.md)
+- [Contributing](https://github.com/tsitsishvili/elastic-audit/blob/main/CONTRIBUTING.md)
+- [Coding Standards](https://github.com/tsitsishvili/elastic-audit/blob/main/CODING_STANDARDS.md)
 
 ## Table of Contents
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Elastic Audit Development"
+  short_description: "Build Laravel audit and activity logging"
+  default_prompt: "Use $elastic-audit-development to integrate Elastic Audit safely in this Laravel application."
