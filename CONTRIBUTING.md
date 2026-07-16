@@ -76,9 +76,9 @@ Before tagging a release:
 - Update `CHANGELOG.md`.
 - Commit the release changes.
 - Tag the release with a SemVer tag, for example `v1.0.0`.
-- Push the tag to GitLab.
+- Push the tag to GitHub.
 
-## Merge Request Checklist
+## Pull Request Checklist
 
 Before requesting review:
 
