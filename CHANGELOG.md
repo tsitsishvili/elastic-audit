@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-07-16
+
+### Added
+
+- Added package-owned Laravel Boost resources for consuming applications: concise guidelines and an
+  `elastic-audit-development` Agent Skill covering HTTP auditing, activity capture, redaction, queues, Elasticsearch
+  operations, and testing. Laravel Boost remains an optional development dependency of the consuming application.
+- Added `AGENTS.md`, a standalone agent guide shipped in the Composer distribution, so applications that do not use
+  Laravel Boost can point a coding agent at `vendor/tsitsishvili/elastic-audit/AGENTS.md` with no extra tooling.
+- Added the `elastic-audit-ai` publish tag, which copies the Agent Skill to `.ai/skills/elastic-audit-development` and
+  the standalone guide to `AGENTS.elastic-audit.md` for applications that do not use Laravel Boost.
+
+### Changed
+
+- Expanded `.gitattributes` with explicit text/binary handling, generated-asset metadata, and Composer archive rules.
+  Distribution archives now exclude development dependencies, tests, CI/editor files, caches, and frontend build
+  sources while retaining runtime assets, package guides, and Laravel Boost resources.
+
 ## [3.1.1] - 2026-07-16
 
 ### Fixed
@@ -179,7 +197,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.1...v3.2.0
 [3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.3...v3.1.0
 [3.0.3]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...v3.0.3

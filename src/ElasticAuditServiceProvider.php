@@ -149,6 +149,14 @@ class ElasticAuditServiceProvider extends ServiceProvider
                 __DIR__ . '/../resources/views' => resource_path('views/vendor/elastic-audit'),
             ], 'elastic-audit-views');
 
+            // Agent resources for applications that do not use Laravel Boost. Boost discovers
+            // resources/boost itself; these copies give other agents the same guidance.
+            $this->publishes([
+                __DIR__ . '/../resources/boost/skills/elastic-audit-development'
+                    => base_path('.ai/skills/elastic-audit-development'),
+                __DIR__ . '/../AGENTS.md' => base_path('AGENTS.elastic-audit.md'),
+            ], 'elastic-audit-ai');
+
             $dashboardAssets = [
                 __DIR__ . '/../public/vendor/elastic-audit' => public_path('vendor/elastic-audit'),
             ];

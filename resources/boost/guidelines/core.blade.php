@@ -1,0 +1,32 @@
+## Elastic Audit
+
+Elastic Audit records third-party HTTP traffic and actor/model activity in a dedicated Elasticsearch cluster. HTTP
+logs and activity logs are independent subsystems with separate configuration, queues, indexes, and dashboards.
+
+- Inspect `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before changing an
+  integration. Never edit the package files under `vendor/`.
+- Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
+  returns an `Illuminate\Http\Client\PendingRequest`, so the normal Laravel HTTP client API remains available.
+- Pass existing backed enum cases implementing `ProviderContract`, `EventTypeContract`, and `EntityTypeContract` to
+  HTTP logging APIs. Inspect the consuming application's registered enum classes and never invent enum cases.
+- For incoming callbacks, use `IncomingHttpLogMiddleware` and set `third_party_*` request attributes from trusted
+  application code. Never derive provider, event, or entity types from user-controlled request input.
+- Use `ActivityLog::record(...)` for explicit domain events and `ActivityLoggable` for automatic Eloquent lifecycle
+  events. Activity entity and actor types are free string labels.
+- Logging dispatches queued jobs. Keep the configured queue worker running and use `Bus::fake()` when asserting job
+  dispatch in tests; unit tests should not require a live Elasticsearch cluster.
+- Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
+  exception because allowed values are stored in clear text.
+- After infrastructure or configuration changes, run `php artisan elastic-audit:health --all`. Install the lifecycle
+  policy before creating HTTP or activity indexes on a fresh environment.
+
+@boostsnippet('Outgoing audited request', 'php')
+$response = HttpLog::make(
+    provider: Provider::Delivery,
+    eventType: EventType::DeliveryOrderCreate,
+    context: HttpLogContext::forEntity(
+        entityType: EntityType::Order,
+        entityId: (string) $order->getKey(),
+    ),
+)->post($url, $payload);
+@endboostsnippet

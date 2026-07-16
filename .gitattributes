@@ -1,2 +1,45 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Compiled dashboard bundles are committed for Composer consumers.
+/public/vendor/elastic-audit/** linguist-generated=true
+
+# Keep development-only files out of Composer dist archives.
+# Directory entries and descendants are listed because Composer filters them independently.
+/.DS_Store             export-ignore
+/.env*                 export-ignore
+/.github               export-ignore
+/.github/**            export-ignore
+/.gitattributes        export-ignore
+/.gitignore            export-ignore
+/.idea                 export-ignore
+/.idea/**              export-ignore
+/.phpunit.cache        export-ignore
+/.phpunit.cache/**     export-ignore
+/.vscode               export-ignore
+/.vscode/**            export-ignore
+/composer.lock         export-ignore
+/node_modules          export-ignore
+/node_modules/**       export-ignore
+/scripts               export-ignore
+/scripts/**            export-ignore
+/tests                 export-ignore
+/tests/**              export-ignore
+/vendor                export-ignore
+/vendor/**             export-ignore
+/phpunit.xml           export-ignore
+/CONTRIBUTING.md       export-ignore
+/CODING_STANDARDS.md   export-ignore
+Thumbs.db               export-ignore
+*.log                   export-ignore
+
+# Consumers use the committed dashboard bundles, not the frontend toolchain.
+/package.json        export-ignore
+/package-lock.json   export-ignore
+/postcss.config.js   export-ignore
+/tailwind.config.js  export-ignore
+/vite.config.js      export-ignore
+/resources/css       export-ignore
+/resources/css/**    export-ignore
+/resources/js        export-ignore
+/resources/js/**     export-ignore
