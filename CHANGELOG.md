@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-16
+
+### Added
+
+- Dashboard CSS and JavaScript are now built into versioned package assets and can be published with
+  `php artisan vendor:publish --tag=elastic-audit-assets --force`; the main `elastic-audit` publish tag also includes
+  them for new installations.
+
+### Changed
+
+- Dashboard pages now use compiled Tailwind CSS and locally bundled Alpine.js/Chart.js instead of runtime CDN assets,
+  removing the production dependency on third-party asset hosts.
+- CI now validates the active `v3.x` branch, tests PHP 8.5, and verifies that committed dashboard assets match their
+  sources.
+
+### Fixed
+
+- Restored highest-dependency test compatibility with Laravel 13.19 and later, whose Testbench base class now exposes
+  a public `query()` request helper.
+
+## [3.0.3] - 2026-07-06
+
+### Changed
+
+- Refactored the HTTP and activity dashboards to share one layout, overview controls, and stat-card components while
+  preserving their existing routes and query behavior.
+- Changed Composer package metadata from proprietary to MIT and added maintainer metadata, matching the repository
+  license.
+
 ## [3.0.2] - 2026-07-06
 
 ### Fixed
@@ -142,7 +171,9 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.3...v3.1.0
+[3.0.3]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v2.5.0...v3.0.0

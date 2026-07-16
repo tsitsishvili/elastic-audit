@@ -320,6 +320,13 @@ Dashboard::auth(fn ($request) => $request->user()?->can('viewActivityLogs') === 
 
 By default (no callback registered) access is restricted to the `local` environment.
 
+Dashboard CSS and JavaScript are published by the main `elastic-audit` install command. Existing applications
+upgrading from `v3.0.3` or older should refresh the locally bundled assets once:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-assets --force
+```
+
 ### Pruning Activity Logs
 
 ```bash

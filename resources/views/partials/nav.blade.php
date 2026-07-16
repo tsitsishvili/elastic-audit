@@ -63,6 +63,7 @@
                 x-data="{ dark: document.documentElement.classList.contains('dark') }"
                 @click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('tphl_theme', dark ? 'dark' : 'light')"
                 :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
+                :aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'"
                 class="ea-focus inline-flex h-9 w-9 items-center justify-center self-end rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white md:self-auto">
             <span x-cloak x-text="dark ? '☀' : '☾'"></span>
         </button>

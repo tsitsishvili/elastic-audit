@@ -7,7 +7,9 @@ namespace Tsitsishvili\ElasticAudit;
 use Elastic\Elasticsearch\ClientBuilder;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Console\CreateActivityLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateHttpLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateLogLifecyclePolicyCommand;
@@ -32,6 +34,9 @@ use Tsitsishvili\ElasticAudit\HttpLogManager;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
+    /** @var array<string, array{file: string}>|null */
+    private ?array $dashboardAssets = null;
+
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/http_logs.php', 'http_logs');
@@ -121,6 +126,10 @@ class ElasticAuditServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'elastic-audit');
+        View::composer(
+            'elastic-audit::*',
+            fn ($view) => $view->with('elasticAuditAssets', $this->dashboardAssetManifest()),
+        );
 
         $this->registerDashboardRoutes();
         $this->registerActivityDashboardRoutes();
@@ -136,6 +145,13 @@ class ElasticAuditServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../resources/views' => resource_path('views/vendor/elastic-audit'),
             ], 'elastic-audit-views');
+
+            $dashboardAssets = [
+                __DIR__ . '/../public/vendor/elastic-audit' => public_path('vendor/elastic-audit'),
+            ];
+
+            $this->publishes($dashboardAssets, 'elastic-audit');
+            $this->publishes($dashboardAssets, 'elastic-audit-assets');
         }
 
         $this->commands([
@@ -148,6 +164,32 @@ class ElasticAuditServiceProvider extends ServiceProvider
             RolloverActivityLogIndexCommand::class,
             ElasticAuditHealthCommand::class,
         ]);
+    }
+
+    /**
+     * Read the build manifest shipped with the Composer package.
+     *
+     * @return array<string, array{file: string}>
+     */
+    private function dashboardAssetManifest(): array
+    {
+        if ($this->dashboardAssets !== null) {
+            return $this->dashboardAssets;
+        }
+
+        $manifestPath = __DIR__ . '/../public/vendor/elastic-audit/manifest.json';
+
+        if (! is_file($manifestPath)) {
+            throw new RuntimeException('Elastic Audit dashboard assets are missing. Run `npm run build` before packaging the library.');
+        }
+
+        $manifest = json_decode(
+            (string)file_get_contents($manifestPath),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        return $this->dashboardAssets = is_array($manifest) ? $manifest : [];
     }
 
     private function registerDashboardRoutes(): void

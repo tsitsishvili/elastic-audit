@@ -10,7 +10,7 @@ use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class HttpLogDashboardQueryTest extends TestCase
 {
-    private function query(FakeLogElasticsearchClient $client): HttpLogDashboardQuery
+    private function dashboardQuery(FakeLogElasticsearchClient $client): HttpLogDashboardQuery
     {
         return new HttpLogDashboardQuery($client, 'test_alias');
     }
@@ -20,7 +20,7 @@ class HttpLogDashboardQueryTest extends TestCase
         $client = new FakeLogElasticsearchClient();
         $client->searchResponse = ['hits' => ['total' => ['value' => 42], 'hits' => []]];
 
-        $result = $this->query($client)->search([], page: 2, perPage: 10);
+        $result = $this->dashboardQuery($client)->search([], page: 2, perPage: 10);
 
         $body = $client->lastSearch()['body'];
 
@@ -35,7 +35,7 @@ class HttpLogDashboardQueryTest extends TestCase
     {
         $client = new FakeLogElasticsearchClient();
 
-        $this->query($client)->search([
+        $this->dashboardQuery($client)->search([
             'provider'     => 'delivery',
             'direction'    => 'outgoing',
             'status_class' => '5xx',
@@ -56,7 +56,7 @@ class HttpLogDashboardQueryTest extends TestCase
     {
         $client = new FakeLogElasticsearchClient();
 
-        $this->query($client)->search(['timeout' => '1']);
+        $this->dashboardQuery($client)->search(['timeout' => '1']);
 
         $filter = $client->lastSearch()['body']['query']['bool']['filter'];
 
@@ -67,7 +67,7 @@ class HttpLogDashboardQueryTest extends TestCase
     {
         $client = new FakeLogElasticsearchClient();
 
-        $this->query($client)->search(['timeout' => '0']);
+        $this->dashboardQuery($client)->search(['timeout' => '0']);
 
         $filter = $client->lastSearch()['body']['query']['bool']['filter'];
 
@@ -78,7 +78,7 @@ class HttpLogDashboardQueryTest extends TestCase
     {
         $client = new FakeLogElasticsearchClient();
 
-        $this->query($client)->search(['from' => '2026-01-01T00:00', 'to' => '2026-02-01T00:00']);
+        $this->dashboardQuery($client)->search(['from' => '2026-01-01T00:00', 'to' => '2026-02-01T00:00']);
 
         $filter = $client->lastSearch()['body']['query']['bool']['filter'];
 
@@ -98,7 +98,7 @@ class HttpLogDashboardQueryTest extends TestCase
             ],
         ];
 
-        $result = $this->query($client)->search([]);
+        $result = $this->dashboardQuery($client)->search([]);
 
         $this->assertCount(1, $result['hits']);
         $this->assertSame('evt-1', $result['hits'][0]['event_id']);
@@ -112,7 +112,7 @@ class HttpLogDashboardQueryTest extends TestCase
             'hits' => ['hits' => [['_id' => 'doc-1', '_source' => ['event_id' => 'evt-9']]]],
         ];
 
-        $log = $this->query($client)->find('evt-9');
+        $log = $this->dashboardQuery($client)->find('evt-9');
 
         $this->assertSame(['term' => ['event_id' => 'evt-9']], $client->lastSearch()['body']['query']);
         $this->assertSame('evt-9', $log['event_id']);
@@ -123,7 +123,7 @@ class HttpLogDashboardQueryTest extends TestCase
         $client = new FakeLogElasticsearchClient();
         $client->searchResponse = ['hits' => ['hits' => []]];
 
-        $this->assertNull($this->query($client)->find('missing'));
+        $this->assertNull($this->dashboardQuery($client)->find('missing'));
     }
 
     public function test_metrics_requests_aggregations(): void
@@ -134,7 +134,7 @@ class HttpLogDashboardQueryTest extends TestCase
             'aggregations' => ['by_provider' => ['buckets' => []]],
         ];
 
-        $metrics = $this->query($client)->metrics([]);
+        $metrics = $this->dashboardQuery($client)->metrics([]);
 
         $body = $client->lastSearch()['body'];
         $this->assertSame(0, $body['size']);
@@ -154,7 +154,7 @@ class HttpLogDashboardQueryTest extends TestCase
             ],
         ];
 
-        $options = $this->query($client)->filterOptions();
+        $options = $this->dashboardQuery($client)->filterOptions();
 
         $this->assertSame(['delivery', 'payment'], $options['providers']);
         $this->assertSame(['order_create'], $options['event_types']);

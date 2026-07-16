@@ -10,6 +10,7 @@ Install dependencies:
 
 ```bash
 composer install
+npm ci
 ```
 
 Validate Composer metadata:
@@ -23,7 +24,11 @@ Run the package tests after a test runner is configured (see
 
 ```bash
 composer test
+npm run build
 ```
+
+Generated files under `public/vendor/elastic-audit` are committed so Composer consumers do not need Node.js; rebuild
+and commit them whenever dashboard templates, CSS, JavaScript, or frontend dependencies change.
 
 ## Development Guidelines
 
@@ -66,13 +71,14 @@ Before tagging a release:
 - Confirm the package installs in a consuming Laravel application.
 - Run Composer validation.
 - Run tests.
+- Rebuild dashboard assets.
 - Review redaction-sensitive changes carefully.
 - Update `CHANGELOG.md`.
 - Commit the release changes.
 - Tag the release with a SemVer tag, for example `v1.0.0`.
-- Push the tag to GitLab.
+- Push the tag to GitHub.
 
-## Merge Request Checklist
+## Pull Request Checklist
 
 Before requesting review:
 

@@ -55,6 +55,26 @@ class DashboardTest extends TestCase
             ->assertSee('Success rate');
     }
 
+    public function test_overview_uses_versioned_local_assets_without_cdn_dependencies(): void
+    {
+        $this->fake->searchResponse = [
+            'hits' => ['total' => ['value' => 1]],
+            'aggregations' => [
+                'by_status_class' => ['buckets' => [['key' => '2xx', 'doc_count' => 1]]],
+                'success' => ['buckets' => [['key' => 1, 'key_as_string' => 'true', 'doc_count' => 1]]],
+                'over_time' => ['buckets' => []],
+            ],
+        ];
+
+        $this->get(route('http-logs.overview', [], false))
+            ->assertOk()
+            ->assertSee('vendor/elastic-audit/styles-', false)
+            ->assertSee('vendor/elastic-audit/alpine-', false)
+            ->assertSee('vendor/elastic-audit/chart-', false)
+            ->assertDontSee('cdn.tailwindcss.com', false)
+            ->assertDontSee('cdn.jsdelivr.net', false);
+    }
+
     public function test_overview_forbidden_when_auth_denies(): void
     {
         Dashboard::auth(fn () => false);
