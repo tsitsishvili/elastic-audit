@@ -125,6 +125,9 @@ public/vendor/elastic-audit/*
 The enum stubs are starting-point implementations of the three package contracts. Edit them to match the providers and
 event types used by the application.
 
+The public asset copy is optional. Dashboard assets are also served directly from the Composer package through a
+manifest-allowlisted route, so a missing or stale published copy does not break the dashboard.
+
 ## Environment Variables
 
 ```dotenv
@@ -613,14 +616,18 @@ per-item Elasticsearch failures are treated as job failures, even when Elasticse
 
 The package ships a Horizon-style web dashboard for browsing logged requests. It reads directly from the
 Elasticsearch read alias and is rendered with server-side Blade. Production-ready Tailwind CSS, Alpine.js, and
-Chart.js bundles are included in the Composer package; consuming applications do not need Node.js.
+Chart.js bundles are included in the Composer package; consuming applications do not need Node.js or an asset publish
+step. The package serves only the hashed files listed in its build manifest and sends one-year immutable cache headers.
 
-The main installation publish command installs the dashboard assets. Existing applications upgrading from `v3.0.3`
-or older should refresh them once:
+Publishing the same files remains available as an optional optimization when the web server or a CDN should serve them
+without passing the first request through Laravel:
 
 ```bash
 php artisan vendor:publish --tag=elastic-audit-assets --force
 ```
+
+Published files use the same URLs as the package route. If a hashed file is absent from the public copy after a package
+upgrade, Laravel serves the current file from the package automatically.
 
 Once the package is installed it is served (by default) at:
 

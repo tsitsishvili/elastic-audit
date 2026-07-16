@@ -9,7 +9,6 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
-use RuntimeException;
 use Tsitsishvili\ElasticAudit\Console\CreateActivityLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateHttpLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateLogLifecyclePolicyCommand;
@@ -19,10 +18,12 @@ use Tsitsishvili\ElasticAudit\Console\PruneHttpLogCommand;
 use Tsitsishvili\ElasticAudit\Console\RolloverActivityLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\RolloverHttpLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
+use Tsitsishvili\ElasticAudit\Dashboard\DashboardAssets;
 use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
-use Tsitsishvili\ElasticAudit\Http\Middleware\AuthorizeDashboard;
+use Tsitsishvili\ElasticAudit\Http\Controllers\DashboardAssetController;
 use Tsitsishvili\ElasticAudit\Http\HttpLogClientFactory;
+use Tsitsishvili\ElasticAudit\Http\Middleware\AuthorizeDashboard;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
@@ -34,9 +35,6 @@ use Tsitsishvili\ElasticAudit\HttpLogManager;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
-    /** @var array<string, array{file: string}>|null */
-    private ?array $dashboardAssets = null;
-
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/http_logs.php', 'http_logs');
@@ -78,6 +76,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
         $this->app->singleton(HttpLogClientFactory::class);
         $this->app->singleton(HttpLogManager::class);
+        $this->app->singleton(DashboardAssets::class);
 
         $this->app->singleton(HttpLogIndexer::class, function (Application $app) {
             return new HttpLogIndexer(
@@ -128,9 +127,13 @@ class ElasticAuditServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'elastic-audit');
         View::composer(
             'elastic-audit::*',
-            fn ($view) => $view->with('elasticAuditAssets', $this->dashboardAssetManifest()),
+            fn ($view) => $view->with(
+                'elasticAuditAssets',
+                $this->app->make(DashboardAssets::class)->manifest(),
+            ),
         );
 
+        $this->registerDashboardAssetRoute();
         $this->registerDashboardRoutes();
         $this->registerActivityDashboardRoutes();
 
@@ -166,30 +169,18 @@ class ElasticAuditServiceProvider extends ServiceProvider
         ]);
     }
 
-    /**
-     * Read the build manifest shipped with the Composer package.
-     *
-     * @return array<string, array{file: string}>
-     */
-    private function dashboardAssetManifest(): array
+    private function registerDashboardAssetRoute(): void
     {
-        if ($this->dashboardAssets !== null) {
-            return $this->dashboardAssets;
+        $httpDashboardEnabled     = (bool) ($this->app['config']['http_logs']['dashboard']['enabled'] ?? false);
+        $activityDashboardEnabled = (bool) ($this->app['config']['activity_logs']['dashboard']['enabled'] ?? false);
+
+        if (! $httpDashboardEnabled && ! $activityDashboardEnabled) {
+            return;
         }
 
-        $manifestPath = __DIR__ . '/../public/vendor/elastic-audit/manifest.json';
-
-        if (! is_file($manifestPath)) {
-            throw new RuntimeException('Elastic Audit dashboard assets are missing. Run `npm run build` before packaging the library.');
-        }
-
-        $manifest = json_decode(
-            (string)file_get_contents($manifestPath),
-            true,
-            flags: JSON_THROW_ON_ERROR,
-        );
-
-        return $this->dashboardAssets = is_array($manifest) ? $manifest : [];
+        Route::get('vendor/elastic-audit/{asset}', DashboardAssetController::class)
+            ->where('asset', '.+')
+            ->name('elastic-audit.assets');
     }
 
     private function registerDashboardRoutes(): void

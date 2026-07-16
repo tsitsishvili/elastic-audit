@@ -5,19 +5,26 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 3.1.0
+
+### Low impact: dashboard asset publishing is optional
+
+No action is required. Dashboard CSS and JavaScript are now served automatically from the Composer package through a
+manifest-allowlisted route. Existing files under `public/vendor/elastic-audit` remain compatible and may be kept for
+direct web-server or CDN delivery.
+
 ## Upgrading from 3.0.3
 
 ### Medium impact: dashboard assets are now local
 
-The HTTP and activity dashboards no longer load Tailwind CSS, Alpine.js, or Chart.js from third-party CDNs. Publish
-the versioned assets included in the Composer package after upgrading:
+The HTTP and activity dashboards no longer load Tailwind CSS, Alpine.js, or Chart.js from third-party CDNs. Current
+package versions serve the bundled assets automatically, so publishing is not required. A static copy remains optional:
 
 ```bash
 php artisan vendor:publish --tag=elastic-audit-assets --force
 ```
 
-New installations that run `php artisan vendor:publish --tag=elastic-audit` already receive these assets. Applications
-that do not enable either dashboard do not need to publish them.
+New installations that run `php artisan vendor:publish --tag=elastic-audit` also receive this static copy.
 
 ## Upgrading from 2.x to 3.x
 

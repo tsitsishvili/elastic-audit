@@ -8,7 +8,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', $defaultTitle)</title>
-    <link rel="stylesheet" href="{{ asset('vendor/elastic-audit/' . $elasticAuditAssets['resources/css/elastic-audit.css']['file']) }}">
+    <link rel="stylesheet" href="{{ route('elastic-audit.assets', ['asset' => $elasticAuditAssets['resources/css/elastic-audit.css']['file']]) }}">
     {{-- Apply the saved/system theme before paint to avoid a flash of the wrong mode. --}}
     <script>
         (function () {
@@ -33,7 +33,7 @@
         @yield('content')
     </main>
 
-    <script type="module" src="{{ asset('vendor/elastic-audit/' . $elasticAuditAssets['resources/js/alpine.js']['file']) }}"></script>
+    <script type="module" src="{{ route('elastic-audit.assets', ['asset' => $elasticAuditAssets['resources/js/alpine.js']['file']]) }}"></script>
     @stack('scripts')
 </body>
 </html>
