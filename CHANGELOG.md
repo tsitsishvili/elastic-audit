@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-07-16
+
+### Fixed
+
+- Fixed HTTP and activity dashboards failing to load their CSS and JavaScript until assets were manually published.
+  Manifest-listed assets are now served directly from the Composer package with immutable cache headers; publishing
+  `elastic-audit-assets` remains available as an optional static-delivery optimization.
+
 ## [3.1.0] - 2026-07-16
 
 ### Added
@@ -171,7 +179,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.3...v3.1.0
 [3.0.3]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...v3.0.2

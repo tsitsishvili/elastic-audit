@@ -257,7 +257,7 @@
 
 @push('scripts')
     @if ($hasData)
-        <script type="module" src="{{ asset('vendor/elastic-audit/' . $elasticAuditAssets['resources/js/chart.js']['file']) }}"></script>
+        <script type="module" src="{{ route('elastic-audit.assets', ['asset' => $elasticAuditAssets['resources/js/chart.js']['file']]) }}"></script>
         <script type="module">
             (function () {
                 const tz       = @json($timezone);
