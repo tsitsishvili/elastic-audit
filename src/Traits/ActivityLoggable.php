@@ -92,7 +92,7 @@ trait ActivityLoggable
     }
 
     /**
-     * @return array{0: string, 1: int|null}
+     * @return array{0: string, 1: int|string|null}
      */
     protected function activityActor(): array
     {
@@ -107,7 +107,15 @@ trait ActivityLoggable
     {
         [$actorType, $actorId] = $this->activityActor();
 
-        return [(string) $actorType, is_numeric($actorId) ? (int) $actorId : null];
+        if (! is_int($actorId) && ! is_string($actorId)) {
+            $actorId = null;
+        }
+
+        if (is_string($actorId) && trim($actorId) === '') {
+            $actorId = null;
+        }
+
+        return [(string) $actorType, $actorId];
     }
 
     private function activityChangesForCreate(): array

@@ -73,6 +73,42 @@ class HttpLogIndexerTest extends TestCase
         $this->assertTrue($captured['http']['timed_out']);
     }
 
+    public function test_integer_user_id_is_indexed_as_keyword_string(): void
+    {
+        $captured = null;
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(function (array $p) use (&$captured): bool {
+                $captured = $p['body'];
+
+                return true;
+            }));
+
+        $this->indexer->index($this->makeLogData(userId: 42));
+
+        $this->assertSame('42', $captured['user_id']);
+    }
+
+    public function test_uuid_user_id_is_indexed_as_keyword_string(): void
+    {
+        $captured = null;
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(function (array $p) use (&$captured): bool {
+                $captured = $p['body'];
+
+                return true;
+            }));
+
+        $this->indexer->index($this->makeLogData(userId: '550e8400-e29b-41d4-a716-446655440000'));
+
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $captured['user_id']);
+    }
+
     public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
     {
         $captured = null;
@@ -92,12 +128,13 @@ class HttpLogIndexerTest extends TestCase
         $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
     }
 
-    private function makeLogData(bool $timedOut = false): HttpLogData
+    private function makeLogData(bool $timedOut = false, int|string|null $userId = null): HttpLogData
     {
         $empty   = new RedactedHttpPayload([], null, null, null, false);
         $context = HttpLogContext::forEntity(
             entityType: TestEntityType::Order,
             entityId: '123',
+            userId: $userId,
         );
 
         return HttpLogData::make(

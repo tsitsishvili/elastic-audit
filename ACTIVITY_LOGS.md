@@ -130,6 +130,12 @@ already exists, the command advances to `-000002`, `-000003`, and so on.
 The command also installs an index template for `<prefix>_activity_logs-*` so Elasticsearch-created rollover indexes
 inherit the activity log mapping, lifecycle settings, replica settings, and read alias.
 
+> **Upgrading an existing installation:** `actor.id` is now a `keyword` instead of a `long`. Elasticsearch cannot
+> change that mapping in place. Run `php artisan activity-logs:create-index` before sending string or UUID actor ids;
+> the command creates the next physical index with the new mapping and moves the write alias to it. Existing indices
+> stay on the read alias. Reindex old documents only if external queries require one uniform field type across all
+> index generations.
+
 With the v3 default lifecycle config, create or update the shared ILM policy first:
 
 ```bash
@@ -180,8 +186,9 @@ ActivityLog::record(
 
 `entityType` is a free string label for the entity being changed (e.g. `order`, `invoice`) — pass your own
 enum's `->value` if you keep one. `actorType` is a free string — conventionally `user`, `system`, `cron`, or
-`job`. `retentionDays` defaults to
-`360` and can be overridden per call via `ActivityLogContext::forActor(..., retentionDays: 90)`.
+`job`. `actorId` accepts `int|string|null`; the DTO preserves the supplied PHP value and the indexer stores every
+non-null actor id as a keyword string. `retentionDays` defaults to `360` and can be overridden per call via
+`ActivityLogContext::forActor(..., retentionDays: 90)`.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 
@@ -265,7 +272,7 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
 {
   "@timestamp": "2026-06-04T10:00:00Z",
   "event_id": "01JX...",
-  "schema_version": 2,
+  "schema_version": 3,
   "request_id": "01JX...",
   "trace": {
     "id": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -274,7 +281,7 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
   },
   "actor": {
     "type": "user",
-    "id": 42
+    "id": "42"
   },
   "action": "order.status_updated",
   "entity": {

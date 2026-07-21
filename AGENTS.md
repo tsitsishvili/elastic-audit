@@ -33,6 +33,8 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   a caller spoof audit metadata.
 - Use `ActivityLog::record(...)` for explicit domain events and `ActivityLoggable` for automatic Eloquent lifecycle
   events. Activity actor and entity types are free-form strings; if the app models them as enums, pass `->value`.
+- HTTP `userId` and activity `actorId` accept integers, strings, UUIDs, or null. The package indexes non-null ids as
+  keyword strings; preserve the application's real identifier instead of coercing UUIDs or string ids to integers.
 - Logging dispatches queued jobs. Keep a worker running for the configured queues, and use `Bus::fake()` when asserting
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
@@ -77,6 +79,7 @@ $request->attributes->set('third_party_provider', Provider::Delivery->value);
 $request->attributes->set('third_party_event_type', EventType::DeliveryStatusCallback->value);
 $request->attributes->set('third_party_entity_type', EntityType::Order->value);
 $request->attributes->set('third_party_entity_id', (string) $order->getKey());
+$request->attributes->set('third_party_user_id', auth()->id());
 ```
 
 The middleware skips capture when registered enum classes or matching values cannot be resolved. Use

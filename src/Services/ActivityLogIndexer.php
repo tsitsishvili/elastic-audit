@@ -58,7 +58,7 @@ class ActivityLogIndexer
             ],
             'actor'          => [
                 'type' => $d->actorType,
-                'id'   => $d->actorId,
+                'id'   => $d->actorId !== null ? (string) $d->actorId : null,
             ],
             'action'         => $d->action,
             'entity'         => [

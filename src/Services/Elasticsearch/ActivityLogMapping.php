@@ -25,7 +25,7 @@ class ActivityLogMapping
                 'actor'          => [
                     'properties' => [
                         'type' => ['type' => 'keyword'],
-                        'id'   => ['type' => 'long'],
+                        'id'   => ['type' => 'keyword'],
                     ],
                 ],
                 'action'         => ['type' => 'keyword'],

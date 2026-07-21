@@ -12,7 +12,7 @@ use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class HttpLogData
 {
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     public function __construct(
         public string $eventId,
@@ -31,7 +31,7 @@ final readonly class HttpLogData
         public string $entityType,
         public string $entityId,
         public ?string $externalId,
-        public ?int $userId,
+        public int|string|null $userId,
         public int $attempt,
         public bool $success,
         public int $retentionDays,

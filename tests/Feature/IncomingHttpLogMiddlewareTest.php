@@ -203,7 +203,7 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         Bus::assertDispatched(LogHttpRequestJob::class);
     }
 
-    public function test_middleware_records_external_id_and_user_id_from_attributes(): void
+    public function test_middleware_records_external_id_and_string_user_id_from_attributes(): void
     {
         Bus::fake();
 
@@ -220,7 +220,45 @@ class IncomingHttpLogMiddlewareTest extends TestCase
 
         Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
             return $job->data->externalId === 'ext-abc-123'
-                && $job->data->userId === 42;
+                && $job->data->userId === '42';
+        });
+    }
+
+    public function test_middleware_records_uuid_user_id_from_attributes(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-with-uuid-user-id', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_user_id', '550e8400-e29b-41d4-a716-446655440000');
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-with-uuid-user-id', [])->assertOk();
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->userId === '550e8400-e29b-41d4-a716-446655440000';
+        });
+    }
+
+    public function test_middleware_records_integer_user_id_from_attributes(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-with-integer-user-id', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_user_id', 42);
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-with-integer-user-id', [])->assertOk();
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->userId === 42;
         });
     }
 
@@ -243,14 +281,14 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         });
     }
 
-    public function test_middleware_ignores_non_numeric_user_id_attribute(): void
+    public function test_middleware_ignores_non_string_and_non_integer_user_id_attribute(): void
     {
         Bus::fake();
 
         Route::post('/_test/callback-bad-user-id', function () {
             request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
             request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
-            request()->attributes->set('third_party_user_id', 'not-a-number');
+            request()->attributes->set('third_party_user_id', ['invalid']);
 
             return response()->json(['ok' => true]);
         })->middleware(IncomingHttpLogMiddleware::class);

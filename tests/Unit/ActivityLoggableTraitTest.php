@@ -132,6 +132,21 @@ class ActivityLoggableTraitTest extends TestCase
         });
     }
 
+    public function test_authenticated_uuid_actor_id_is_preserved(): void
+    {
+        Bus::fake();
+
+        Auth::shouldReceive('check')->andReturn(true);
+        Auth::shouldReceive('id')->andReturn('550e8400-e29b-41d4-a716-446655440000');
+
+        TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->actorType === 'user'
+                && $job->data->actorId === '550e8400-e29b-41d4-a716-446655440000';
+        });
+    }
+
     public function test_actor_type_is_system_when_not_authenticated(): void
     {
         Bus::fake();
@@ -288,7 +303,7 @@ class ActivityLoggableTraitTest extends TestCase
 
             protected function activityActor(): array
             {
-                return ['job', 99];
+                return ['job', 'worker-a'];
             }
 
             protected function activityEntityId(): string
@@ -301,7 +316,7 @@ class ActivityLoggableTraitTest extends TestCase
 
         Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
             return $job->data->actorType === 'job'
-                && $job->data->actorId === 99
+                && $job->data->actorId === 'worker-a'
                 && str_starts_with($job->data->entityId, 'custom-');
         });
     }

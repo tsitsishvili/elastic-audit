@@ -9,14 +9,14 @@ use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class ActivityLogData
 {
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
 
     public function __construct(
         public string $eventId,
         public string $timestamp,
         public string $requestId,
         public string $actorType,
-        public ?int $actorId,
+        public int|string|null $actorId,
         public string $action,
         public string $entityType,
         public string $entityId,

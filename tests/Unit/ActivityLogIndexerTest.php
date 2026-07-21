@@ -89,7 +89,22 @@ class ActivityLogIndexerTest extends TestCase
         $this->indexer->index($data);
 
         $this->assertSame('user', $captured['actor']['type']);
-        $this->assertSame(42, $captured['actor']['id']);
+        $this->assertSame('42', $captured['actor']['id']);
+    }
+
+    public function test_uuid_actor_id_is_indexed_as_keyword_string(): void
+    {
+        $captured = null;
+        $data     = $this->makeData('550e8400-e29b-41d4-a716-446655440000');
+
+        $this->client->method('index')->with($this->callback(function (array $p) use (&$captured) {
+            $captured = $p['body'];
+            return true;
+        }));
+
+        $this->indexer->index($data);
+
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $captured['actor']['id']);
     }
 
     public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
@@ -110,11 +125,11 @@ class ActivityLogIndexerTest extends TestCase
         $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
     }
 
-    private function makeData(): ActivityLogData
+    private function makeData(int|string|null $actorId = 42): ActivityLogData
     {
         $context = ActivityLogContext::forActor(
             actorType: 'user',
-            actorId: 42,
+            actorId: $actorId,
             entityType: 'order',
             entityId: '7',
             requestId: 'req-123',

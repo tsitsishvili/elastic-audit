@@ -332,7 +332,7 @@ data, and failure information.
 | `entity.type`       | Entity type from the log context, for example `order`.                                    |
 | `entity.id`         | Internal entity identifier from the log context.                                          |
 | `external_id`       | Optional external provider identifier.                                                    |
-| `user_id`           | Optional application user id.                                                             |
+| `user_id`           | Optional integer, string, or UUID application user id, indexed as a keyword string.       |
 | `attempt`           | Queue/job attempt or request attempt value.                                               |
 | `success`           | Boolean success flag.                                                                     |
 | `retention_days`    | Retention window used by `http-logs:prune`.                                               |
@@ -360,6 +360,12 @@ before attaching the read and write aliases.
 
 The command also installs an index template for `<prefix>_http_logs-*` so Elasticsearch-created rollover indexes inherit
 the HTTP log mapping, lifecycle settings, replica settings, and read alias.
+
+> **Upgrading an existing installation:** `user_id` is now a `keyword` instead of a `long`. Elasticsearch cannot
+> change that mapping in place. Run `php artisan http-logs:create-index` before sending string or UUID user ids; the
+> command creates the next physical index with the new mapping and moves the write alias to it. Existing indices stay
+> on the read alias. Reindex old documents only if external queries require one uniform field type across all index
+> generations.
 
 ### Lifecycle, Rollover, and Health
 
@@ -396,6 +402,9 @@ php artisan elastic-audit:health --all
 
 Use `HttpLog::make(...)` to obtain a logging-aware HTTP client instead of using Laravel's `Http` facade
 directly.
+
+`HttpLogContext` accepts `int|string|null` for `userId`. The DTO preserves the supplied PHP value while the indexer
+stores every non-null user id as a keyword string, so integers, UUIDs, and other string identifiers filter consistently.
 
 ```php
 <?php
@@ -505,6 +514,7 @@ class DeliveryCallbackController
         $request->attributes->set('third_party_event_type', EventType::DeliveryStatusCallback->value);
         $request->attributes->set('third_party_entity_type', EntityType::Order->value);
         $request->attributes->set('third_party_entity_id', $orderId);
+        $request->attributes->set('third_party_user_id', auth()->id());
 
         // Handle the callback...
 
@@ -515,6 +525,9 @@ class DeliveryCallbackController
 
 Do not resolve provider or event type from URL segments or request input. Set these values from application code so
 user-controlled data cannot spoof log metadata.
+
+`third_party_user_id` accepts an integer or non-empty string, including a UUID. Set it only from trusted server-side
+identity state, never from callback input.
 
 The middleware automatically logs the response it returns (status code, headers, and sanitized body) alongside the
 request — no extra code is required. If the callback handler throws after the trusted attributes have been set, the

@@ -5,6 +5,32 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 3.2.0
+
+### High impact: user and actor ids now support strings and UUIDs
+
+`HttpLogContext::$userId` and `ActivityLogContext::$actorId` now accept `int|string|null`. The corresponding data DTOs
+preserve the supplied PHP value, including UUIDs and other string identifiers. `ActivityLoggable` also preserves string
+values returned by `Auth::id()` or an `activityActor()` override instead of discarding them.
+
+Elasticsearch stores HTTP `user_id` and activity `actor.id` as keyword strings. Their mappings changed from `long` to
+`keyword`, which Elasticsearch cannot apply to an existing field in place. The HTTP and activity document schema
+versions are now 4 and 3 respectively.
+
+**What you need to do:** before resuming queue workers or emitting string/UUID ids, create a new physical index for
+each enabled subsystem so its write alias targets the new mapping:
+
+```bash
+php artisan http-logs:create-index
+php artisan activity-logs:create-index
+php artisan elastic-audit:health --all
+```
+
+Run only the create-index commands for enabled subsystems. Existing physical indices remain attached to the read alias
+and keep their old numeric mapping. Reindex old documents and detach the old indices when all queries must see one
+uniform field type. In particular, an activity dashboard UUID `actor_id` filter can fail or return partial results while
+the read alias spans both the old `long` mapping and the new `keyword` mapping.
+
 ## Upgrading from 3.1.1
 
 ### Low impact: agent resources are available

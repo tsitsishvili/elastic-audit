@@ -54,6 +54,9 @@ $response = HttpLog::make(
     ->post($url, $payload);
 ```
 
+`userId` accepts `int|string|null`, including UUIDs. Keep the application's real identifier type; Elastic Audit
+normalizes every non-null id to a keyword string only when building the Elasticsearch document.
+
 Keep the provider call's existing exception and response handling. Logging queues a sanitized event and preserves the
 original request behavior.
 
@@ -72,6 +75,7 @@ $request->attributes->set('third_party_provider', Provider::Delivery->value);
 $request->attributes->set('third_party_event_type', EventType::DeliveryStatusCallback->value);
 $request->attributes->set('third_party_entity_type', EntityType::Order->value);
 $request->attributes->set('third_party_entity_id', (string) $order->getKey());
+$request->attributes->set('third_party_user_id', auth()->id());
 ```
 
 Never take `third_party_provider`, `third_party_event_type`, or `third_party_entity_type` from route parameters, query
@@ -110,6 +114,7 @@ attribute diffs. Override `activityActor()`, `activityEntityId()`, or `activityM
 represent the application's domain.
 
 Activity `actorType` and `entityType` values are strings. If the application uses an enum for them, pass `->value`.
+`actorId` accepts `int|string|null`, including UUIDs, and is indexed as a keyword string.
 
 ## Protect sensitive data
 

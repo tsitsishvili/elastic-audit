@@ -10,7 +10,7 @@ final readonly class ActivityLogContext
 {
     public function __construct(
         public string $actorType,
-        public ?int $actorId,
+        public int|string|null $actorId,
         public string $entityType,
         public string $entityId,
         public string $requestId,
@@ -22,7 +22,7 @@ final readonly class ActivityLogContext
 
     public static function forActor(
         string $actorType,
-        ?int $actorId,
+        int|string|null $actorId,
         string $entityType,
         string $entityId,
         ?string $requestId = null,

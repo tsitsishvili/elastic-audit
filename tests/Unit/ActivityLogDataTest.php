@@ -50,7 +50,7 @@ class ActivityLogDataTest extends TestCase
         $this->assertNull($data->traceParent);
         $this->assertNotEmpty($data->eventId);
         $this->assertNotEmpty($data->timestamp);
-        $this->assertSame(2, ActivityLogData::SCHEMA_VERSION);
+        $this->assertSame(3, ActivityLogData::SCHEMA_VERSION);
     }
 
     public function test_make_parses_traceparent_from_context(): void

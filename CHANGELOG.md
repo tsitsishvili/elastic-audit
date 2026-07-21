@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- HTTP `userId` and activity `actorId` now accept `int|string|null`, including UUIDs and other string identifiers.
+  `ActivityLoggable` preserves string ids returned by `Auth::id()` and custom `activityActor()` implementations.
+- Elasticsearch maps HTTP `user_id` and activity `actor.id` as `keyword` and indexes every non-null id as a string.
+  HTTP and activity schema versions are now 4 and 3. Existing installations must run the relevant create-index command
+  before logging string ids; see the [Upgrade Guide](UPGRADE.md#upgrading-from-320).
+
 ## [3.2.0] - 2026-07-16
 
 ### Added

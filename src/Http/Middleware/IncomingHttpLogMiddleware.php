@@ -31,7 +31,7 @@ class IncomingHttpLogMiddleware
      *   third_party_event_type — string matching a case in your HttpLogEventType enum
      *   third_party_entity_type / third_party_entity_id — optional entity context
      *   third_party_external_id — optional provider-side identifier (string)
-     *   third_party_user_id     — optional acting user id (int)
+     *   third_party_user_id     — optional acting user id (int or non-empty string)
      *
      * Register your enum classes in config:
      *   http_logs.enums.provider, .event_type, .entity_type
@@ -199,12 +199,12 @@ class IncomingHttpLogMiddleware
         return $value === '' ? null : $value;
     }
 
-    private function resolveUserId(mixed $value): ?int
+    private function resolveUserId(mixed $value): int|string|null
     {
-        if (! is_numeric($value)) {
+        if (! is_int($value) && ! is_string($value)) {
             return null;
         }
 
-        return (int) $value;
+        return is_string($value) && trim($value) === '' ? null : $value;
     }
 }

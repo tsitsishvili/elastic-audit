@@ -55,7 +55,7 @@ class HttpLogIndexer
             'provider'       => (string) $d->provider->value,
             'event_type'     => (string) $d->eventType->value,
             'direction'      => $d->direction->value,
-            'user_id'        => $d->userId,
+            'user_id'        => $d->userId !== null ? (string) $d->userId : null,
             'attempt'        => $d->attempt,
             'success'        => $d->success,
             'retention_days' => $d->retentionDays,
