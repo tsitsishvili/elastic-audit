@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main, dev, v3.x]
+    branches: [main, dev, v3.x, v4.x]
   pull_request:
-    branches: [main, dev, v3.x]
+    branches: [main, dev, v3.x, v4.x]
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
@@ -48,6 +48,12 @@ jobs:
         uses: ramsey/composer-install@26d8a556604053a9612623447203a691f406fbe6 # v4
         with:
           dependency-versions: ${{ matrix.dependencies }}
+
+      - name: Verify PSR-4 autoloading
+        run: composer dump-autoload --optimize --strict-psr --no-interaction
+
+      - name: Lint PHP sources
+        run: find config src stubs tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Run tests
         run: composer test

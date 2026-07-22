@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
@@ -60,6 +62,68 @@ class ActivityDashboardTest extends TestCase
     public function test_show_returns_404_for_unknown_event(): void
     {
         $this->get(route('activity-logs.logs.show', 'nonexistent'))->assertStatus(404);
+    }
+
+    public function test_show_renders_redacted_and_malformed_legacy_changes_without_crashing(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+        $fake->searchResponse = [
+            'hits' => [
+                'total' => ['value' => 1],
+                'hits'  => [[
+                    '_id'     => 'event-1',
+                    '_source' => [
+                        'event_id' => 'event-1',
+                        'action'   => 'user.updated',
+                        'success'  => true,
+                        'changes'  => [
+                            'password'     => '[REDACTED]',
+                            'legacy_array' => ['unexpected' => ['nested' => true]],
+                            'status'       => ['old' => 'pending', 'new' => 'active'],
+                            'enabled'      => ['old' => false, 'new' => true],
+                        ],
+                    ],
+                ]],
+            ],
+        ];
+
+        $this->get(route('activity-logs.logs.show', 'event-1'))
+            ->assertOk()
+            ->assertSee('[REDACTED]')
+            ->assertSee('legacy_array')
+            ->assertSee('{&quot;unexpected&quot;:{&quot;nested&quot;:true}}', false)
+            ->assertSee('pending')
+            ->assertSee('active')
+            ->assertSee('false')
+            ->assertSee('true');
+    }
+
+    public function test_query_errors_do_not_expose_elasticsearch_details(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+        $fake->searchResolver = static fn (): never => throw new RuntimeException(
+            'Could not connect to elastic.internal:9200/private-index',
+        );
+        Log::spy();
+
+        foreach ([
+            route('activity-logs.overview'),
+            route('activity-logs.logs.index'),
+            route('activity-logs.logs.show', 'event-1'),
+        ] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('Failed to query Elasticsearch. Check the application log for details.')
+                ->assertDontSee('elastic.internal')
+                ->assertDontSee('private-index');
+        }
+
+        Log::shouldHaveReceived('error')
+            ->times(3)
+            ->withArgs(fn (string $message, array $context): bool => $message === 'Elastic Audit activity dashboard query failed'
+                && $context['error'] === 'Could not connect to elastic.internal:9200/private-index');
     }
 
     public function test_dashboard_blocked_when_auth_fails(): void

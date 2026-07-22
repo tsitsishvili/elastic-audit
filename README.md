@@ -78,6 +78,11 @@ Permanent retention is supported independently for documents and indexes. Use a 
 or a context's `retainForever: true` for documents, and disable `log_elasticsearch.lifecycle.delete_enabled` to keep
 rolled-over indexes. See [Lifecycle, Rollover, and Health](AUDIT_LOGS.md#lifecycle-rollover-and-health).
 
+HTTP capture is bounded to 1 MB by default; larger bodies are headers-only, and bodies that cannot be key-redacted
+(such as XML or plain text) default to hash-only metadata. Successful incoming callbacks are queued after the response
+is sent, while activity jobs wait for the surrounding database transaction to commit. Review the upgrade guide before
+moving an existing installation to this release line.
+
 ## Requirements
 
 - PHP `^8.2`

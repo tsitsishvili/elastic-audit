@@ -19,13 +19,33 @@ return [
     'body_max_bytes'     => env('HTTP_LOGS_BODY_MAX_BYTES', 32768),
 
     /*
+     * Bodies larger than this many bytes are captured as headers-only —
+     * no body, preview, or hash — so a huge provider response is never
+     * decoded, redacted, or hashed in memory on the request path.
+     */
+    'body_capture_max_bytes' => env('HTTP_LOGS_BODY_CAPTURE_MAX_BYTES', 1048576),
+
+    /*
+     * How to store bodies that cannot be key-redacted because they do not
+     * decode to a key/value structure (XML/SOAP, plain text, scalar JSON):
+     *
+     * metadata = store headers plus a sha256 hash of the raw body (default);
+     * preview  = store the raw body untouched. Every value in it — including
+     *            any secret — is kept in clear text, so opt in only for
+     *            providers whose non-JSON payloads are known to be safe.
+     */
+    'undecodable_body_mode' => env('HTTP_LOGS_UNDECODABLE_BODY_MODE', 'metadata'),
+
+    /*
        * preview = store sanitized body;
        * metadata = drop body, keep only status/host/path
     */
     'payment_body_mode'  => env('HTTP_LOGS_PAYMENT_BODY_MODE', 'preview'),
 
-    'index_alias'             => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_http_logs',
-    'index_alias_write'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_http_logs_write',
+    // Null derives aliases from log_elasticsearch.index_prefix. Set a string
+    // only when this subsystem intentionally needs custom aliases.
+    'index_alias'       => null,
+    'index_alias_write' => null,
 
     /*
      * Web dashboard for browsing logged requests (Horizon-style).
@@ -70,9 +90,8 @@ return [
     ],
 
     /*
-     * String values of provider enum cases that should use PaymentRedactor.
-     * Set this in your app's config override with the ->value of your payment provider cases.
-     * Example: ['tbc', 'bog', 'credo'...]
+     * String, integer, or backed-enum provider values that should use PaymentRedactor.
+     * Example: [Provider::Tbc, Provider::Bog->value, 'credo']
      */
     'payment_provider_values' => [],
 

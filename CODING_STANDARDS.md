@@ -4,7 +4,7 @@ These standards apply to `tsitsishvili/elastic-audit` and should be followed by 
 
 ## PHP Version
 
-- Use PHP 8.3+ syntax.
+- Use PHP 8.2+ syntax so every Composer-supported runtime can parse the package.
 - Declare strict types in every PHP source and test file:
 
 ```php

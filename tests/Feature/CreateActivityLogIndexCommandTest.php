@@ -96,6 +96,50 @@ class CreateActivityLogIndexCommandTest extends TestCase
         $this->assertContains(config('activity_logs.index_alias_write'), $fake->createdAliases);
     }
 
+    public function test_uses_rollover_api_when_write_alias_already_exists(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public array $createdIndexes = [];
+
+            public array $rollovers = [];
+
+            public function existsIndex(string $index): bool
+            {
+                return false;
+            }
+
+            public function existsAlias(string $name): bool
+            {
+                return $name === config('activity_logs.index_alias_write');
+            }
+
+            public function createIndex(array $params): array
+            {
+                $this->createdIndexes[] = $params['index'];
+
+                return [];
+            }
+
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
+            {
+                $this->rollovers[] = compact('alias', 'conditions', 'newIndex');
+
+                return ['rolled_over' => true];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:create-index')->assertSuccessful();
+
+        $this->assertSame([], $fake->createdIndexes);
+        $this->assertSame([[
+            'alias'      => config('activity_logs.index_alias_write'),
+            'conditions' => [],
+            'newIndex'   => config('activity_logs.index_alias') . '-000001',
+        ]], $fake->rollovers);
+    }
+
     #[AllowMockObjectsWithoutExpectations]
     public function test_returns_failure_when_es_unreachable(): void
     {

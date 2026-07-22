@@ -76,8 +76,10 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
 
     public function getAlias(string $name): array
     {
+        $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
         return [
-            "{$name}-000001" => [
+            "{$baseName}-000001" => [
                 'aliases' => [
                     $name => ['is_write_index' => true],
                 ],

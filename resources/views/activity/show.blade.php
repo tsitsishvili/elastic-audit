@@ -11,6 +11,16 @@
         try { return \Illuminate\Support\Carbon::parse($ts)->timezone($timezone)->format('Y-m-d H:i:s T'); }
         catch (\Throwable) { return (string) $ts; }
     };
+    $fmtValue = function (mixed $value): string {
+        if (is_string($value)) return $value;
+        if (is_bool($value)) return $value ? 'true' : 'false';
+        if (is_int($value) || is_float($value)) return (string) $value;
+        if ($value === null) return 'null';
+
+        $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $encoded === false ? '[unrenderable value]' : $encoded;
+    };
 @endphp
 
 <div class="mb-4">
@@ -20,7 +30,7 @@
 @if($error)
     <div class="rounded bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
 @elseif($log)
-@php $changes = $log['changes'] ?? []; @endphp
+@php $changes = is_array($log['changes'] ?? null) ? $log['changes'] : []; @endphp
 
 <div class="space-y-6">
     {{-- Summary card --}}
@@ -88,17 +98,28 @@
             </thead>
             <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                 @foreach($changes as $field => $diff)
+                @php
+                    $isDiff = is_array($diff)
+                        && array_key_exists('old', $diff)
+                        && array_key_exists('new', $diff);
+                    $oldValue = $isDiff ? $diff['old'] : null;
+                    $newValue = $isDiff ? $diff['new'] : $diff;
+                @endphp
                 <tr>
                     <td class="px-4 py-2.5 font-mono text-xs font-medium">{{ $field }}</td>
                     <td class="px-4 py-2.5 font-mono text-xs text-slate-500">
-                        @if($diff['old'] === null)
+                        @if($oldValue === null)
                             <span class="italic text-slate-400">null</span>
                         @else
-                            {{ is_array($diff['old']) ? json_encode($diff['old']) : $diff['old'] }}
+                            {{ $fmtValue($oldValue) }}
                         @endif
                     </td>
                     <td class="px-4 py-2.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
-                        {{ is_array($diff['new']) ? json_encode($diff['new']) : $diff['new'] }}
+                        @if($newValue === null)
+                            <span class="italic text-slate-400">null</span>
+                        @else
+                            {{ $fmtValue($newValue) }}
+                        @endif
                     </td>
                 </tr>
                 @endforeach

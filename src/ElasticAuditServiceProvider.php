@@ -29,6 +29,8 @@ use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Services\HttpLogger;
+use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\HttpLogManager;
@@ -40,6 +42,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/http_logs.php', 'http_logs');
         $this->mergeConfigFrom(__DIR__ . '/../config/log_elasticsearch.php', 'log_elasticsearch');
         $this->mergeConfigFrom(__DIR__ . '/../config/activity_logs.php', 'activity_logs');
+        $this->configureIndexNames();
 
         $this->app->singleton(LogElasticsearchClientInterface::class, function (Application $app) {
             $config = $app['config']['log_elasticsearch'];
@@ -67,11 +70,25 @@ class ElasticAuditServiceProvider extends ServiceProvider
         $this->app->singleton(SensitiveDataRedactor::class, fn(): SensitiveDataRedactor => new SensitiveDataRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
+            undecodableBodyMode: $this->undecodableBodyMode(),
+            captureMaxBytes: $this->captureMaxBytes(),
         ));
 
         $this->app->singleton(PaymentRedactor::class, fn(): PaymentRedactor => new PaymentRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
+            undecodableBodyMode: $this->undecodableBodyMode(),
+            captureMaxBytes: $this->captureMaxBytes(),
+        ));
+
+        $this->app->singleton(HttpPayloadRedactorResolver::class, fn(Application $app): HttpPayloadRedactorResolver => new HttpPayloadRedactorResolver(
+            defaultRedactor: $app->make(SensitiveDataRedactor::class),
+            paymentRedactor: $app->make(PaymentRedactor::class),
+        ));
+
+        $this->app->singleton(HttpLogger::class, fn(Application $app): HttpLogger => new HttpLogger(
+            redactor: $app->make(SensitiveDataRedactor::class),
+            redactorResolver: $app->make(HttpPayloadRedactorResolver::class),
         ));
 
         $this->app->singleton(HttpLogClientFactory::class);
@@ -122,6 +139,42 @@ class ElasticAuditServiceProvider extends ServiceProvider
         );
     }
 
+    private function undecodableBodyMode(): string
+    {
+        return (string) config(
+            'http_logs.undecodable_body_mode',
+            SensitiveDataRedactor::UNDECODABLE_MODE_METADATA,
+        );
+    }
+
+    private function captureMaxBytes(): int
+    {
+        return (int) config(
+            'http_logs.body_capture_max_bytes',
+            SensitiveDataRedactor::DEFAULT_CAPTURE_MAX_BYTES,
+        );
+    }
+
+    private function configureIndexNames(): void
+    {
+        $config = $this->app->make('config');
+        $prefix = (string) $config->get('log_elasticsearch.index_prefix', 'app_logs');
+
+        $derived = [
+            'http_logs.index_alias'                   => "{$prefix}_http_logs",
+            'http_logs.index_alias_write'             => "{$prefix}_http_logs_write",
+            'activity_logs.index_alias'               => "{$prefix}_activity_logs",
+            'activity_logs.index_alias_write'         => "{$prefix}_activity_logs_write",
+            'log_elasticsearch.lifecycle.policy_name' => "{$prefix}_elastic_audit_policy",
+        ];
+
+        foreach ($derived as $key => $value) {
+            if ($config->get($key) === null) {
+                $config->set($key, $value);
+            }
+        }
+    }
+
     public function boot(): void
     {
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'elastic-audit');
@@ -142,7 +195,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
                 __DIR__ . '/../config/http_logs.php'         => config_path('http_logs.php'),
                 __DIR__ . '/../config/log_elasticsearch.php' => config_path('log_elasticsearch.php'),
                 __DIR__ . '/../config/activity_logs.php'     => config_path('activity_logs.php'),
-                __DIR__ . '/Stubs/Enums/ElasticAudit'        => app_path('Enums/ElasticAudit'),
+                __DIR__ . '/../stubs/Enums/ElasticAudit'     => app_path('Enums/ElasticAudit'),
             ], 'elastic-audit');
 
             $this->publishes([

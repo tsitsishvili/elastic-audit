@@ -6,6 +6,8 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionProperty;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
@@ -36,15 +38,14 @@ class ActivityLogIndexerTest extends TestCase
         $this->indexer->index($this->makeData());
     }
 
-    public function test_document_id_is_sha256_of_event_id(): void
+    public function test_uses_event_id_as_document_id(): void
     {
-        $data       = $this->makeData();
-        $expectedId = hash('sha256', $data->eventId);
+        $data = $this->makeData();
 
         $this->client
             ->expects($this->once())
             ->method('index')
-            ->with($this->callback(fn (array $p) => $p['id'] === $expectedId));
+            ->with($this->callback(fn (array $p) => $p['id'] === $data->eventId));
 
         $this->indexer->index($data);
     }
@@ -107,6 +108,22 @@ class ActivityLogIndexerTest extends TestCase
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $captured['actor']['id']);
     }
 
+    public function test_indexes_legacy_queued_data_without_trace_properties(): void
+    {
+        $legacyData = $this->withoutTraceProperties($this->makeData());
+
+        $this->client
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(fn (array $p): bool => $p['body']['trace'] === [
+                'id'          => null,
+                'span_id'     => null,
+                'traceparent' => null,
+            ]));
+
+        $this->indexer->index($legacyData);
+    }
+
     public function test_permanent_document_has_no_indexed_retention_value(): void
     {
         $captured = null;
@@ -160,5 +177,21 @@ class ActivityLogIndexerTest extends TestCase
             context: $context,
             changes: ['status' => ['old' => 'pending', 'new' => 'paid']],
         );
+    }
+
+    private function withoutTraceProperties(ActivityLogData $data): ActivityLogData
+    {
+        $reflection = new ReflectionClass($data);
+        $legacyData = $reflection->newInstanceWithoutConstructor();
+
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            if (in_array($property->getName(), ['traceId', 'spanId', 'traceParent'], true)) {
+                continue;
+            }
+
+            $property->setValue($legacyData, $property->getValue($data));
+        }
+
+        return $legacyData;
     }
 }

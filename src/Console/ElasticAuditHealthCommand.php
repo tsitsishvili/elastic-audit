@@ -9,6 +9,7 @@ use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
 use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 use Throwable;
@@ -42,6 +43,7 @@ class ElasticAuditHealthCommand extends Command
         ) || $failed;
 
         $failed = $this->checkHttpEnums((bool) config('http_logs.enabled', false)) || $failed;
+        $failed = $this->checkHttpCaptureOptions((bool) config('http_logs.enabled', false)) || $failed;
 
         $failed = $this->checkSubsystem(
             $client,
@@ -75,6 +77,10 @@ class ElasticAuditHealthCommand extends Command
 
         $failed = false;
 
+        if (! $enabled) {
+            $this->line("{$label}: disabled; checking aliases because --all was supplied.");
+        }
+
         if ($readAlias === '' || $writeAlias === '') {
             $this->error("{$label}: read/write aliases must not be empty.");
             $failed = true;
@@ -83,15 +89,26 @@ class ElasticAuditHealthCommand extends Command
             $failed = true;
         }
 
-        if ($queue === '') {
-            $this->error("{$label}: queue name is empty.");
-            $failed = true;
-        } else {
-            $this->info("{$label}: queue={$queue}.");
+        foreach (['read' => $readAlias, 'write' => $writeAlias] as $kind => $alias) {
+            if ($alias !== '' && ($error = ElasticsearchIndexNames::validationError($alias)) !== null) {
+                $this->error("{$label}: {$kind} alias [{$alias}] is invalid: {$error}.");
+                $failed = true;
+            }
         }
 
-        $failed = $this->checkJobOptions($label, $configKey) || $failed;
-        $failed = $this->checkRetentionDays($label, $configKey) || $failed;
+        if ($enabled) {
+            if ($queue === '') {
+                $this->error("{$label}: queue name is empty.");
+                $failed = true;
+            } else {
+                $this->info("{$label}: queue={$queue}.");
+            }
+
+            $failed = $this->checkJobOptions($label, $configKey) || $failed;
+            $failed = $this->checkRetentionDays($label, $configKey) || $failed;
+        }
+
+        $aliasResponses = [];
 
         foreach (['read' => $readAlias, 'write' => $writeAlias] as $kind => $alias) {
             if ($alias === '') {
@@ -107,13 +124,60 @@ class ElasticAuditHealthCommand extends Command
                 }
 
                 $this->info("{$label}: {$kind} alias exists: {$alias}");
+                $aliasResponses[$kind] = $client->getAlias($alias);
             } catch (Throwable $e) {
                 $this->error("{$label}: failed checking {$kind} alias {$alias}: " . $e->getMessage());
                 $failed = true;
             }
         }
 
+        if (isset($aliasResponses['write'])) {
+            $writeIndex = $this->resolveWriteIndex($aliasResponses['write'], $writeAlias);
+
+            if ($writeIndex === null) {
+                $this->error("{$label}: write alias {$writeAlias} must resolve to exactly one writable index.");
+                $failed = true;
+            } elseif (isset($aliasResponses['read']) && ! array_key_exists($writeIndex, $aliasResponses['read'])) {
+                $this->error("{$label}: current write index {$writeIndex} is missing from read alias {$readAlias}.");
+                $failed = true;
+            } else {
+                $this->info("{$label}: write alias targets {$writeIndex}.");
+            }
+        }
+
         return $failed;
+    }
+
+    private function resolveWriteIndex(array $response, string $writeAlias): ?string
+    {
+        $aliasIndexes         = [];
+        $explicitWriteIndexes = [];
+
+        foreach ($response as $index => $metadata) {
+            $alias = is_array($metadata) ? ($metadata['aliases'][$writeAlias] ?? null) : null;
+
+            if (! is_array($alias)) {
+                continue;
+            }
+
+            $aliasIndexes[(string) $index] = $alias;
+
+            if (($alias['is_write_index'] ?? null) === true) {
+                $explicitWriteIndexes[] = (string) $index;
+            }
+        }
+
+        if (count($explicitWriteIndexes) === 1) {
+            return $explicitWriteIndexes[0];
+        }
+
+        if ($explicitWriteIndexes !== [] || count($aliasIndexes) !== 1) {
+            return null;
+        }
+
+        $index = array_key_first($aliasIndexes);
+
+        return ! array_key_exists('is_write_index', $aliasIndexes[$index]) ? $index : null;
     }
 
     private function checkRetentionDays(string $label, string $configKey): bool
@@ -158,16 +222,19 @@ class ElasticAuditHealthCommand extends Command
         $failed = false;
 
         foreach (['tries', 'timeout'] as $key) {
-            $value = config("{$configKey}.job.{$key}");
+            $value     = config("{$configKey}.job.{$key}");
+            $validated = $this->validateInteger($value);
 
-            if (! is_numeric($value) || (int) $value < 1) {
+            if ($validated === false || $validated < 1) {
                 $this->error("{$label}: job.{$key} must be a positive integer.");
                 $failed = true;
             }
         }
 
-        $batchTimeout = config("{$configKey}.job.batch_timeout");
-        if (! is_numeric($batchTimeout) || (int) $batchTimeout < 1) {
+        $batchTimeout          = config("{$configKey}.job.batch_timeout");
+        $validatedBatchTimeout = $this->validateInteger($batchTimeout);
+
+        if ($validatedBatchTimeout === false || $validatedBatchTimeout < 1) {
             $this->error("{$label}: job.batch_timeout must be a positive integer.");
             $failed = true;
         }
@@ -184,7 +251,9 @@ class ElasticAuditHealthCommand extends Command
         }
 
         foreach ($backoff as $value) {
-            if (! is_numeric($value) || (int) $value < 0) {
+            $validated = $this->validateInteger($value);
+
+            if ($validated === false || $validated < 0) {
                 $this->error("{$label}: job.backoff must contain only non-negative integers.");
                 $failed = true;
 
@@ -210,7 +279,7 @@ class ElasticAuditHealthCommand extends Command
 
     private function checkHttpEnums(bool $enabled): bool
     {
-        if (! $enabled && ! $this->option('all')) {
+        if (! $enabled) {
             return false;
         }
 
@@ -226,7 +295,7 @@ class ElasticAuditHealthCommand extends Command
             $class = config("http_logs.enums.{$key}");
 
             if (! $this->isBackedEnumContract($class, $contract)) {
-                $this->error("HTTP logs: enums.{$key} must be a backed enum implementing {$contract}.");
+                $this->error("HTTP logs: enums.{$key} must be a string-backed enum implementing {$contract}.");
                 $failed = true;
 
                 continue;
@@ -238,15 +307,73 @@ class ElasticAuditHealthCommand extends Command
         return $failed;
     }
 
+    private function checkHttpCaptureOptions(bool $enabled): bool
+    {
+        if (! $enabled) {
+            return false;
+        }
+
+        $failed     = false;
+        $sampleRate = config('http_logs.sample_rate');
+
+        if (! is_numeric($sampleRate)
+            || ! is_finite((float) $sampleRate)
+            || (float) $sampleRate < 0.0
+            || (float) $sampleRate > 1.0) {
+            $this->error('HTTP logs: sample_rate must be a number between 0.0 and 1.0.');
+            $failed = true;
+        }
+
+        $sizes = [];
+
+        foreach (['body_preview_bytes', 'body_max_bytes', 'body_capture_max_bytes'] as $key) {
+            $value     = config("http_logs.{$key}");
+            $validated = $this->validateInteger($value);
+
+            if ($validated === false || $validated < 0) {
+                $this->error("HTTP logs: {$key} must be a non-negative integer.");
+                $failed = true;
+
+                continue;
+            }
+
+            $sizes[$key] = $validated;
+        }
+
+        if (count($sizes) === 3
+            && ($sizes['body_preview_bytes'] > $sizes['body_max_bytes']
+                || $sizes['body_max_bytes'] > $sizes['body_capture_max_bytes'])) {
+            $this->error('HTTP logs: body byte limits must satisfy preview <= max <= capture.');
+            $failed = true;
+        }
+
+        foreach (['undecodable_body_mode', 'payment_body_mode'] as $key) {
+            if (! in_array(config("http_logs.{$key}"), ['metadata', 'preview'], true)) {
+                $this->error("HTTP logs: {$key} must be metadata or preview.");
+                $failed = true;
+            }
+        }
+
+        if (! $failed) {
+            $this->info('HTTP logs: capture and redaction options valid.');
+        }
+
+        return $failed;
+    }
+
     /**
      * @param class-string $contract
      */
     private function isBackedEnumContract(mixed $class, string $contract): bool
     {
-        return is_string($class)
-            && enum_exists($class)
-            && is_subclass_of($class, \BackedEnum::class)
-            && is_subclass_of($class, $contract);
+        if (! is_string($class)
+            || ! enum_exists($class)
+            || ! is_subclass_of($class, \BackedEnum::class)
+            || ! is_subclass_of($class, $contract)) {
+            return false;
+        }
+
+        return (new \ReflectionEnum($class))->getBackingType()?->getName() === 'string';
     }
 
     private function checkLifecycle(): bool
@@ -290,7 +417,7 @@ class ElasticAuditHealthCommand extends Command
             }
 
             foreach (['HTTP logs' => 'http_logs', 'Activity logs' => 'activity_logs'] as $label => $configKey) {
-                $checked = (bool) config("{$configKey}.enabled", false) || $this->option('all');
+                $checked = (bool) config("{$configKey}.enabled", false);
 
                 if ($checked && config("{$configKey}.retain_forever", false) === true) {
                     $this->error("{$label}: retain_forever cannot guarantee permanent storage while lifecycle index deletion is enabled.");

@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchRetentionPruner;
 use Throwable;
 
 class PruneHttpLogCommand extends Command
@@ -17,11 +18,15 @@ class PruneHttpLogCommand extends Command
 
     public function handle(LogElasticsearchClientInterface $client): int
     {
-        $readAlias = config('http_logs.index_alias');
+        $readAlias = (string) config('http_logs.index_alias');
+        $pruner    = new ElasticsearchRetentionPruner($client);
 
-        $retentionValues = $this->fetchDistinctRetentionDays($client, $readAlias);
-
-        if ($retentionValues === null) {
+        try {
+            $retentionValues = $pruner->retentionDays($readAlias);
+        } catch (Throwable $e) {
+            Log::error('PruneHttpLogCommand: failed to fetch retention_days buckets', [
+                'error' => $e->getMessage(),
+            ]);
             $this->error('Failed to fetch retention_days values from Elasticsearch.');
 
             return self::FAILURE;
@@ -34,7 +39,7 @@ class PruneHttpLogCommand extends Command
         }
 
         foreach ($retentionValues as $days) {
-            if (! $this->pruneForRetention($client, $readAlias, (int) $days)) {
+            if (! $this->pruneForRetention($pruner, $readAlias, $days)) {
                 return self::FAILURE;
             }
         }
@@ -42,58 +47,14 @@ class PruneHttpLogCommand extends Command
         return self::SUCCESS;
     }
 
-    private function fetchDistinctRetentionDays(LogElasticsearchClientInterface $client, string $alias): ?array
-    {
-        try {
-            $result = $client->search([
-                'index' => $alias,
-                'body'  => [
-                    'size' => 0,
-                    'aggs' => [
-                        'retention_buckets' => [
-                            'terms' => [
-                                'field' => 'retention_days',
-                                'size'  => 50,
-                            ],
-                        ],
-                    ],
-                ],
-            ]);
-
-            $buckets = $result['aggregations']['retention_buckets']['buckets'] ?? [];
-
-            return array_column($buckets, 'key');
-        } catch (Throwable $e) {
-            Log::error('PruneHttpLogCommand: failed to fetch retention_days buckets', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
-        }
-    }
-
-    private function pruneForRetention(LogElasticsearchClientInterface $client, string $alias, int $days): bool
+    private function pruneForRetention(ElasticsearchRetentionPruner $pruner, string $alias, int $days): bool
     {
         $cutoff = now()->subDays($days)->toIso8601ZuluString();
 
         $this->info("Pruning documents with retention_days={$days} older than {$cutoff}...");
 
         try {
-            $result = $client->deleteByQuery([
-                'index' => $alias,
-                'body'  => [
-                    'query' => [
-                        'bool' => [
-                            'filter' => [
-                                ['term' => ['retention_days' => $days]],
-                                ['range' => ['@timestamp' => ['lt' => $cutoff]]],
-                            ],
-                        ],
-                    ],
-                ],
-            ]);
-
-            $deleted = $result['deleted'] ?? 0;
+            $deleted = $pruner->deleteExpired($alias, $days, $cutoff);
 
             Log::info('PruneHttpLogCommand: pruned documents', [
                 'retention_days' => $days,

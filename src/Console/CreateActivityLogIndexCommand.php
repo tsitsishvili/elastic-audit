@@ -6,11 +6,13 @@ namespace Tsitsishvili\ElasticAudit\Console;
 
 use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
+use Throwable;
 
 class CreateActivityLogIndexCommand extends Command
 {
@@ -24,6 +26,9 @@ class CreateActivityLogIndexCommand extends Command
         $writeAlias    = (string) config('activity_logs.index_alias_write');
 
         try {
+            ElasticsearchIndexNames::assertValid($readAlias, 'Activity logs read alias');
+            ElasticsearchIndexNames::assertValid($writeAlias, 'Activity logs write alias');
+
             $mappings = ActivityLogMapping::get();
 
             $client->putIndexTemplate(
@@ -32,6 +37,21 @@ class CreateActivityLogIndexCommand extends Command
             );
 
             $physicalIndex = ElasticsearchIndexNames::nextAvailableRolloverIndex($client, $readAlias);
+
+            if ($client->existsAlias($writeAlias)) {
+                $this->info("Rolling over {$writeAlias} to {$physicalIndex}...");
+
+                $result = $client->rollover($writeAlias, [], $physicalIndex);
+
+                if (($result['rolled_over'] ?? false) !== true) {
+                    throw new RuntimeException("Elasticsearch did not roll over {$writeAlias}.");
+                }
+
+                $this->info('Index rolled over.');
+                $this->info('Done.');
+
+                return self::SUCCESS;
+            }
 
             $this->info("Creating index: {$physicalIndex}");
 
@@ -49,11 +69,15 @@ class CreateActivityLogIndexCommand extends Command
 
             $this->info('Index created.');
 
-            $this->attachAlias($client, $physicalIndex, $readAlias, [], exclusive: false);
-            $this->attachAlias($client, $physicalIndex, $writeAlias, ['is_write_index' => true], exclusive: true);
+            $this->attachAlias($client, $physicalIndex, $readAlias);
+            $this->attachAlias($client, $physicalIndex, $writeAlias, ['is_write_index' => true]);
         } catch (NoNodeAvailableException $e) {
             $this->error('Cannot reach log Elasticsearch cluster: ' . $e->getMessage());
             $this->error('Check LOG_ELASTICSEARCH_HOST / LOG_ELASTICSEARCH_PORT in your .env.');
+
+            return self::FAILURE;
+        } catch (Throwable $e) {
+            $this->error('Failed to create or roll over the activity logs index: ' . $e->getMessage());
 
             return self::FAILURE;
         }
@@ -63,7 +87,7 @@ class CreateActivityLogIndexCommand extends Command
         return self::SUCCESS;
     }
 
-    private function attachAlias(LogElasticsearchClientInterface $client, string $physicalIndex, string $alias, array $extraProps, bool $exclusive = false): void
+    private function attachAlias(LogElasticsearchClientInterface $client, string $physicalIndex, string $alias, array $extraProps = []): void
     {
         if (! $client->existsAlias($alias)) {
             $this->info("Attaching alias: {$alias}");
@@ -72,17 +96,9 @@ class CreateActivityLogIndexCommand extends Command
             return;
         }
 
-        if ($exclusive) {
-            $this->info("Swapping alias {$alias} → {$physicalIndex}");
-            $client->updateAliases([
-                ['remove' => ['index' => '*', 'alias' => $alias]],
-                ['add' => ['index' => $physicalIndex, 'alias' => $alias] + $extraProps],
-            ]);
-        } else {
-            $this->info("Adding {$physicalIndex} to alias {$alias}");
-            $client->updateAliases([
-                ['add' => ['index' => $physicalIndex, 'alias' => $alias] + $extraProps],
-            ]);
-        }
+        $this->info("Adding {$physicalIndex} to alias {$alias}");
+        $client->updateAliases([
+            ['add' => ['index' => $physicalIndex, 'alias' => $alias] + $extraProps],
+        ]);
     }
 }

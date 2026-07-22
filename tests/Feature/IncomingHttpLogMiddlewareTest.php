@@ -6,9 +6,12 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
 use Tsitsishvili\ElasticAudit\Http\Middleware\IncomingHttpLogMiddleware;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Services\HttpLogger;
+use Tsitsishvili\ElasticAudit\Tests\Fixtures\IntBackedProvider;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -131,6 +134,23 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         })->middleware(IncomingHttpLogMiddleware::class);
 
         $this->postJson('/_test/callback-missing-provider-class', [])->assertOk();
+
+        Bus::assertNotDispatched(LogHttpRequestJob::class);
+    }
+
+    public function test_middleware_does_not_throw_for_integer_backed_enum_configuration(): void
+    {
+        config(['http_logs.enums.provider' => IntBackedProvider::class]);
+        Bus::fake();
+
+        Route::post('/_test/callback-integer-provider', function () {
+            request()->attributes->set('third_party_provider', 1);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-integer-provider')->assertOk();
 
         Bus::assertNotDispatched(LogHttpRequestJob::class);
     }
@@ -300,6 +320,46 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         });
     }
 
+    public function test_middleware_treats_empty_user_id_as_absent(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-empty-user-id', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_user_id', '');
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-empty-user-id')->assertOk();
+
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->userId === null,
+        );
+    }
+
+    public function test_middleware_treats_whitespace_user_id_as_absent(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-whitespace-user-id', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_user_id', " \t ");
+
+            return response()->json(['ok' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-whitespace-user-id')->assertOk();
+
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->userId === null,
+        );
+    }
+
     public function test_middleware_logs_the_response_body(): void
     {
         Bus::fake();
@@ -346,5 +406,127 @@ class IncomingHttpLogMiddlewareTest extends TestCase
                 && $job->data->errorClass === \RuntimeException::class
                 && ! str_contains((string) $job->data->errorMessage, 'token=secret');
         });
+    }
+
+    public function test_failed_callback_is_logged_once_even_when_terminate_runs(): void
+    {
+        // Exception handling stays ON, so the kernel renders a response for the
+        // thrown error AND runs terminate(). handle() logs the failure inline and
+        // leaves no latency attribute, so terminate() must not log it a second time.
+        Bus::fake();
+
+        Route::post('/_test/callback-throws-handled', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+
+            throw new \RuntimeException('boom');
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-throws-handled')->assertStatus(500);
+
+        Bus::assertDispatchedTimes(LogHttpRequestJob::class, 1);
+    }
+
+    public function test_middleware_accepts_configured_enum_instances(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-enum-instances', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback);
+            request()->attributes->set('third_party_entity_type', TestEntityType::Order);
+
+            return response()->json(['ok' => true], 202);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-enum-instances')->assertAccepted();
+
+        Bus::assertDispatched(LogHttpRequestJob::class);
+    }
+
+    public function test_middleware_rejects_arbitrary_attribute_objects_without_affecting_response(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-object-attributes', function () {
+            request()->attributes->set('third_party_provider', new \stdClass);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback);
+
+            return response()->json(['ok' => true], 202);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-object-attributes')->assertAccepted();
+
+        Bus::assertNotDispatched(LogHttpRequestJob::class);
+    }
+
+    public function test_logging_failure_does_not_change_successful_callback_response(): void
+    {
+        $logger = $this->createMock(HttpLogger::class);
+        $logger->expects($this->once())
+            ->method('logIncoming')
+            ->willThrowException(new \RuntimeException('logger failed'));
+        $this->app->instance(HttpLogger::class, $logger);
+
+        Route::post('/_test/callback-logger-fails', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback);
+
+            return response()->json(['ok' => true], 202);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-logger-fails')->assertAccepted();
+    }
+
+    public function test_logging_failure_does_not_replace_original_callback_exception(): void
+    {
+        $logger = $this->createMock(HttpLogger::class);
+        $logger->expects($this->once())
+            ->method('logIncoming')
+            ->willThrowException(new \RuntimeException('logger failed'));
+        $this->app->instance(HttpLogger::class, $logger);
+
+        $original = new \DomainException('handler failed');
+        $this->withoutExceptionHandling();
+
+        Route::post('/_test/callback-original-exception', function () use ($original) {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback);
+
+            throw $original;
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        try {
+            $this->postJson('/_test/callback-original-exception');
+            $this->fail('Expected the callback exception.');
+        } catch (\Throwable $caught) {
+            $this->assertSame($original, $caught);
+        }
+    }
+
+    public function test_middleware_preserves_http_exception_status_in_log(): void
+    {
+        Bus::fake();
+        $this->withoutExceptionHandling();
+
+        Route::post('/_test/callback-http-exception', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback);
+
+            throw new UnprocessableEntityHttpException('invalid callback');
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        try {
+            $this->postJson('/_test/callback-http-exception');
+            $this->fail('Expected the callback exception.');
+        } catch (UnprocessableEntityHttpException) {
+            // The original HTTP exception must remain visible to the caller.
+        }
+
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->httpStatusCode === 422
+                && $job->data->success === false,
+        );
     }
 }

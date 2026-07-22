@@ -25,7 +25,10 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
 - Read `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before changing an
   integration. **Never edit files under `vendor/`.**
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
-  returns an `Illuminate\Http\Client\PendingRequest`, so the normal Laravel HTTP client API stays available.
+  returns an `Illuminate\Http\Client\PendingRequest`, so fluent configuration and single-request verbs stay available.
+  Do not use Laravel `pool()` / `batch()` for audited calls: they create separate pending requests without the package
+  middleware. Hooks that mutate a request after the logger snapshots it can also make the stored request differ from
+  what is sent.
 - Pass real backed enum cases implementing `ProviderContract`, `EventTypeContract`, and `EntityTypeContract` to the HTTP
   logging APIs. Inspect the classes registered under `http_logs.enums` and **never invent enum cases**.
 - For incoming callbacks, use `IncomingHttpLogMiddleware` and set the `third_party_*` request attributes from trusted
@@ -39,6 +42,10 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
   exception, because allowed values are stored in clear text.
+- Bodies that do not decode to JSON or form key/value data (XML/SOAP, plain text) are stored as headers plus a raw-body
+  hash. Treat `HTTP_LOGS_UNDECODABLE_BODY_MODE=preview` like a `redaction.allow` entry: it stores those bodies in clear
+  text, so opt in only when the provider's payloads are known to be secret-free. Bodies over
+  `body_capture_max_bytes` (default 1 MB) are captured headers-only.
 - Default document retention comes from each subsystem's `retention_days` (both 360) / `retain_forever` config. Pass
   `retentionDays` for a finite override or `retainForever: true` for a permanent individual event; never pass both.
   Permanent documents have a null `retention_days` and are ignored by prune commands. ILM independently deletes whole
@@ -87,9 +94,10 @@ $request->attributes->set('third_party_entity_id', (string) $order->getKey());
 $request->attributes->set('third_party_user_id', auth()->id());
 ```
 
-The middleware skips capture when registered enum classes or matching values cannot be resolved. Use
-`HttpLog::logIncoming()` only when middleware cannot represent the flow, and pass the real response and exception so
-status and failure data stay accurate.
+The middleware skips capture when registered enum classes or matching values cannot be resolved. Successful callbacks
+are queued from the middleware's `terminate()` phase after the response is sent; exception paths are captured inline so
+their failure details are preserved. Use `HttpLog::logIncoming()` only when middleware cannot represent the flow, and
+pass the real response and exception so status and failure data stay accurate.
 
 ## Record activity
 
@@ -113,7 +121,8 @@ ActivityLog::record(
 Apply `ActivityLoggable` to an Eloquent model only when automatic `created`, `updated`, `deleted`, `restored`, and
 `force_deleted` events are wanted. Use `$activityLogOnly` / `$activityLogExcept` to avoid noisy or sensitive attribute
 diffs, and override `activityActor()`, `activityEntityId()`, or `activityMetadata()` only when the defaults do not fit
-the domain.
+the domain. Activity jobs dispatch after the surrounding database transaction commits, so rolled-back model changes do
+not produce audit records.
 
 ## Set up a fresh environment
 
@@ -134,7 +143,8 @@ dashboard outside `local`.
 - Assert that disabled configurations are no-ops.
 - Use `Bus::fake()` and assert `LogHttpRequestJob` / `LogActivityJob` dispatch instead of requiring Elasticsearch.
 - Use Laravel HTTP fakes for provider responses while exercising the audited `PendingRequest`.
-- Test callback attribute mapping, especially invalid or absent enum values.
+- Test callback attribute mapping, especially invalid or absent enum values. Direct middleware unit tests must invoke
+  `terminate()` for successful callbacks; full Laravel HTTP tests do this through the kernel.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
 - Run `php artisan elastic-audit:health --all` only where the logs cluster is reachable.
 

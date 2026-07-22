@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
+use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Services\HttpLogger;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
@@ -115,6 +117,43 @@ class HttpLoggerTest extends TestCase
             return $job->data->request->body === ['password' => '[REDACTED]', 'order_id' => '123']
                 && ! str_contains((string) $job->data->request->bodyPreview, 'super-secret-password');
         });
+    }
+
+    public function test_log_incoming_uses_payment_redactor_for_configured_provider(): void
+    {
+        config([
+            'http_logs.enabled'                 => true,
+            'http_logs.payment_body_mode'       => 'metadata',
+            'http_logs.payment_provider_values' => [TestProvider::Payment],
+        ]);
+        Bus::fake();
+
+        $default  = new SensitiveDataRedactor;
+        $payment  = new PaymentRedactor;
+        $resolver = new HttpPayloadRedactorResolver($default, $payment);
+        $logger   = new HttpLogger($default, $resolver);
+
+        $logger->logIncoming(
+            request: Request::create(
+                'https://example.com/payment-callback',
+                'POST',
+                [],
+                [],
+                [],
+                ['CONTENT_TYPE' => 'application/json'],
+                json_encode(['card_number' => '4111111111111111']),
+            ),
+            provider: TestProvider::Payment,
+            eventType: TestEventType::DeliveryStatusCallback,
+            context: $this->context,
+        );
+
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->request->body === null
+                && $job->data->request->bodyPreview === null
+                && $job->data->request->bodyHash === null,
+        );
     }
 
     public function test_log_incoming_is_no_op_when_sample_rate_is_zero(): void
@@ -284,5 +323,79 @@ class HttpLoggerTest extends TestCase
                 && $job->data->response->bodyHash === null
                 && $job->data->response->headers === [];
         });
+    }
+
+    public function test_incoming_content_length_over_capture_cap_skips_body_read(): void
+    {
+        config([
+            'http_logs.enabled'                => true,
+            'http_logs.body_capture_max_bytes' => 64,
+        ]);
+        Bus::fake();
+
+        $request = new class(server: ['HTTP_HOST' => 'example.com', 'REQUEST_METHOD' => 'POST', 'REQUEST_URI' => '/callback', 'CONTENT_LENGTH' => '500', 'CONTENT_TYPE' => 'application/json']) extends Request
+        {
+            public bool $contentRead = false;
+
+            public function getContent(bool $asResource = false)
+            {
+                $this->contentRead = true;
+
+                throw new \RuntimeException('Body should not be read.');
+            }
+        };
+
+        $this->logger->logIncoming(
+            request: $request,
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryStatusCallback,
+            context: $this->context,
+        );
+
+        $this->assertFalse($request->contentRead);
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->request->body === null
+                && $job->data->request->bodyHash === null,
+        );
+    }
+
+    public function test_incoming_unknown_length_stream_is_bounded_and_rewound(): void
+    {
+        config([
+            'http_logs.enabled'                => true,
+            'http_logs.body_capture_max_bytes' => 64,
+        ]);
+        Bus::fake();
+
+        $resource = fopen('php://temp', 'r+');
+        $this->assertIsResource($resource);
+        fwrite($resource, str_repeat('a', 500));
+        rewind($resource);
+
+        $request = new Request(
+            server: [
+                'HTTP_HOST'      => 'example.com',
+                'REQUEST_METHOD' => 'POST',
+                'REQUEST_URI'    => '/callback',
+                'CONTENT_TYPE'   => 'text/plain',
+            ],
+            content: $resource,
+        );
+
+        $this->logger->logIncoming(
+            request: $request,
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryStatusCallback,
+            context: $this->context,
+        );
+
+        $this->assertSame(0, ftell($resource));
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->request->body === null
+                && $job->data->request->bodyPreview === null
+                && $job->data->request->bodyHash === null,
+        );
     }
 }

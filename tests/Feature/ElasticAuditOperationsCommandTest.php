@@ -6,6 +6,7 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
+use Tsitsishvili\ElasticAudit\Tests\Fixtures\IntBackedProvider;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ElasticAuditOperationsCommandTest extends TestCase
@@ -47,6 +48,80 @@ class ElasticAuditOperationsCommandTest extends TestCase
             ->assertFailed();
     }
 
+    public function test_health_all_checks_disabled_http_aliases_without_validating_unused_http_options(): void
+    {
+        config([
+            'http_logs.enabled'                => false,
+            'http_logs.enums.provider'         => null,
+            'http_logs.enums.event_type'       => null,
+            'http_logs.enums.entity_type'      => null,
+            'http_logs.queue'                  => '',
+            'http_logs.job.tries'              => 0,
+            'http_logs.retention_days'         => 0,
+            'http_logs.sample_rate'            => 2,
+            'http_logs.body_preview_bytes'     => 200,
+            'http_logs.body_max_bytes'         => 100,
+            'http_logs.body_capture_max_bytes' => 50,
+        ]);
+
+        $fake = new class extends FakeLogElasticsearchClient {
+            /** @var list<string> */
+            public array $checkedAliases = [];
+
+            public function existsAlias(string $name): bool
+            {
+                $this->checkedAliases[] = $name;
+
+                return parent::existsAlias($name);
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health --all')
+            ->expectsOutputToContain('HTTP logs: disabled; checking aliases because --all was supplied.')
+            ->assertSuccessful();
+
+        $this->assertContains(config('http_logs.index_alias'), $fake->checkedAliases);
+        $this->assertContains(config('http_logs.index_alias_write'), $fake->checkedAliases);
+    }
+
+    public function test_health_command_rejects_integer_backed_http_enum(): void
+    {
+        config([
+            'http_logs.enabled'        => true,
+            'http_logs.enums.provider' => IntBackedProvider::class,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('must be a string-backed enum')
+            ->assertFailed();
+    }
+
+    public function test_health_command_rejects_invalid_http_capture_options(): void
+    {
+        config([
+            'http_logs.enabled'                => true,
+            'http_logs.sample_rate'            => 1.5,
+            'http_logs.body_preview_bytes'     => 200,
+            'http_logs.body_max_bytes'         => 100,
+            'http_logs.body_capture_max_bytes' => 50,
+            'http_logs.undecodable_body_mode'  => 'raw',
+            'http_logs.payment_body_mode'      => 'raw',
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('sample_rate must be a number between 0.0 and 1.0')
+            ->expectsOutputToContain('body byte limits must satisfy preview <= max <= capture')
+            ->expectsOutputToContain('undecodable_body_mode must be metadata or preview')
+            ->expectsOutputToContain('payment_body_mode must be metadata or preview')
+            ->assertFailed();
+    }
+
     public function test_health_command_fails_when_job_options_are_invalid(): void
     {
         config([
@@ -63,6 +138,40 @@ class ElasticAuditOperationsCommandTest extends TestCase
             ->assertFailed();
     }
 
+    public function test_health_command_rejects_fractional_job_options(): void
+    {
+        config([
+            'activity_logs.enabled'           => true,
+            'activity_logs.job.tries'         => 1.5,
+            'activity_logs.job.timeout'       => '30.5',
+            'activity_logs.job.batch_timeout' => 90.5,
+            'activity_logs.job.backoff'       => ['10', '20.5'],
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('Activity logs: job.tries')
+            ->expectsOutputToContain('Activity logs: job.timeout')
+            ->expectsOutputToContain('Activity logs: job.batch_timeout')
+            ->expectsOutputToContain('Activity logs: job.backoff')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_retention_is_outside_mapping_range(): void
+    {
+        config([
+            'activity_logs.enabled'        => true,
+            'activity_logs.retention_days' => 0,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('Activity logs: retention_days must be an integer between 1 and 32767.')
+            ->assertFailed();
+    }
+
     public function test_health_command_fails_when_alias_config_is_invalid(): void
     {
         config([
@@ -75,6 +184,93 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: read and write aliases must be different.')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_alias_contains_invalid_index_characters(): void
+    {
+        config([
+            'activity_logs.enabled'     => true,
+            'activity_logs.index_alias' => 'Example App activity',
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('Activity logs: read alias [Example App activity] is invalid')
+            ->assertFailed();
+    }
+
+    public function test_health_command_fails_when_sole_write_alias_index_is_explicitly_non_writable(): void
+    {
+        config(['activity_logs.enabled' => true]);
+
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function getAlias(string $name): array
+            {
+                $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
+                return [
+                    "{$baseName}-000001" => [
+                        'aliases' => [$name => ['is_write_index' => false]],
+                    ],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('must resolve to exactly one writable index')
+            ->assertFailed();
+    }
+
+    public function test_health_command_accepts_an_implicit_single_write_index(): void
+    {
+        config(['http_logs.enabled' => false, 'activity_logs.enabled' => true]);
+
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function getAlias(string $name): array
+            {
+                $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
+                return [
+                    "{$baseName}-000001" => [
+                        'aliases' => [$name => []],
+                    ],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')->assertSuccessful();
+    }
+
+    public function test_health_command_fails_when_current_write_index_is_absent_from_read_alias(): void
+    {
+        config([
+            'http_logs.enabled'     => false,
+            'activity_logs.enabled' => true,
+        ]);
+
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function getAlias(string $name): array
+            {
+                $index = str_ends_with($name, '_write') ? 'activity-000002' : 'activity-000001';
+
+                return [
+                    $index => [
+                        'aliases' => [$name => ['is_write_index' => true]],
+                    ],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('is missing from read alias')
             ->assertFailed();
     }
 

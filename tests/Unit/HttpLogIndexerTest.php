@@ -15,6 +15,8 @@ use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionProperty;
 
 class HttpLogIndexerTest extends TestCase
 {
@@ -42,15 +44,14 @@ class HttpLogIndexerTest extends TestCase
         $this->indexer->index($this->makeLogData());
     }
 
-    public function test_generates_deterministic_id_from_event_id(): void
+    public function test_uses_event_id_as_document_id(): void
     {
-        $data       = $this->makeLogData();
-        $expectedId = hash('sha256', $data->eventId);
+        $data = $this->makeLogData();
 
         $this->logClient
             ->expects($this->once())
             ->method('index')
-            ->with($this->callback(fn (array $p) => $p['id'] === $expectedId));
+            ->with($this->callback(fn (array $p) => $p['id'] === $data->eventId));
 
         $this->indexer->index($data, 2);
     }
@@ -71,6 +72,22 @@ class HttpLogIndexerTest extends TestCase
         $this->indexer->index($this->makeLogData(timedOut: true));
 
         $this->assertTrue($captured['http']['timed_out']);
+    }
+
+    public function test_indexes_legacy_queued_data_without_trace_properties(): void
+    {
+        $legacyData = $this->withoutTraceProperties($this->makeLogData());
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(fn (array $p): bool => $p['body']['trace'] === [
+                'id'          => null,
+                'span_id'     => null,
+                'traceparent' => null,
+            ]));
+
+        $this->indexer->index($legacyData);
     }
 
     public function test_integer_user_id_is_indexed_as_keyword_string(): void
@@ -174,5 +191,21 @@ class HttpLogIndexerTest extends TestCase
             success: true,
             timedOut: $timedOut,
         );
+    }
+
+    private function withoutTraceProperties(HttpLogData $data): HttpLogData
+    {
+        $reflection = new ReflectionClass($data);
+        $legacyData = $reflection->newInstanceWithoutConstructor();
+
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            if (in_array($property->getName(), ['traceId', 'spanId', 'traceParent'], true)) {
+                continue;
+            }
+
+            $property->setValue($legacyData, $property->getValue($data));
+        }
+
+        return $legacyData;
     }
 }

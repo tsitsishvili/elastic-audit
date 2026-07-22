@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Http;
 use GuzzleHttp\Promise\Create;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
@@ -15,14 +16,15 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 use Throwable;
 
 /**
  * Guzzle handler-stack middleware that logs outgoing third-party HTTP traffic.
  *
  * Attached by HttpLogClientFactory to the PendingRequest returned from
- * HttpLog::make(). Capturing at the transport layer means the full native
- * Laravel HTTP client API is available to callers and no request can bypass logging.
+ * HttpLog::make(). It captures requests executed by that PendingRequest;
+ * Laravel's pool/batch APIs create separate child requests and are not covered.
  *
  * Logging is best-effort and must never affect the caller's request: every capture
  * path is gated and wrapped so a logging failure can neither throw nor swallow the
@@ -30,17 +32,24 @@ use Throwable;
  */
 final class OutgoingHttpLogMiddleware
 {
+    private readonly bool $capture;
+
     public function __construct(
         private readonly ProviderContract $provider,
         private readonly EventTypeContract $eventType,
         private readonly HttpLogContext $context,
         private readonly SensitiveDataRedactor $redactor,
-    ) {}
+        ?bool $capture = null,
+    ) {
+        // Keep one decision for the lifetime of this audited PendingRequest so
+        // Laravel retries cannot be sampled independently from each other.
+        $this->capture = $capture ?? CaptureSampling::shouldCapture();
+    }
 
     public function __invoke(callable $handler): callable
     {
         return function (RequestInterface $request, array $options) use ($handler) {
-            if (! $this->shouldLog()) {
+            if (! $this->capture) {
                 return $handler($request, $options);
             }
 
@@ -86,17 +95,6 @@ final class OutgoingHttpLogMiddleware
         };
     }
 
-    private function shouldLog(): bool
-    {
-        if (! config('http_logs.enabled', false)) {
-            return false;
-        }
-
-        $sampleRate = (float) config('http_logs.sample_rate', 1.0);
-
-        return ! ($sampleRate < 1.0 && (float) mt_rand() / mt_getrandmax() >= $sampleRate);
-    }
-
     /**
      * Read the request body as a JSON-decodable string so the redactor can redact keys.
      * Form bodies are parsed back into an array (and re-encoded) so secrets are redacted
@@ -111,30 +109,61 @@ final class OutgoingHttpLogMiddleware
             return '';
         }
 
-        $body = $request->getBody();
-
-        if (! $body->isSeekable()) {
-            return '';
-        }
-
-        $raw = (string) $body;
-        $body->rewind();
-
-        return $raw;
+        return $this->readBody($request->getBody());
     }
 
     private function captureResponseBody(ResponseInterface $response): string
     {
-        $body = $response->getBody();
+        return $this->readBody($response->getBody());
+    }
 
+    /**
+     * Read a message body without materializing oversized payloads: bodies over
+     * the capture cap return '' (captured headers-only), and unknown-size
+     * streams are read in chunks so at most cap+1 bytes are ever held.
+     */
+    private function readBody(StreamInterface $body): string
+    {
         if (! $body->isSeekable()) {
             return '';
         }
 
-        $raw = (string) $body;
-        $body->rewind();
+        $cap = max(0, (int) config(
+            'http_logs.body_capture_max_bytes',
+            SensitiveDataRedactor::DEFAULT_CAPTURE_MAX_BYTES,
+        ));
 
-        return $raw;
+        $size = $body->getSize();
+
+        if ($size !== null && $size > $cap) {
+            return '';
+        }
+
+        $raw = '';
+
+        try {
+            $body->rewind();
+
+            while (! $body->eof() && strlen($raw) <= $cap) {
+                $remaining  = $cap - strlen($raw);
+                $readLength = $remaining >= 8192 ? 8192 : $remaining + 1;
+                $chunk      = $body->read($readLength);
+
+                if ($chunk === '') {
+                    return $body->eof() ? $raw : '';
+                }
+
+                $raw .= $chunk;
+            }
+        } finally {
+            try {
+                $body->rewind();
+            } catch (Throwable) {
+                // A broken capture stream must not mask the provider result.
+            }
+        }
+
+        return strlen($raw) > $cap ? '' : $raw;
     }
 
     private function dispatch(
@@ -159,7 +188,16 @@ final class OutgoingHttpLogMiddleware
                 previewBytes: $previewBytes,
             );
 
-            $responseBodyRaw = $response !== null ? $this->captureResponseBody($response) : '';
+            $responseBodyRaw = '';
+
+            if ($response !== null) {
+                try {
+                    $responseBodyRaw = $this->captureResponseBody($response);
+                } catch (Throwable) {
+                    // Preserve the metadata-only log if response capture fails.
+                }
+            }
+
             $responseHeaders = $response !== null ? $response->getHeaders() : [];
 
             $responsePayload = $this->redactor->buildPayload(
@@ -173,8 +211,7 @@ final class OutgoingHttpLogMiddleware
             $success    = $exception === null && $statusCode !== null && $statusCode < 400;
             $timedOut   = $exception !== null && $this->isTimeout($exception);
 
-            // Strip query string from stored URL — query params may carry API keys
-            $safeUrl = (string) strtok($url, '?');
+            $safeUrl = $this->redactor->sanitizeUrl($url);
 
             $errorMessage = $exception !== null
                 ? $this->redactor->sanitizeErrorMessage($exception->getMessage())

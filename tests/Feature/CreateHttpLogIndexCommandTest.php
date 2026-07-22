@@ -60,10 +60,31 @@ class CreateHttpLogIndexCommandTest extends TestCase
         $this->artisan('http-logs:create-index')->assertSuccessful();
     }
 
-    public function test_swaps_write_alias_when_it_already_exists(): void
+    public function test_uses_rollover_api_when_write_alias_already_exists(): void
     {
         $this->esClient->method('existsIndex')->willReturn(false);
-        $this->esClient->method('existsAlias')->willReturnOnConsecutiveCalls(false, true);
+        $this->esClient->method('existsAlias')->willReturnCallback(
+            fn (string $alias): bool => $alias === config('http_logs.index_alias_write')
+        );
+        $this->esClient->method('rollover')->willReturn(['rolled_over' => true]);
+
+        $this->esClient->expects($this->never())->method('createIndex');
+        $this->esClient->expects($this->once())->method('rollover')->with(
+            config('http_logs.index_alias_write'),
+            [],
+            config('http_logs.index_alias') . '-000001',
+        );
+        $this->esClient->expects($this->never())->method('updateAliases');
+
+        $this->artisan('http-logs:create-index')->assertSuccessful();
+    }
+
+    public function test_adds_to_read_alias_when_it_already_exists(): void
+    {
+        $this->esClient->method('existsIndex')->willReturn(false);
+        $this->esClient->method('existsAlias')->willReturnCallback(
+            fn (string $alias): bool => $alias === config('http_logs.index_alias')
+        );
         $this->esClient->method('createIndex')->willReturn(['acknowledged' => true]);
 
         $this->esClient->expects($this->once())->method('putAlias');
@@ -72,16 +93,26 @@ class CreateHttpLogIndexCommandTest extends TestCase
         $this->artisan('http-logs:create-index')->assertSuccessful();
     }
 
-    public function test_adds_to_read_alias_when_it_already_exists(): void
+    public function test_returns_failure_when_rollover_is_not_acknowledged(): void
     {
         $this->esClient->method('existsIndex')->willReturn(false);
-        $this->esClient->method('existsAlias')->willReturnOnConsecutiveCalls(true, false);
-        $this->esClient->method('createIndex')->willReturn(['acknowledged' => true]);
+        $this->esClient->method('existsAlias')->willReturn(true);
+        $this->esClient->expects($this->once())->method('rollover')->willReturn(['rolled_over' => false]);
 
-        $this->esClient->expects($this->once())->method('putAlias');
-        $this->esClient->expects($this->once())->method('updateAliases');
+        $this->artisan('http-logs:create-index')
+            ->expectsOutputToContain('did not roll over')
+            ->assertFailed();
+    }
 
-        $this->artisan('http-logs:create-index')->assertSuccessful();
+    public function test_rejects_an_invalid_index_alias_before_calling_elasticsearch(): void
+    {
+        config(['http_logs.index_alias' => 'Example App logs']);
+
+        $this->esClient->expects($this->never())->method('putIndexTemplate');
+
+        $this->artisan('http-logs:create-index')
+            ->expectsOutputToContain('HTTP logs read alias [Example App logs] is invalid')
+            ->assertFailed();
     }
 
     #[AllowMockObjectsWithoutExpectations]

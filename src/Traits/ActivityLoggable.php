@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Traits;
 
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
 use Tsitsishvili\ElasticAudit\Support\RetentionDays;
+use Throwable;
 
 trait ActivityLoggable
 {
@@ -27,10 +29,14 @@ trait ActivityLoggable
         });
 
         static::deleted(function (self $model): void {
+            if (method_exists($model, 'isForceDeleting') && $model->isForceDeleting()) {
+                return;
+            }
+
             $model->logActivityEvent('deleted', []);
         });
 
-        if (in_array(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive(static::class), true)) {
+        if (in_array(SoftDeletes::class, class_uses_recursive(static::class), true)) {
             static::restored(function (self $model): void {
                 $model->logActivityEvent('restored', []);
             });
@@ -43,31 +49,35 @@ trait ActivityLoggable
 
     private function logActivityEvent(string $event, array $changes): void
     {
-        $entityType = $this->activityEntityType();
+        try {
+            $entityType = $this->activityEntityType();
 
-        [$actorType, $actorId] = $this->resolveActivityActor();
+            [$actorType, $actorId] = $this->resolveActivityActor();
 
-        $context = new ActivityLogContext(
-            actorType: $actorType,
-            actorId: $actorId,
-            entityType: $entityType,
-            entityId: $this->activityEntityId(),
-            requestId: (string) Str::ulid(),
-            retentionDays: RetentionDays::resolve(
-                days: null,
-                retainForever: false,
-                configuredDays: config('activity_logs.retention_days', 360),
-                configuredRetainForever: (bool) config('activity_logs.retain_forever', false),
-            ),
-            traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
-        );
+            $context = new ActivityLogContext(
+                actorType: $actorType,
+                actorId: $actorId,
+                entityType: $entityType,
+                entityId: $this->activityEntityId(),
+                requestId: (string) Str::ulid(),
+                retentionDays: RetentionDays::resolve(
+                    days: null,
+                    retainForever: false,
+                    configuredDays: config('activity_logs.retention_days', 360),
+                    configuredRetainForever: (bool) config('activity_logs.retain_forever', false),
+                ),
+                traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
+            );
 
-        app(ActivityLogger::class)->record(
-            action: $entityType . '.' . $event,
-            context: $context,
-            changes: $changes,
-            metadata: $this->activityMetadata($event, $changes),
-        );
+            app(ActivityLogger::class)->record(
+                action: $entityType . '.' . $event,
+                context: $context,
+                changes: $changes,
+                metadata: $this->activityMetadata($event, $changes),
+            );
+        } catch (Throwable) {
+            // Model persistence must never depend on audit capture succeeding.
+        }
     }
 
     /**

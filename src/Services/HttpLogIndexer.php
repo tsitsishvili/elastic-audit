@@ -16,11 +16,11 @@ class HttpLogIndexer
 
     public function index(HttpLogData $data, int $attempt = 1): void
     {
-        $id = hash('sha256', $data->eventId);
-
+        // The optional argument is retained for existing callers. HTTP-attempt
+        // state belongs to the immutable DTO, so queue retries cannot overwrite it.
         $this->client->index([
             'index' => $this->writeAlias,
-            'id'    => $id,
+            'id'    => $data->eventId,
             'body'  => $this->toDocument($data),
         ]);
     }
@@ -33,8 +33,7 @@ class HttpLogIndexer
         $body = [];
 
         foreach ($items as $data) {
-            $id     = hash('sha256', $data->eventId);
-            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => $id]];
+            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => $data->eventId]];
             $body[] = $this->toDocument($data);
         }
 
@@ -60,9 +59,10 @@ class HttpLogIndexer
             'success'        => $d->success,
             'retention_days' => $d->retentionDays,
             'trace'          => [
-                'id'          => $d->traceId,
-                'span_id'     => $d->spanId,
-                'traceparent' => $d->traceParent,
+                // isset() guards serialized jobs queued before trace fields existed.
+                'id'          => isset($d->traceId) ? $d->traceId : null,
+                'span_id'     => isset($d->spanId) ? $d->spanId : null,
+                'traceparent' => isset($d->traceParent) ? $d->traceParent : null,
             ],
             'http'           => [
                 'method'       => $d->httpMethod,

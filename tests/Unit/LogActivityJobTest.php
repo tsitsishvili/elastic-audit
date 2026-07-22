@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityBatchJob;
@@ -30,6 +31,12 @@ class LogActivityJobTest extends TestCase
         $job = new LogActivityJob($this->makeData());
 
         $this->assertSame('high-priority', $job->queue);
+    }
+
+    public function test_activity_jobs_are_dispatched_after_database_commit(): void
+    {
+        $this->assertInstanceOf(ShouldQueueAfterCommit::class, new LogActivityJob($this->makeData()));
+        $this->assertInstanceOf(ShouldQueueAfterCommit::class, new LogActivityBatchJob([$this->makeData()]));
     }
 
     public function test_job_uses_retry_policy_from_config(): void
