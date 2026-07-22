@@ -6,7 +6,7 @@ namespace App\Enums\ElasticAudit;
 
 use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
 
-// String-backed so values land directly in ES keyword fields.
+// String-backed so values land directly in Elasticsearch keyword fields.
 enum EntityType: string implements EntityTypeContract
 {
     case None = 'none';

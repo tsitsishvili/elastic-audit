@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -15,7 +15,7 @@ use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 use Throwable;
 
-class LogActivityJob implements ShouldQueue
+class LogActivityJob implements ShouldQueueAfterCommit
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

@@ -40,7 +40,10 @@ class PruneHttpLogCommandTest extends TestCase
         $this->esClient->method('search')->willReturn([
             'aggregations' => [
                 'retention_buckets' => [
-                    'buckets' => [['key' => 30], ['key' => 90]],
+                    'buckets' => [
+                        ['key' => ['retention_days' => 30]],
+                        ['key' => ['retention_days' => 90]],
+                    ],
                 ],
             ],
         ]);
@@ -56,7 +59,9 @@ class PruneHttpLogCommandTest extends TestCase
     public function test_shows_deleted_count_per_retention_period(): void
     {
         $this->esClient->method('search')->willReturn([
-            'aggregations' => ['retention_buckets' => ['buckets' => [['key' => 30]]]],
+            'aggregations' => ['retention_buckets' => ['buckets' => [
+                ['key' => ['retention_days' => 30]],
+            ]]],
         ]);
 
         $this->esClient->method('deleteByQuery')->willReturn(['deleted' => 5]);
@@ -77,14 +82,118 @@ class PruneHttpLogCommandTest extends TestCase
             ->expectsOutputToContain('Failed to fetch retention_days values');
     }
 
+    public function test_rejects_unsafe_retention_values_already_present_in_elasticsearch(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'aggregations' => [
+                'retention_buckets' => [
+                    'buckets' => [['key' => ['retention_days' => 0]]],
+                ],
+            ],
+        ]);
+
+        $this->esClient->expects($this->never())->method('deleteByQuery');
+
+        $this->artisan('http-logs:prune')
+            ->expectsOutputToContain('Failed to fetch retention_days values')
+            ->assertFailed();
+    }
+
+    public function test_rejects_fractional_retention_values_already_present_in_elasticsearch(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'aggregations' => [
+                'retention_buckets' => [
+                    'buckets' => [['key' => ['retention_days' => '1.5']]],
+                ],
+            ],
+        ]);
+
+        $this->esClient->expects($this->never())->method('deleteByQuery');
+
+        $this->artisan('http-logs:prune')
+            ->expectsOutputToContain('Failed to fetch retention_days values')
+            ->assertFailed();
+    }
+
     #[AllowMockObjectsWithoutExpectations]
     public function test_returns_failure_when_delete_by_query_fails(): void
     {
         $this->esClient->method('search')->willReturn([
-            'aggregations' => ['retention_buckets' => ['buckets' => [['key' => 30]]]],
+            'aggregations' => ['retention_buckets' => ['buckets' => [
+                ['key' => ['retention_days' => 30]],
+            ]]],
         ]);
 
         $this->esClient->method('deleteByQuery')->willThrowException(new RuntimeException('delete failed'));
+
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    public function test_returns_failure_when_retention_search_is_partial(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'timed_out'    => true,
+            'aggregations' => ['retention_buckets' => ['buckets' => []]],
+        ]);
+
+        $this->esClient->expects($this->never())->method('deleteByQuery');
+
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to fetch retention_days values');
+    }
+
+    #[AllowMockObjectsWithoutExpectations]
+    public function test_returns_failure_when_delete_by_query_times_out(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'aggregations' => ['retention_buckets' => ['buckets' => [
+                ['key' => ['retention_days' => 30]],
+            ]]],
+        ]);
+        $this->esClient->method('deleteByQuery')->willReturn([
+            'timed_out' => true,
+            'deleted'   => 10,
+        ]);
+
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    #[AllowMockObjectsWithoutExpectations]
+    public function test_returns_failure_when_delete_by_query_returns_failures(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'aggregations' => ['retention_buckets' => ['buckets' => [
+                ['key' => ['retention_days' => 30]],
+            ]]],
+        ]);
+        $this->esClient->method('deleteByQuery')->willReturn([
+            'deleted'  => 10,
+            'failures' => [['cause' => ['reason' => 'shard failed']]],
+        ]);
+
+        $this->artisan('http-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    #[AllowMockObjectsWithoutExpectations]
+    public function test_returns_failure_when_delete_by_query_has_version_conflicts(): void
+    {
+        $this->esClient->method('search')->willReturn([
+            'aggregations' => ['retention_buckets' => ['buckets' => [
+                ['key' => ['retention_days' => 30]],
+            ]]],
+        ]);
+        $this->esClient->method('deleteByQuery')->willReturn([
+            'deleted'           => 10,
+            'version_conflicts' => 1,
+        ]);
 
         $this->artisan('http-logs:prune')
             ->assertFailed()

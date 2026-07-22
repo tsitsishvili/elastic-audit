@@ -38,33 +38,31 @@ application can enable only what it needs.
 
 ## Quick Start
 
-1. Add the package repository to the consuming application's `composer.json`
-   (see [Installation](AUDIT_LOGS.md#installation)).
-2. Install the package:
+1. Once v4.0.0 is published, install the stable v4 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit
+    composer require tsitsishvili/elastic-audit:^4.0
     ```
 
-3. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
+2. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
 
     ```bash
     php artisan vendor:publish --tag=elastic-audit
     ```
 
-4. Configure Elasticsearch and enable the subsystem you need in `.env`
+3. Configure Elasticsearch and enable the subsystem you need in `.env`
    (see [Environment Variables](AUDIT_LOGS.md#environment-variables) and
    [Register Application Enums](AUDIT_LOGS.md#register-application-enums)).
-5. Install the lifecycle policy, then create the Elasticsearch indices and aliases
+4. Install the lifecycle policy, then create the Elasticsearch indices and aliases
    ([HTTP](AUDIT_LOGS.md#create-elasticsearch-index) · [Activity](ACTIVITY_LOGS.md#create-the-activity-index)):
 
     ```bash
     php artisan elastic-audit:lifecycle-policy
-    php artisan http-logs:create-index
-    php artisan activity-logs:create-index
+    php artisan http-logs:create-index       # when HTTP logs are enabled
+    php artisan activity-logs:create-index   # when activity logs are enabled
     ```
 
-6. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
+5. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
 
     ```bash
     php artisan queue:work --queue=default
@@ -73,6 +71,15 @@ application can enable only what it needs.
 For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-requests),
 [logging incoming callbacks](AUDIT_LOGS.md#logging-incoming-callbacks), and
 [recording activity](ACTIVITY_LOGS.md#manual-logging).
+
+Permanent retention is supported independently for documents and indexes. Use a subsystem's `retain_forever` setting
+or a context's `retainForever: true` for documents, and disable `log_elasticsearch.lifecycle.delete_enabled` to keep
+rolled-over indexes. See [Lifecycle, Rollover, and Health](AUDIT_LOGS.md#lifecycle-rollover-and-health).
+
+HTTP capture is bounded to 1 MB by default; larger bodies are headers-only, and bodies that cannot be key-redacted
+(such as XML or plain text) default to hash-only metadata. Successful incoming callbacks are queued after the response
+is sent, while activity jobs wait for the surrounding database transaction to commit. Review the upgrade guide before
+moving an existing installation to this release line.
 
 ## Requirements
 
@@ -168,7 +175,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^3.0"
+    "tsitsishvili/elastic-audit": "^4.0"
   }
 }
 ```

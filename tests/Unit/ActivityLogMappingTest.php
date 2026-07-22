@@ -28,7 +28,7 @@ class ActivityLogMappingTest extends TestCase
     {
         $actor = ActivityLogMapping::get()['properties']['actor']['properties'];
         $this->assertSame('keyword', $actor['type']['type']);
-        $this->assertSame('long', $actor['id']['type']);
+        $this->assertSame('keyword', $actor['id']['type']);
     }
 
     public function test_mapping_has_entity_with_type_and_id(): void

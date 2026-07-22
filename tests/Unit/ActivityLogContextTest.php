@@ -39,6 +39,18 @@ class ActivityLogContextTest extends TestCase
         $this->assertSame('cron', $ctx->actorType);
     }
 
+    public function test_for_actor_accepts_uuid_actor_id(): void
+    {
+        $ctx = ActivityLogContext::forActor(
+            actorType: 'user',
+            actorId: '550e8400-e29b-41d4-a716-446655440000',
+            entityType: 'order',
+            entityId: '1',
+        );
+
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $ctx->actorId);
+    }
+
     public function test_for_actor_accepts_custom_request_id(): void
     {
         $ctx = ActivityLogContext::forActor(

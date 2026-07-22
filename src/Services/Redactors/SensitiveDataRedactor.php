@@ -10,6 +10,19 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
 class SensitiveDataRedactor
 {
     /**
+     * How to store bodies that cannot be key-redacted because they do not
+     * decode to a key/value structure (XML, plain text, scalar JSON):
+     * 'metadata' keeps headers plus a hash of the raw body; 'preview' stores
+     * the raw body untouched — every value in it is stored in clear text.
+     */
+    public const UNDECODABLE_MODE_METADATA = 'metadata';
+
+    public const UNDECODABLE_MODE_PREVIEW = 'preview';
+
+    /** Bodies larger than this are captured as headers-only (no decode/redact/hash). */
+    public const DEFAULT_CAPTURE_MAX_BYTES = 1_048_576;
+
+    /**
      * Secret words matched as whole words (in any position) inside a header
      * name. Matching is word-aware after normalization, so these never fire
      * mid-word — 'secret' does not match 'secretary'. Catches vendor variants
@@ -36,6 +49,22 @@ class SensitiveDataRedactor
         'token',
         'key',
     ];
+
+    /** Header values that are URLs and therefore need value-level sanitizing. */
+    private const URL_VALUE_HEADERS = [
+        'location',
+        'content_location',
+        'referer',
+        'referrer',
+    ];
+
+    /** Headers that can contain a URL alongside directives or link metadata. */
+    private const EMBEDDED_URL_HEADERS = [
+        'link',
+        'refresh',
+    ];
+
+    private const ERROR_MESSAGE_MAX_BYTES = 2048;
 
     /**
      * Secret words matched as whole words (in any position) inside a body key.
@@ -123,16 +152,21 @@ class SensitiveDataRedactor
 
     /** @var string[] */
     private array $headerAllow;
+
     /** @var string[] */
     private array $headerBlock;
+
     /** @var string[] */
     private array $bodyAllow;
+
     /** @var string[] */
     private array $bodyBlock;
 
     public function __construct(
-        RedactionRules $headers = new RedactionRules(),
-        RedactionRules $body = new RedactionRules(),
+        RedactionRules $headers = new RedactionRules,
+        RedactionRules $body = new RedactionRules,
+        private readonly string $undecodableBodyMode = self::UNDECODABLE_MODE_METADATA,
+        private readonly int $captureMaxBytes = self::DEFAULT_CAPTURE_MAX_BYTES,
     ) {
         $this->headerAllow = array_map($this->normalizeName(...), $headers->allow);
         $this->headerBlock = array_map($this->normalizeName(...), $headers->block);
@@ -145,9 +179,19 @@ class SensitiveDataRedactor
         $result = [];
 
         foreach ($headers as $name => $value) {
-            $result[$name] = $this->isSensitiveHeader((string)$name)
-                ? '[REDACTED]'
-                : $value;
+            if ($this->isSensitiveHeader((string) $name)) {
+                $result[$name] = '[REDACTED]';
+
+                continue;
+            }
+
+            $normalizedName = $this->normalizeName((string) $name);
+
+            $result[$name] = match (true) {
+                in_array($normalizedName, self::URL_VALUE_HEADERS, true)     => $this->sanitizeUrlHeaderValue($value),
+                in_array($normalizedName, self::EMBEDDED_URL_HEADERS, true) => $this->sanitizeEmbeddedUrlHeaderValue($value),
+                default                                                      => $value,
+            };
         }
 
         return $result;
@@ -168,7 +212,7 @@ class SensitiveDataRedactor
 
     public function redactBody(mixed $body): mixed
     {
-        if (!is_array($body)) {
+        if (! is_array($body)) {
             return $body;
         }
 
@@ -271,10 +315,11 @@ class SensitiveDataRedactor
 
         $byteLength = strlen($body);
         $truncated  = $byteLength > $maxBytes;
-        $storedStr  = $truncated ? substr($body, 0, $maxBytes) : $body;
-        $preview    = mb_substr($body, 0, $previewBytes);
-        $hash       = 'sha256:' . hash('sha256', $body);
-        $decoded    = json_decode($storedStr, true);
+        // mb_strcut caps by bytes without splitting a multibyte sequence.
+        $storedStr = $truncated ? mb_strcut($body, 0, $maxBytes, 'UTF-8') : $body;
+        $preview   = mb_strcut($body, 0, $previewBytes, 'UTF-8');
+        $hash      = 'sha256:'.hash('sha256', $body);
+        $decoded   = json_decode($storedStr, true);
 
         return new RedactedHttpPayload(
             headers: [],
@@ -289,21 +334,39 @@ class SensitiveDataRedactor
     {
         $redactedHeaders = $this->redactHeaders($headers);
 
-        if (str_contains($rawBody, "\0") || !mb_check_encoding($rawBody, 'UTF-8')) {
-            return new RedactedHttpPayload(
-                headers: $redactedHeaders,
-                body: null,
-                bodyPreview: null,
-                bodyHash: null,
-                bodyTruncated: false,
-            );
+        if ($rawBody === '') {
+            return RedactedHttpPayload::empty($redactedHeaders);
+        }
+
+        // Oversized bodies are stored headers-only: decoding, redacting, and
+        // hashing them would cost unbounded memory/CPU on the request path.
+        if (strlen($rawBody) > $this->captureMaxBytes) {
+            return RedactedHttpPayload::empty($redactedHeaders);
+        }
+
+        // Binary bodies expose no redactable structure; keep headers only.
+        if (str_contains($rawBody, "\0") || ! mb_check_encoding($rawBody, 'UTF-8')) {
+            return RedactedHttpPayload::empty($redactedHeaders);
         }
 
         // Decode → redact → re-encode so preview and hash are derived from redacted content,
         // ensuring no raw PII/secrets appear in bodyPreview or bodyHash.
-        $decoded        = $this->decodeBody($headers, $rawBody);
-        $redactedArray  = is_array($decoded) ? $this->redactBody($decoded) : null;
-        $redactedString = $redactedArray !== null ? (string)json_encode($redactedArray) : $rawBody;
+        $decoded       = $this->decodeBody($headers, $rawBody);
+        $redactedArray = is_array($decoded) ? $this->redactBody($decoded) : null;
+
+        if ($redactedArray === null && $this->undecodableBodyMode !== self::UNDECODABLE_MODE_PREVIEW) {
+            // The body cannot be key-redacted, so storing it would leak any
+            // secret it carries. Keep only a raw-body hash for correlation.
+            return new RedactedHttpPayload(
+                headers: $redactedHeaders,
+                body: null,
+                bodyPreview: null,
+                bodyHash: 'sha256:'.hash('sha256', $rawBody),
+                bodyTruncated: false,
+            );
+        }
+
+        $redactedString = $redactedArray !== null ? (string) json_encode($redactedArray) : $rawBody;
 
         $payload = $this->truncateAndHash($redactedString, $maxBytes, $previewBytes);
 
@@ -342,12 +405,105 @@ class SensitiveDataRedactor
         return false;
     }
 
+    /** Remove URI userinfo, query, and fragment components before storage. */
+    public function sanitizeUrl(string $url): string
+    {
+        $url = explode('#', $url, 2)[0];
+        $url = explode('?', $url, 2)[0];
+
+        return (string) preg_replace(
+            '~^((?:[a-z][a-z0-9+.-]*:)?//)[^/@\s]+@~i',
+            '$1',
+            $url,
+        );
+    }
+
     /**
-     * Strip query strings from URLs embedded in exception messages to prevent
-     * API keys passed as query params from leaking into error logs.
+     * Sanitize URLs and conservative credential-shaped values embedded in an
+     * exception message without changing ordinary prose.
      */
     public function sanitizeErrorMessage(string $message): string
     {
-        return (string)preg_replace('/\?[^\s\'"<>]*/i', '?[REDACTED]', $message);
+        $message = (string) preg_replace_callback(
+            '~(?:[a-z][a-z0-9+.-]*:)?//[^\s\'"<>]+~i',
+            function (array $matches): string {
+                $matched = $matches[0];
+                $url     = rtrim($matched, '.,;!)]}');
+                $suffix  = substr($matched, strlen($url));
+                $marker  = str_contains($url, '?')
+                    ? '?[REDACTED]'
+                    : (str_contains($url, '#') ? '#[REDACTED]' : '');
+
+                return $this->sanitizeUrl($url).$marker.$suffix;
+            },
+            $message,
+        );
+
+        // Also catch relative URL/path queries while leaving prose such as
+        // "Retry?" untouched.
+        $message = (string) preg_replace(
+            '/(?<=[\w\/])\?[^\s\'"<>]+/',
+            '?[REDACTED]',
+            $message,
+        );
+
+        $message = (string) preg_replace(
+            '~\b(authorization|proxy[-_ ]authorization)(\s*[:=]\s*)(?:(?:bearer|basic)\s+)?[^\s,;]+~i',
+            '$1$2[REDACTED]',
+            $message,
+        );
+
+        $message = (string) preg_replace(
+            '~\b(password|passwd|passphrase|passcode|secret|api[_-]?key|token|access[_-]?token|refresh[_-]?token|credential|cookie|signature|hmac)(\s*[:=]\s*)(?:"[^"]*"|\'[^\']*\'|[^\s,;]+)~i',
+            '$1$2[REDACTED]',
+            $message,
+        );
+
+        // JSON-style "key": value pairs, where the quote before the colon
+        // defeats the key[:=]value pass above (e.g. a provider error body
+        // echoed verbatim into the exception message).
+        $message = (string) preg_replace(
+            '~("(?:password|passwd|passphrase|passcode|secret|api[_-]?key|token|access[_-]?token|refresh[_-]?token|credential|cookie|signature|hmac|pan|cvv|cvc|card[_-]?number|card[_-]?holder|iban)"\s*:\s*)(?:"[^"]*"|-?\d+(?:\.\d+)?|true|false|null)~i',
+            '$1"[REDACTED]"',
+            $message,
+        );
+
+        $message = (string) preg_replace(
+            '~\b(Bearer)(\s+)[A-Za-z0-9._\~+\/=:-]+~i',
+            '$1$2[REDACTED]',
+            $message,
+        );
+
+        return mb_strcut($message, 0, self::ERROR_MESSAGE_MAX_BYTES, 'UTF-8');
+    }
+
+    private function sanitizeUrlHeaderValue(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            $sanitized = [];
+
+            foreach ($value as $key => $item) {
+                $sanitized[$key] = $this->sanitizeUrlHeaderValue($item);
+            }
+
+            return $sanitized;
+        }
+
+        return is_string($value) ? $this->sanitizeUrl($value) : $value;
+    }
+
+    private function sanitizeEmbeddedUrlHeaderValue(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            $sanitized = [];
+
+            foreach ($value as $key => $item) {
+                $sanitized[$key] = $this->sanitizeEmbeddedUrlHeaderValue($item);
+            }
+
+            return $sanitized;
+        }
+
+        return is_string($value) ? $this->sanitizeErrorMessage($value) : $value;
     }
 }

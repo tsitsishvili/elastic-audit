@@ -9,10 +9,16 @@ return [
         'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
         'batch_timeout' => env('ACTIVITY_LOGS_BATCH_JOB_TIMEOUT', 60),
     ],
-    'retention_days'    => 360,
+    // retain_forever makes the default document lifetime permanent. Individual
+    // contexts can still pass retentionDays to opt into a finite lifetime. The
+    // lifecycle delete phase must also be disabled to retain whole indexes.
+    'retention_days'    => env('ACTIVITY_LOGS_RETENTION_DAYS', 360),
+    'retain_forever'    => env('ACTIVITY_LOGS_RETAIN_FOREVER', false),
 
-    'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',
-    'index_alias_write' => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs_write',
+    // Null derives aliases from log_elasticsearch.index_prefix. Set a string
+    // only when this subsystem intentionally needs custom aliases.
+    'index_alias'       => null,
+    'index_alias_write' => null,
 
     /*
      * Redaction applied to the 'changes' and 'metadata' maps before an activity

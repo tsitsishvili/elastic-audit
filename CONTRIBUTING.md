@@ -17,6 +17,7 @@ Validate Composer metadata:
 
 ```bash
 composer validate --no-check-publish
+composer audit --no-dev
 ```
 
 Run the package tests after a test runner is configured (see
@@ -25,6 +26,13 @@ Run the package tests after a test runner is configured (see
 ```bash
 composer test
 npm run build
+```
+
+With a disposable Elasticsearch cluster listening on port 9200, run the real integration smoke test:
+
+```bash
+ELASTICSEARCH_INTEGRATION=1 ELASTICSEARCH_URL=http://127.0.0.1:9200 \
+    vendor/bin/phpunit tests/Integration/ElasticsearchSmokeTest.php
 ```
 
 Generated files under `public/vendor/elastic-audit` are committed so Composer consumers do not need Node.js; rebuild
@@ -70,7 +78,9 @@ Before tagging a release:
 
 - Confirm the package installs in a consuming Laravel application.
 - Run Composer validation.
+- Run the runtime dependency audit.
 - Run tests.
+- Run the PHP compatibility matrix and Elasticsearch 8/9 smoke matrix.
 - Rebuild dashboard assets.
 - Review redaction-sensitive changes carefully.
 - Update `CHANGELOG.md`.

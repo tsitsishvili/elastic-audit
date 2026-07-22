@@ -16,6 +16,11 @@ final class ElasticsearchLifecycle
         return (string) config('log_elasticsearch.lifecycle.policy_name', 'elastic_audit_policy');
     }
 
+    public static function deleteEnabled(): bool
+    {
+        return (bool) config('log_elasticsearch.lifecycle.delete_enabled', true);
+    }
+
     public static function rolloverConditions(): array
     {
         $conditions = [];
@@ -43,8 +48,15 @@ final class ElasticsearchLifecycle
             ],
         ];
 
-        $deleteAfter = config('log_elasticsearch.lifecycle.delete_after');
-        if (is_string($deleteAfter) && $deleteAfter !== '') {
+        if (self::deleteEnabled()) {
+            $deleteAfter = config('log_elasticsearch.lifecycle.delete_after');
+
+            if (! is_string($deleteAfter) || $deleteAfter === '') {
+                throw new \InvalidArgumentException(
+                    'log_elasticsearch.lifecycle.delete_after must be a non-empty string when lifecycle deletion is enabled.',
+                );
+            }
+
             $phases['delete'] = [
                 'min_age' => $deleteAfter,
                 'actions' => ['delete' => new \stdClass()],

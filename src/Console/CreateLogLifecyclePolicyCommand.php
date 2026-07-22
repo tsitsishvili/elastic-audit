@@ -34,6 +34,10 @@ class CreateLogLifecyclePolicyCommand extends Command
 
         $this->info('Lifecycle policy created: ' . ElasticsearchLifecycle::policyName());
 
+        if (! ElasticsearchLifecycle::deleteEnabled()) {
+            $this->warn('Lifecycle delete phase is disabled; rolled-over indexes will be retained forever.');
+        }
+
         return self::SUCCESS;
     }
 }

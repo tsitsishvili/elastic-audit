@@ -30,6 +30,10 @@ surrounding request behavior or exposing sensitive data.
 Build an `HttpLogContext`, then use `HttpLog::make()` in place of `Http::`. The result is Laravel's normal
 `PendingRequest`, so apply timeouts, retries, authentication, headers, and request methods as usual.
 
+Use single-request verbs on that returned instance. Laravel `pool()` and `batch()` create separate pending requests and
+do not inherit the package middleware. Request hooks that mutate the outgoing request after capture can also make the
+stored snapshot differ from the bytes ultimately sent.
+
 ```php
 use App\Enums\ElasticAudit\EntityType;
 use App\Enums\ElasticAudit\EventType;
@@ -54,6 +58,9 @@ $response = HttpLog::make(
     ->post($url, $payload);
 ```
 
+`userId` accepts `int|string|null`, including UUIDs. Keep the application's real identifier type; Elastic Audit
+normalizes every non-null id to a keyword string only when building the Elasticsearch document.
+
 Keep the provider call's existing exception and response handling. Logging queues a sanitized event and preserves the
 original request behavior.
 
@@ -72,11 +79,16 @@ $request->attributes->set('third_party_provider', Provider::Delivery->value);
 $request->attributes->set('third_party_event_type', EventType::DeliveryStatusCallback->value);
 $request->attributes->set('third_party_entity_type', EntityType::Order->value);
 $request->attributes->set('third_party_entity_id', (string) $order->getKey());
+$request->attributes->set('third_party_user_id', auth()->id());
 ```
 
 Never take `third_party_provider`, `third_party_event_type`, or `third_party_entity_type` from route parameters, query
 strings, headers, or request bodies. User-controlled values could spoof audit metadata. The middleware skips capture
 when registered enum classes or matching values cannot be resolved.
+
+Successful callbacks are captured in the middleware's `terminate()` phase after the response is sent. Exception paths
+are captured inline so their details are not lost. Direct unit tests of the middleware must call `terminate()` after a
+successful `handle()` call; tests through Laravel's HTTP kernel execute the terminable phase normally.
 
 Use `HttpLog::logIncoming()` only when middleware cannot represent the flow. Pass the actual response and exception
 details so status and failure data remain accurate.
@@ -110,6 +122,8 @@ attribute diffs. Override `activityActor()`, `activityEntityId()`, or `activityM
 represent the application's domain.
 
 Activity `actorType` and `entityType` values are strings. If the application uses an enum for them, pass `->value`.
+`actorId` accepts `int|string|null`, including UUIDs, and is indexed as a keyword string. Activity jobs dispatch only
+after the surrounding database transaction commits; a rollback intentionally discards the queued audit event.
 
 ## Protect sensitive data
 
@@ -119,8 +133,10 @@ Activity `actorType` and `entityType` values are strings. If the application use
   built-in and configured blocking.
 - Register payment provider enum values in `http_logs.payment_provider_values` so payment-specific body handling is
   applied.
-- Remember that URL query strings are omitted, but payload previews and allowed fields can still contain personal or
-  secret data.
+- Undecodable bodies default to headers plus a raw-body hash. Treat
+  `HTTP_LOGS_UNDECODABLE_BODY_MODE=preview` like an allow-list exception because it stores the raw body in clear text.
+- Bodies larger than `body_capture_max_bytes` (1 MB by default) are headers-only. URL userinfo/query/fragment data is
+  omitted, but payload previews and allowed fields can still contain personal or secret data.
 
 ## Configure operations
 
@@ -128,21 +144,27 @@ For a fresh environment, apply infrastructure in this order:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
-php artisan http-logs:create-index
-php artisan activity-logs:create-index
-php artisan elastic-audit:health --all
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
 ```
 
-Run only the index command for enabled subsystems. Keep a worker running for `HTTP_LOGS_QUEUE` and
-`ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Configure dashboard authorization
-with `Dashboard::auth(...)` before exposing either dashboard outside `local`.
+The plain health command validates enabled subsystems. Use `--all` only when aliases for disabled subsystems have also
+been provisioned and should be checked. Keep a worker running for `HTTP_LOGS_QUEUE` and
+`ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Default document retention comes
+from each subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays` for a finite override or
+`retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but
+permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes
+independently. Finite values must be `1`–`32767`. Configure dashboard authorization with `Dashboard::auth(...)` before
+exposing either dashboard outside `local`.
 
 ## Verify changes
 
 - Test disabled configurations as no-ops.
 - Use `Bus::fake()` and assert `LogHttpRequestJob` or `LogActivityJob` dispatch instead of requiring Elasticsearch.
 - Use Laravel HTTP fakes for provider responses while exercising the audited `PendingRequest`.
-- Test callback attribute mapping, especially invalid or absent enum values.
+- Test callback attribute mapping, especially invalid or absent enum values, and exercise the terminable success path.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
 - Run the focused tests first, then the full application suite.
-- Run `php artisan elastic-audit:health --all` in an environment that is allowed to reach the logs cluster.
+- Run `php artisan elastic-audit:health` in an environment that is allowed to reach the logs cluster. Add `--all` only
+  when provisioned aliases for disabled subsystems should also be checked.

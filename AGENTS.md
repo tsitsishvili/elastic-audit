@@ -25,7 +25,10 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
 - Read `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before changing an
   integration. **Never edit files under `vendor/`.**
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
-  returns an `Illuminate\Http\Client\PendingRequest`, so the normal Laravel HTTP client API stays available.
+  returns an `Illuminate\Http\Client\PendingRequest`, so fluent configuration and single-request verbs stay available.
+  Do not use Laravel `pool()` / `batch()` for audited calls: they create separate pending requests without the package
+  middleware. Hooks that mutate a request after the logger snapshots it can also make the stored request differ from
+  what is sent.
 - Pass real backed enum cases implementing `ProviderContract`, `EventTypeContract`, and `EntityTypeContract` to the HTTP
   logging APIs. Inspect the classes registered under `http_logs.enums` and **never invent enum cases**.
 - For incoming callbacks, use `IncomingHttpLogMiddleware` and set the `third_party_*` request attributes from trusted
@@ -33,12 +36,24 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   a caller spoof audit metadata.
 - Use `ActivityLog::record(...)` for explicit domain events and `ActivityLoggable` for automatic Eloquent lifecycle
   events. Activity actor and entity types are free-form strings; if the app models them as enums, pass `->value`.
+- HTTP `userId` and activity `actorId` accept integers, strings, UUIDs, or null. The package indexes non-null ids as
+  keyword strings; preserve the application's real identifier instead of coercing UUIDs or string ids to integers.
 - Logging dispatches queued jobs. Keep a worker running for the configured queues, and use `Bus::fake()` when asserting
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
   exception, because allowed values are stored in clear text.
-- After infrastructure or config changes, run `php artisan elastic-audit:health --all`. Install the lifecycle policy
-  before creating indexes on a fresh environment.
+- Bodies that do not decode to JSON or form key/value data (XML/SOAP, plain text) are stored as headers plus a raw-body
+  hash. Treat `HTTP_LOGS_UNDECODABLE_BODY_MODE=preview` like a `redaction.allow` entry: it stores those bodies in clear
+  text, so opt in only when the provider's payloads are known to be secret-free. Bodies over
+  `body_capture_max_bytes` (default 1 MB) are captured headers-only.
+- Default document retention comes from each subsystem's `retention_days` (both 360) / `retain_forever` config. Pass
+  `retentionDays` for a finite override or `retainForever: true` for a permanent individual event; never pass both.
+  Permanent documents have a null `retention_days` and are ignored by prune commands. ILM independently deletes whole
+  indexes, so permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` and an updated policy.
+  Finite values must be `1`–`32767`.
+- After infrastructure or config changes, run `php artisan elastic-audit:health`. Use `--all` only when aliases for
+  disabled subsystems have also been provisioned and should be checked. Install the lifecycle policy before creating
+  indexes on a fresh environment.
 
 ## Log an outgoing provider request
 
@@ -77,11 +92,13 @@ $request->attributes->set('third_party_provider', Provider::Delivery->value);
 $request->attributes->set('third_party_event_type', EventType::DeliveryStatusCallback->value);
 $request->attributes->set('third_party_entity_type', EntityType::Order->value);
 $request->attributes->set('third_party_entity_id', (string) $order->getKey());
+$request->attributes->set('third_party_user_id', auth()->id());
 ```
 
-The middleware skips capture when registered enum classes or matching values cannot be resolved. Use
-`HttpLog::logIncoming()` only when middleware cannot represent the flow, and pass the real response and exception so
-status and failure data stay accurate.
+The middleware skips capture when registered enum classes or matching values cannot be resolved. Successful callbacks
+are queued from the middleware's `terminate()` phase after the response is sent; exception paths are captured inline so
+their failure details are preserved. Use `HttpLog::logIncoming()` only when middleware cannot represent the flow, and
+pass the real response and exception so status and failure data stay accurate.
 
 ## Record activity
 
@@ -105,7 +122,8 @@ ActivityLog::record(
 Apply `ActivityLoggable` to an Eloquent model only when automatic `created`, `updated`, `deleted`, `restored`, and
 `force_deleted` events are wanted. Use `$activityLogOnly` / `$activityLogExcept` to avoid noisy or sensitive attribute
 diffs, and override `activityActor()`, `activityEntityId()`, or `activityMetadata()` only when the defaults do not fit
-the domain.
+the domain. Activity jobs dispatch after the surrounding database transaction commits, so rolled-back model changes do
+not produce audit records.
 
 ## Set up a fresh environment
 
@@ -114,7 +132,7 @@ php artisan vendor:publish --tag=elastic-audit   # config + enum stubs
 php artisan elastic-audit:lifecycle-policy       # install first
 php artisan http-logs:create-index               # only if HTTP logs are enabled
 php artisan activity-logs:create-index           # only if activity logs are enabled
-php artisan elastic-audit:health --all
+php artisan elastic-audit:health
 ```
 
 Capture dispatches jobs rather than indexing synchronously, so keep a worker running for the `HTTP_LOGS_QUEUE` and
@@ -126,9 +144,11 @@ dashboard outside `local`.
 - Assert that disabled configurations are no-ops.
 - Use `Bus::fake()` and assert `LogHttpRequestJob` / `LogActivityJob` dispatch instead of requiring Elasticsearch.
 - Use Laravel HTTP fakes for provider responses while exercising the audited `PendingRequest`.
-- Test callback attribute mapping, especially invalid or absent enum values.
+- Test callback attribute mapping, especially invalid or absent enum values. Direct middleware unit tests must invoke
+  `terminate()` for successful callbacks; full Laravel HTTP tests do this through the kernel.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
-- Run `php artisan elastic-audit:health --all` only where the logs cluster is reachable.
+- Run `php artisan elastic-audit:health` only where the logs cluster is reachable. Add `--all` only when provisioned
+  aliases for disabled subsystems should also be checked.
 
 ## Deeper reference
 

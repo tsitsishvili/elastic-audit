@@ -303,4 +303,26 @@ class LogElasticsearchClientTest extends TestCase
             $client->rollover('logs_write', ['max_age' => '30d'], 'logs-000001')
         );
     }
+
+    public function test_rollover_omits_body_for_unconditional_rollover(): void
+    {
+        $indices = $this->createMock(Indices::class);
+        $indices->expects($this->once())->method('rollover')->with($this->callback(
+            fn (array $params): bool => $params === [
+                'alias'     => 'logs_write',
+                'new_index' => 'logs-000002',
+            ]
+        ))->willReturn($this->esResponse);
+
+        $this->esResponse->method('asArray')->willReturn(['rolled_over' => true]);
+
+        $esClient = $this->createStub(SpyElasticsearchClientInterface::class);
+        $esClient->method('indices')->willReturn($indices);
+        $client = new LogElasticsearchClient($esClient);
+
+        $this->assertSame(
+            ['rolled_over' => true],
+            $client->rollover('logs_write', [], 'logs-000002'),
+        );
+    }
 }

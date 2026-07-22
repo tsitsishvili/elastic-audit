@@ -50,8 +50,9 @@ ActivityLogger::record()
 → activity write alias
 ```
 
-Capture never throws and is gated by `activity_logs.enabled`. Indexing happens asynchronously on the
-configured queue. The document ID is `sha256(eventId)`.
+Capture never throws and is gated by `activity_logs.enabled`. Indexing happens asynchronously on the configured queue.
+Activity jobs wait for the active database transaction to commit; a rollback discards the queued audit event so the log
+cannot claim that an uncommitted model change occurred. The Elasticsearch document ID is the raw `eventId` ULID.
 
 ### Activity Configuration
 
@@ -73,10 +74,12 @@ return [
         'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
         'batch_timeout' => env('ACTIVITY_LOGS_BATCH_JOB_TIMEOUT', 60),
     ],
-    'retention_days'    => 360,
+    'retention_days'    => env('ACTIVITY_LOGS_RETENTION_DAYS', 360),
+    'retain_forever'    => env('ACTIVITY_LOGS_RETAIN_FOREVER', false),
 
-    'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',
-    'index_alias_write' => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs_write',
+    // null derives both names from log_elasticsearch.index_prefix
+    'index_alias'       => null,
+    'index_alias_write' => null,
 
     // Redaction applied to the 'changes' and 'metadata' maps before queueing.
     'redaction' => [
@@ -101,7 +104,8 @@ The `changes` and `metadata` maps are redacted by key name before queueing, usin
 (so a model's `password` / `email` attribute diffs never reach Elasticsearch in clear text). Tune it with
 `activity_logs.redaction.block` / `.allow` — same semantics as the
 HTTP [Redaction Notes](AUDIT_LOGS.md#redaction-notes), but a
-single flat list since activity events have no headers.
+single flat list since activity events have no headers. Sensitive change fields retain their `{old, new}` structure
+with both values redacted, and activity error messages receive the HTTP credential/URL sanitizer plus a 2048-byte cap.
 
 Relevant environment variables:
 
@@ -113,6 +117,8 @@ Relevant environment variables:
 | `ACTIVITY_LOGS_JOB_BACKOFF`       | `10,30,120` | Comma-separated retry backoff seconds for activity log jobs                                       |
 | `ACTIVITY_LOGS_JOB_TIMEOUT`       | `30`        | Timeout in seconds for single activity log jobs                                                   |
 | `ACTIVITY_LOGS_BATCH_JOB_TIMEOUT` | `60`        | Timeout in seconds for activity bulk replay jobs                                                  |
+| `ACTIVITY_LOGS_RETENTION_DAYS`    | `360`       | Default finite retention; must be an integer from `1` through `32767`                             |
+| `ACTIVITY_LOGS_RETAIN_FOREVER`    | `false`     | Make permanent retention the default; finite context overrides remain available                  |
 | `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`      | Register the dashboard routes                                                                     |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`    | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
 | `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity`  | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
@@ -123,12 +129,19 @@ Relevant environment variables:
 php artisan activity-logs:create-index
 ```
 
-Creates the physical index with a `dynamic: strict` mapping and attaches the read/write aliases. In `v3.0.2` and newer,
-the command uses rollover-compatible names: a fresh setup starts with `<prefix>_activity_logs-000001`; if that index
-already exists, the command advances to `-000002`, `-000003`, and so on.
+Creates the physical index with a `dynamic: strict` mapping and attaches the read/write aliases. A fresh setup starts
+with `<prefix>_activity_logs-000001`; if an index exists without a write alias, the command advances to `-000002`,
+`-000003`, and so on. When the write alias already exists, re-running the command uses Elasticsearch's rollover API
+instead of manually moving the alias, preserving lifecycle progression for the previous generation.
 
 The command also installs an index template for `<prefix>_activity_logs-*` so Elasticsearch-created rollover indexes
 inherit the activity log mapping, lifecycle settings, replica settings, and read alias.
+
+> **Upgrading an existing installation:** `actor.id` is now a `keyword` instead of a `long`. Elasticsearch cannot
+> change that mapping in place. Run `php artisan activity-logs:create-index` before sending string or UUID actor ids;
+> the command creates the next physical index with the new mapping and moves the write alias to it. Existing indices
+> stay on the read alias. Reindex old documents only if external queries require one uniform field type across all
+> index generations.
 
 With the v3 default lifecycle config, create or update the shared ILM policy first:
 
@@ -180,8 +193,12 @@ ActivityLog::record(
 
 `entityType` is a free string label for the entity being changed (e.g. `order`, `invoice`) — pass your own
 enum's `->value` if you keep one. `actorType` is a free string — conventionally `user`, `system`, `cron`, or
-`job`. `retentionDays` defaults to
-`360` and can be overridden per call via `ActivityLogContext::forActor(..., retentionDays: 90)`.
+`job`. `actorId` accepts `int|string|null`; the DTO preserves the supplied PHP value and the indexer stores every
+non-null actor id as a keyword string. `retentionDays` defaults to `360` and can be overridden per call via
+`ActivityLogContext::forActor(..., retentionDays: 90)`. Use
+`ActivityLogContext::forActor(..., retainForever: true)` for a permanent individual event, or set
+`ACTIVITY_LOGS_RETAIN_FOREVER=true` to make that the default. An explicit `retentionDays` overrides the permanent
+default; passing both options on one context is invalid.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 
@@ -244,7 +261,8 @@ class Order extends Model
 `$activityLogOnly` is applied first (whitelist), then `$activityLogExcept` (blacklist). The entity id defaults to
 `(string) $model->getKey()` and can be overridden via `activityEntityId()`. `activityMetadata()` defaults to `[]` and
 lands in the `metadata` map (stored but not indexed — see below), mirroring the `metadata:` argument of a manual
-`ActivityLog::record()` call.
+`ActivityLog::record()` call. Hook failures and malformed custom actor values are isolated so audit capture can never
+prevent model persistence. A force delete emits only `{entity}.force_deleted`, not an additional deleted event.
 
 ### Actor Resolution
 
@@ -265,7 +283,7 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
 {
   "@timestamp": "2026-06-04T10:00:00Z",
   "event_id": "01JX...",
-  "schema_version": 2,
+  "schema_version": 3,
   "request_id": "01JX...",
   "trace": {
     "id": "4bf92f3577b34da6a3ce929d0e0e4736",
@@ -274,7 +292,7 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
   },
   "actor": {
     "type": "user",
-    "id": 42
+    "id": "42"
   },
   "action": "order.status_updated",
   "entity": {
@@ -302,6 +320,9 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
 `changes` and `metadata` are stored but **not indexed** (`enabled: false`) — their keys are caller-defined, so
 they are searchable by `event_id`/`action`/`actor`/`entity` but not by their inner keys.
 
+The document's Elasticsearch `_id` is the `event_id` ULID itself, so retried queue jobs overwrite the same document
+instead of creating duplicates.
+
 ### Activity Dashboard
 
 When `activity_logs.dashboard.enabled` is true, the dashboard is served under the configured path (default
@@ -309,7 +330,8 @@ When `activity_logs.dashboard.enabled` is true, the dashboard is served under th
 
 - **Overview** — total / success / failure counts, top actions, top actor types.
 - **List** — paginated, newest first, filterable by action, actor type, success, entity id, and date range.
-- **Detail** — full event, a before/after change table, and a metadata dump.
+- **Detail** — full event, a before/after change table, and a metadata dump. Legacy malformed diff entries render
+  defensively instead of breaking the page.
 
 Access is gated by the same authorization callback as the HTTP dashboard:
 
@@ -334,12 +356,18 @@ php artisan vendor:publish --tag=elastic-audit-assets --force
 php artisan activity-logs:prune
 ```
 
-Deletes documents older than their own `retention_days` value. In v3, ILM is the preferred default retention path for
-new indexes. Use pruning when ILM is disabled, when different actions need different lifetimes, or as a manual cleanup
-fallback.
+Deletes documents older than their own `retention_days` value. Permanent documents store null, so this command ignores
+them. ILM is independent: when `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=true`, it deletes whole indexes without
+inspecting document retention.
 
-The command exits with a non-zero status when Elasticsearch cannot fetch retention buckets or a `delete_by_query`
-operation fails. This is intentional so CI, cron, and monitoring can detect retention failures.
+To guarantee permanent activity storage, set both `ACTIVITY_LOGS_RETAIN_FOREVER=true` and
+`LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=false`, then rerun `php artisan elastic-audit:lifecycle-policy`. The health
+command rejects a permanent subsystem default that conflicts with enabled index deletion. These defaults affect only
+new documents; migrate historical numeric `retention_days` values before resuming pruning if they must also be kept.
+
+The command composite-pages every distinct retention value and exits with a non-zero status when a search times out,
+has failed shards, or a `delete_by_query` response reports timeout, version conflicts, or per-item failures. This lets
+CI, cron, and monitoring detect incomplete retention work.
 
 For ILM/rollover, install the shared lifecycle policy and use the activity rollover command:
 
@@ -352,7 +380,8 @@ php artisan activity-logs:rollover
 creates or updates the shared policy named by `LOG_ELASTICSEARCH_LIFECYCLE_POLICY`. New indexes only receive lifecycle
 settings when lifecycle is enabled before `activity-logs:create-index` runs.
 
-Use `php artisan elastic-audit:health` to verify cluster reachability, aliases, job retry options, and lifecycle state.
+Use `php artisan elastic-audit:health` to verify cluster reachability, canonical names, aliases and write-index topology,
+job retry options, and lifecycle state.
 For high-volume replays, `LogActivityBatchJob` accepts a list of `ActivityLogData` DTOs and indexes them through the
 Elasticsearch bulk API. Bulk responses with per-item Elasticsearch failures are treated as job failures, even when
 Elasticsearch returns HTTP 200.
@@ -361,6 +390,8 @@ Elasticsearch returns HTTP 200.
 
 - **Capture never throws.** A logging failure can never break the surrounding request — errors are swallowed and
   the job's own failures are logged, not propagated.
+- **Transactional events reflect committed state.** Single and batch activity jobs dispatch after commit and are not
+  indexed when the surrounding database transaction rolls back.
 - **Disabled is a true no-op.** With `activity_logs.enabled = false`, `record()` returns immediately and no job
   is dispatched.
 - **Backward compatibility.** The indexed document shape is versioned via `ActivityLogData::SCHEMA_VERSION`; the

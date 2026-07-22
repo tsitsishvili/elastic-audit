@@ -4,10 +4,49 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Support;
 
+use InvalidArgumentException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 
 final class ElasticsearchIndexNames
 {
+    public static function assertValid(string $name, string $label = 'Elasticsearch index or alias'): void
+    {
+        $error = self::validationError($name);
+
+        if ($error !== null) {
+            throw new InvalidArgumentException("{$label} [{$name}] is invalid: {$error}");
+        }
+    }
+
+    public static function validationError(string $name): ?string
+    {
+        if ($name === '') {
+            return 'the name must not be empty';
+        }
+
+        if (strlen($name) > 255) {
+            return 'the UTF-8 byte length must not exceed 255';
+        }
+
+        if ($name === '.' || $name === '..') {
+            return 'the names "." and ".." are reserved';
+        }
+
+        if ($name !== strtolower($name)) {
+            return 'uppercase letters are not allowed';
+        }
+
+        if (preg_match('/^[\\-_+]/', $name) === 1) {
+            return 'the name must not start with -, _, or +';
+        }
+
+        if (preg_match('/[\\\\\/*?"<>| ,#:]/', $name) === 1) {
+            return 'the name contains a forbidden character';
+        }
+
+        return null;
+    }
+
     public static function initialRolloverIndex(string $baseName): string
     {
         return self::rolloverIndex($baseName, 1);

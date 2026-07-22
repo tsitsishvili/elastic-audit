@@ -510,6 +510,99 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame([], $payload->headers);
     }
 
+    public function test_undecodable_xml_body_stores_hash_only_by_default(): void
+    {
+        $rawBody = '<payment><card_number>4111111111111111</card_number></payment>';
+
+        $payload = $this->redactor->buildPayload(
+            ['Content-Type' => 'application/xml'],
+            $rawBody,
+            32768,
+            4096,
+        );
+
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertSame('sha256:'.hash('sha256', $rawBody), $payload->bodyHash);
+        $this->assertFalse($payload->bodyTruncated);
+    }
+
+    public function test_undecodable_plain_text_body_stores_hash_only_by_default(): void
+    {
+        $payload = $this->redactor->buildPayload([], 'token=abc but not urlencoded content type', 32768, 4096);
+
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertNotNull($payload->bodyHash);
+    }
+
+    public function test_undecodable_scalar_json_body_stores_hash_only_by_default(): void
+    {
+        $payload = $this->redactor->buildPayload([], '"a-bare-secret-string"', 32768, 4096);
+
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertNotNull($payload->bodyHash);
+    }
+
+    public function test_undecodable_body_preview_mode_stores_raw_body(): void
+    {
+        $redactor = new SensitiveDataRedactor(
+            undecodableBodyMode: SensitiveDataRedactor::UNDECODABLE_MODE_PREVIEW,
+        );
+        $rawBody = '<order><id>42</id></order>';
+
+        $payload = $redactor->buildPayload([], $rawBody, 32768, 4096);
+
+        $this->assertNull($payload->body);
+        $this->assertSame($rawBody, $payload->bodyPreview);
+        $this->assertSame('sha256:'.hash('sha256', $rawBody), $payload->bodyHash);
+    }
+
+    public function test_undecodable_mode_does_not_affect_json_bodies(): void
+    {
+        $rawBody = json_encode(['password' => 'secret', 'order_id' => 1]);
+
+        $payload = $this->redactor->buildPayload([], $rawBody, 32768, 4096);
+
+        $this->assertSame(['password' => '[REDACTED]', 'order_id' => 1], $payload->body);
+        $this->assertNotNull($payload->bodyPreview);
+    }
+
+    public function test_empty_body_produces_headers_only_payload(): void
+    {
+        $payload = $this->redactor->buildPayload(['Content-Type' => 'application/json'], '', 32768, 4096);
+
+        $this->assertSame(['Content-Type' => 'application/json'], $payload->headers);
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertNull($payload->bodyHash);
+        $this->assertFalse($payload->bodyTruncated);
+    }
+
+    public function test_oversized_body_produces_headers_only_payload(): void
+    {
+        $redactor = new SensitiveDataRedactor(captureMaxBytes: 100);
+        $rawBody  = json_encode(['data' => str_repeat('a', 200)]);
+
+        $payload = $redactor->buildPayload(['Content-Type' => 'application/json'], $rawBody, 32768, 4096);
+
+        $this->assertSame(['Content-Type' => 'application/json'], $payload->headers);
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertNull($payload->bodyHash);
+    }
+
+    public function test_body_within_capture_cap_is_processed_normally(): void
+    {
+        $redactor = new SensitiveDataRedactor(captureMaxBytes: 10_000);
+        $rawBody  = json_encode(['order_id' => 42]);
+
+        $payload = $redactor->buildPayload([], $rawBody, 32768, 4096);
+
+        $this->assertSame(['order_id' => 42], $payload->body);
+    }
+
     // ── truncateAndHash (utility) ────────────────────────────────────────────
 
     public function test_skips_binary_bodies_containing_null_bytes(): void
@@ -548,6 +641,18 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertTrue($payload->bodyTruncated);
     }
 
+    public function test_preview_is_byte_capped_without_splitting_multibyte_chars(): void
+    {
+        // Georgian characters are 3 bytes each in UTF-8; a 10-byte cap fits
+        // exactly three characters and must not emit a partial fourth.
+        $body    = str_repeat('ქ', 20);
+        $payload = $this->redactor->truncateAndHash($body, 32768, 10);
+
+        $this->assertSame(str_repeat('ქ', 3), $payload->bodyPreview);
+        $this->assertTrue(mb_check_encoding((string) $payload->bodyPreview, 'UTF-8'));
+        $this->assertLessThanOrEqual(10, strlen((string) $payload->bodyPreview));
+    }
+
     // ── sanitizeErrorMessage ─────────────────────────────────────────────────
 
     public function test_sanitize_error_message_strips_query_string_from_url(): void
@@ -566,5 +671,83 @@ class SensitiveDataRedactorTest extends TestCase
         $message = 'Connection refused to host api.example.com on port 443';
 
         $this->assertSame($message, $this->redactor->sanitizeErrorMessage($message));
+    }
+
+    public function test_sanitize_error_message_leaves_prose_question_marks_unchanged(): void
+    {
+        $message = 'Operation failed. Retry? Did you configure the endpoint?';
+
+        $this->assertSame($message, $this->redactor->sanitizeErrorMessage($message));
+    }
+
+    public function test_sanitizes_url_valued_headers(): void
+    {
+        $headers = $this->redactor->redactHeaders([
+            'Location' => ['https://user:password@example.com/callback?code=secret#token'],
+            'Referer'  => ['/checkout?access_token=secret#payment'],
+        ]);
+
+        $this->assertSame(['https://example.com/callback'], $headers['Location']);
+        $this->assertSame(['/checkout'], $headers['Referer']);
+    }
+
+    public function test_sanitizes_urls_embedded_in_link_and_refresh_headers(): void
+    {
+        $headers = $this->redactor->redactHeaders([
+            'Link'    => ['<https://user:password@example.com/orders?token=secret>; rel="next"'],
+            'Refresh' => '5; url=https://user:password@example.com/login?token=secret',
+        ]);
+
+        $this->assertSame(
+            ['<https://example.com/orders?[REDACTED]>; rel="next"'],
+            $headers['Link'],
+        );
+        $this->assertSame(
+            '5; url=https://example.com/login?[REDACTED]',
+            $headers['Refresh'],
+        );
+    }
+
+    public function test_sanitize_url_removes_userinfo_query_and_fragment(): void
+    {
+        $this->assertSame(
+            'https://example.com/pay',
+            $this->redactor->sanitizeUrl('https://user:password@example.com/pay?api_key=secret#fragment'),
+        );
+    }
+
+    public function test_sanitize_error_message_redacts_url_userinfo_and_credentials(): void
+    {
+        $message = 'Failed https://alice:password@example.com/pay password=secret token=abc Authorization: Bearer abc123';
+        $result  = $this->redactor->sanitizeErrorMessage($message);
+
+        $this->assertStringContainsString('https://example.com/pay', $result);
+        $this->assertStringNotContainsString('alice:password', $result);
+        $this->assertStringNotContainsString('password=secret', $result);
+        $this->assertStringNotContainsString('token=abc', $result);
+        $this->assertStringNotContainsString('Bearer abc123', $result);
+        $this->assertStringContainsString('password=[REDACTED]', $result);
+        $this->assertStringContainsString('Authorization: [REDACTED]', $result);
+    }
+
+    public function test_sanitize_error_message_redacts_json_shaped_secrets(): void
+    {
+        $message = 'Provider rejected {"password":"hunter2","token":"abc.def","cvv":123,"amount":100}';
+        $result  = $this->redactor->sanitizeErrorMessage($message);
+
+        $this->assertStringNotContainsString('hunter2', $result);
+        $this->assertStringNotContainsString('abc.def', $result);
+        $this->assertStringContainsString('"password":"[REDACTED]"', $result);
+        $this->assertStringContainsString('"token":"[REDACTED]"', $result);
+        $this->assertStringContainsString('"cvv":"[REDACTED]"', $result);
+        $this->assertStringContainsString('"amount":100', $result);
+    }
+
+    public function test_sanitize_error_message_is_byte_capped_without_invalid_utf8(): void
+    {
+        $result = $this->redactor->sanitizeErrorMessage(str_repeat('ქ', 2000));
+
+        $this->assertLessThanOrEqual(2048, strlen($result));
+        $this->assertTrue(mb_check_encoding($result, 'UTF-8'));
     }
 }

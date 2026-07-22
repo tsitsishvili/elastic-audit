@@ -18,7 +18,7 @@ class HttpLogMapping
                 'provider'       => ['type' => 'keyword'],
                 'event_type'     => ['type' => 'keyword'],
                 'direction'      => ['type' => 'keyword'],
-                'user_id'        => ['type' => 'long'],
+                'user_id'        => ['type' => 'keyword'],
                 'attempt'        => ['type' => 'short'],
                 'success'        => ['type' => 'boolean'],
                 'retention_days' => ['type' => 'short'],

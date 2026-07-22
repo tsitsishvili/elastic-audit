@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
+use Illuminate\Support\Facades\Log;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
@@ -68,9 +69,10 @@ class DashboardTest extends TestCase
 
         $this->get(route('http-logs.overview', [], false))
             ->assertOk()
-            ->assertSee('vendor/elastic-audit/styles-', false)
-            ->assertSee('vendor/elastic-audit/alpine-', false)
-            ->assertSee('vendor/elastic-audit/chart-', false)
+            ->assertSee('href="/vendor/elastic-audit/styles-', false)
+            ->assertSee('src="/vendor/elastic-audit/alpine-', false)
+            ->assertSee('src="/vendor/elastic-audit/chart-', false)
+            ->assertDontSee('http://localhost/vendor/elastic-audit/', false)
             ->assertDontSee('cdn.tailwindcss.com', false)
             ->assertDontSee('cdn.jsdelivr.net', false);
     }
@@ -80,6 +82,27 @@ class DashboardTest extends TestCase
         Dashboard::auth(fn () => false);
 
         $this->get(route('http-logs.overview', [], false))->assertForbidden();
+    }
+
+    public function test_dashboard_hides_elasticsearch_exception_details_and_logs_them(): void
+    {
+        Log::spy();
+        $this->fake->searchResolver = fn () => throw new \RuntimeException(
+            'Failed to reach http://elastic.internal:9200/private-index',
+        );
+
+        $this->get(route('http-logs.overview', [], false))
+            ->assertOk()
+            ->assertSee('Failed to query Elasticsearch. Check the application log for details.')
+            ->assertDontSee('elastic.internal')
+            ->assertDontSee('private-index');
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->with(
+                'Elastic Audit HTTP dashboard query failed',
+                ['error' => 'Failed to reach http://elastic.internal:9200/private-index'],
+            );
     }
 
     public function test_overview_applies_range_and_interval_to_metrics_query(): void

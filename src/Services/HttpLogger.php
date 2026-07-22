@@ -13,13 +13,16 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 use Throwable;
 
 class HttpLogger
 {
     public function __construct(
         private readonly SensitiveDataRedactor $redactor,
+        private readonly ?HttpPayloadRedactorResolver $redactorResolver = null,
     ) {}
 
     public function logIncoming(
@@ -33,22 +36,18 @@ class HttpLogger
         ?Response $response = null,
         ?Throwable $exception = null,
     ): void {
-        if (! config('http_logs.enabled', false)) {
-            return;
-        }
-
-        $sampleRate = (float) config('http_logs.sample_rate', 1.0);
-        if ($sampleRate < 1.0 && (float) mt_rand() / mt_getrandmax() >= $sampleRate) {
+        if (! CaptureSampling::shouldCapture()) {
             return;
         }
 
         try {
+            $redactor     = $this->redactorResolver?->forProvider($provider) ?? $this->redactor;
             $maxBytes     = (int) config('http_logs.body_max_bytes', 32768);
             $previewBytes = (int) config('http_logs.body_preview_bytes', 4096);
 
-            $requestPayload = $this->redactor->buildPayload(
+            $requestPayload = $redactor->buildPayload(
                 headers: $request->headers->all(),
-                rawBody: $request->getContent(),
+                rawBody: $this->captureRequestBody($request),
                 maxBytes: $maxBytes,
                 previewBytes: $previewBytes,
             );
@@ -57,7 +56,7 @@ class HttpLogger
                 $content = $response->getContent(); // string|false (false for streamed/binary responses)
 
                 if (is_string($content)) {
-                    $responsePayload = $this->redactor->buildPayload(
+                    $responsePayload = $redactor->buildPayload(
                         headers: $response->headers->all(),
                         rawBody: $content,
                         maxBytes: $maxBytes,
@@ -66,15 +65,14 @@ class HttpLogger
                 } else {
                     // Streamed/binary responses expose no readable body; still redact and keep headers.
                     $responsePayload = RedactedHttpPayload::empty(
-                        $this->redactor->redactHeaders($response->headers->all()),
+                        $redactor->redactHeaders($response->headers->all()),
                     );
                 }
             } else {
                 $responsePayload = RedactedHttpPayload::empty();
             }
 
-            // Strip query string from stored URL — query params may carry API keys
-            $safeUrl = (string) strtok($request->fullUrl(), '?');
+            $safeUrl = $redactor->sanitizeUrl($request->fullUrl());
 
             $data = HttpLogData::make(
                 provider: $provider,
@@ -89,7 +87,7 @@ class HttpLogger
                 httpStatusCode: $httpStatusCode,
                 success: $success,
                 errorClass: $exception !== null ? $exception::class : null,
-                errorMessage: $exception !== null ? $this->redactor->sanitizeErrorMessage($exception->getMessage()) : null,
+                errorMessage: $exception !== null ? $redactor->sanitizeErrorMessage($exception->getMessage()) : null,
                 traceParent: $request->headers->get('traceparent'),
             );
 
@@ -97,5 +95,70 @@ class HttpLogger
         } catch (Throwable) {
             // Never let logging failures propagate
         }
+    }
+
+    /**
+     * Read at most the configured capture cap plus one byte. Content-Length is
+     * only a fast rejection path; the bounded stream read remains authoritative
+     * when the header is missing or incorrect.
+     */
+    private function captureRequestBody(Request $request): string
+    {
+        $cap = max(0, (int) config(
+            'http_logs.body_capture_max_bytes',
+            SensitiveDataRedactor::DEFAULT_CAPTURE_MAX_BYTES,
+        ));
+
+        $contentLength = $request->headers->get('Content-Length');
+
+        if (is_string($contentLength)
+            && ctype_digit(trim($contentLength))
+            && (int) trim($contentLength) > $cap) {
+            return '';
+        }
+
+        try {
+            $body = $request->getContent(true);
+        } catch (Throwable) {
+            return '';
+        }
+
+        if (! is_resource($body)) {
+            return '';
+        }
+
+        $raw = '';
+
+        try {
+            while (! feof($body) && strlen($raw) <= $cap) {
+                $remaining  = $cap - strlen($raw);
+                $readLength = $remaining >= 8192 ? 8192 : $remaining + 1;
+                $chunk      = fread($body, $readLength);
+
+                if (! is_string($chunk)) {
+                    return '';
+                }
+
+                if ($chunk === '') {
+                    return feof($body) ? $raw : '';
+                }
+
+                $raw .= $chunk;
+            }
+        } catch (Throwable) {
+            return '';
+        } finally {
+            try {
+                $metadata = stream_get_meta_data($body);
+
+                if ($metadata['seekable'] === true) {
+                    rewind($body);
+                }
+            } catch (Throwable) {
+                // A broken body stream must not suppress the metadata-only log.
+            }
+        }
+
+        return strlen($raw) > $cap ? '' : $raw;
     }
 }

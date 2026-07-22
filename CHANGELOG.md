@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-22
+
+### Added
+
+- Permanent document and index retention. HTTP and activity logs can default to `retain_forever`, individual contexts
+  accept `retainForever: true`, and `log_elasticsearch.lifecycle.delete_enabled=false` keeps ILM rollover without a
+  delete phase. Health checks reject permanent subsystem defaults that conflict with whole-index deletion.
+- Bounded HTTP body capture through `body_capture_max_bytes` / `HTTP_LOGS_BODY_CAPTURE_MAX_BYTES` (default 1 MB), plus
+  `undecodable_body_mode` / `HTTP_LOGS_UNDECODABLE_BODY_MODE` for choosing hash-only metadata (default) or an explicitly
+  reviewed clear-text preview for XML, plain text, scalar JSON, and other bodies that cannot be key-redacted.
+- Release CI now includes runtime dependency auditing, SemVer tag triggers, and real Elasticsearch 8/9 lifecycle,
+  indexing, rollover, health, and pruning smoke tests.
+
+### Changed
+
+- HTTP `userId` and activity `actorId` now accept `int|string|null`, including UUIDs and other string identifiers.
+  `ActivityLoggable` preserves string ids returned by `Auth::id()` and custom `activityActor()` implementations.
+- Elasticsearch maps HTTP `user_id` and activity `actor.id` as `keyword` and indexes every non-null id as a string.
+  HTTP and activity schema versions are now 4 and 3. Existing installations must run the relevant create-index command
+  before logging string ids; see the [Upgrade Guide](UPGRADE.md#upgrading-from-320).
+- Context factories now read validated default retention from `http_logs.retention_days` and
+  `activity_logs.retention_days`. Finite values must be between `1` and `32767`.
+- Successful incoming callbacks are now captured from terminable middleware after the response is sent. Exception
+  paths remain inline so their sanitized failure details and HTTP status are preserved.
+- Activity single and batch jobs dispatch after the surrounding database transaction commits. Rolled-back model changes
+  no longer leave activity documents claiming that they persisted.
+- HTTP and activity Elasticsearch `_id` values are now the raw `event_id` ULID rather than its SHA-256 hash. Queue
+  retries remain idempotent while operational tooling can address a document by its visible event id.
+- Subsystem aliases and the default lifecycle policy are derived from one canonical index prefix when their config is
+  `null`. `APP_NAME` fallbacks are slugged, explicit invalid Elasticsearch names are rejected, and new configurations
+  default to one replica instead of zero.
+- Composer now declares the Promise and PSR HTTP interfaces used by the middleware directly, requires the patched
+  `guzzlehttp/guzzle ^7.15.1` floor, and removes the unused direct PSR-7 implementation requirement. Publishable
+  application enum templates moved outside the package's PSR-4 source tree, and CI validates strict optimized
+  autoloading plus PHP syntax on `v4.x`.
+
+### Fixed
+
+- Dashboard CSS and JavaScript assets now use same-origin relative URLs, preventing mixed-content failures when Laravel
+  runs behind a TLS-terminating reverse proxy.
+- Stored URLs, URL-valued headers, and exception messages now remove userinfo, query/fragment secrets, authorization
+  values, and common credential-shaped values. Diagnostic messages are UTF-8-safe and capped at 2048 bytes.
+- Incoming and outgoing payment capture now use one provider-redactor resolver; integer, string, and backed-enum config
+  values resolve consistently. One audited pending request also keeps one sampling decision across Laravel retries.
+- Callback capture safely accepts configured enum instances, rejects arbitrary values without throwing, preserves
+  Symfony HTTP exception status codes, and cannot replace the response or original handler exception.
+- HTTP request/response reads are memory-bounded, restore seekable streams, skip multipart/binary/oversized bodies, and
+  truncate UTF-8 previews without splitting multibyte characters.
+- Activity capture preserves sensitive `{old, new}` diff shape, sanitizes activity errors, renders malformed legacy
+  diffs defensively, prevents force-delete duplicate events, and isolates custom activity hooks from model persistence.
+- Prune commands composite-page every retention value and detect timeouts, shard failures, version conflicts, and
+  partial deletion failures.
+- Re-running a create-index command with an existing write alias uses Elasticsearch rollover instead of manually
+  swapping the alias, preserving lifecycle progression for the previous generation.
+- Dashboard controllers log the real Elasticsearch exception server-side while returning only a generic error to the
+  browser.
+- `elastic-audit:health --all` can verify aliases for disabled subsystems without rejecting their intentionally unused
+  enum, queue, retention, or capture configuration.
+- Malformed retry and timeout configuration now falls back safely instead of coercing fractional/non-scalar values;
+  failed HTTP job diagnostics include the unique `event_id`.
+
 ## [3.2.0] - 2026-07-16
 
 ### Added
@@ -204,9 +265,10 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...HEAD
-[3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.1...v3.2.0
-[3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v3.1.1
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0
+[3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v.3.1.1...v3.2.0
+[3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v.3.1.1
 [3.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.3...v3.1.0
 [3.0.3]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...v3.0.2

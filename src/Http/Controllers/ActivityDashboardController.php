@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Http\Controllers;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
 
@@ -55,7 +56,7 @@ class ActivityDashboardController
         try {
             $metrics = $this->query->metrics($filters);
         } catch (Throwable $e) {
-            $error = $e->getMessage();
+            $error = $this->queryError($e);
         }
 
         return view('elastic-audit::activity.overview', [
@@ -93,7 +94,7 @@ class ActivityDashboardController
             $total   = $result['total'];
             $options = $this->query->filterOptions();
         } catch (Throwable $e) {
-            $error = $e->getMessage();
+            $error = $this->queryError($e);
         }
 
         return view('elastic-audit::activity.index', [
@@ -120,7 +121,7 @@ class ActivityDashboardController
             return view('elastic-audit::activity.show', [
                 'log'      => null,
                 'timezone' => $timezone,
-                'error'    => $e->getMessage(),
+                'error'    => $this->queryError($e),
             ]);
         }
 
@@ -131,6 +132,17 @@ class ActivityDashboardController
             'timezone' => $timezone,
             'error'    => null,
         ]);
+    }
+
+    /**
+     * Elasticsearch errors may expose internal hostnames and index details,
+     * so only the application log receives the original message.
+     */
+    private function queryError(Throwable $e): string
+    {
+        Log::error('Elastic Audit activity dashboard query failed', ['error' => $e->getMessage()]);
+
+        return 'Failed to query Elasticsearch. Check the application log for details.';
     }
 
     /**

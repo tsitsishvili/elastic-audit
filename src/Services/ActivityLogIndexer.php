@@ -16,11 +16,9 @@ class ActivityLogIndexer
 
     public function index(ActivityLogData $data): void
     {
-        $id = hash('sha256', $data->eventId);
-
         $this->client->index([
             'index' => $this->writeAlias,
-            'id'    => $id,
+            'id'    => $data->eventId,
             'body'  => $this->toDocument($data),
         ]);
     }
@@ -33,7 +31,7 @@ class ActivityLogIndexer
         $body = [];
 
         foreach ($items as $data) {
-            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => hash('sha256', $data->eventId)]];
+            $body[] = ['index' => ['_index' => $this->writeAlias, '_id' => $data->eventId]];
             $body[] = $this->toDocument($data);
         }
 
@@ -52,13 +50,14 @@ class ActivityLogIndexer
             'schema_version' => ActivityLogData::SCHEMA_VERSION,
             'request_id'     => $d->requestId,
             'trace'          => [
-                'id'          => $d->traceId,
-                'span_id'     => $d->spanId,
-                'traceparent' => $d->traceParent,
+                // isset() guards serialized jobs queued before trace fields existed.
+                'id'          => isset($d->traceId) ? $d->traceId : null,
+                'span_id'     => isset($d->spanId) ? $d->spanId : null,
+                'traceparent' => isset($d->traceParent) ? $d->traceParent : null,
             ],
             'actor'          => [
                 'type' => $d->actorType,
-                'id'   => $d->actorId,
+                'id'   => $d->actorId !== null ? (string) $d->actorId : null,
             ],
             'action'         => $d->action,
             'entity'         => [

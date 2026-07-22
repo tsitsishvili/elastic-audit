@@ -144,10 +144,14 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
 
     public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
     {
-        $params = [
-            'alias' => $alias,
-            'body'  => ['conditions' => $conditions],
-        ];
+        $params = ['alias' => $alias];
+
+        // Omitting conditions asks Elasticsearch for an unconditional rollover.
+        // Sending an empty conditions object is not equivalent on every supported
+        // client/server combination.
+        if ($conditions !== []) {
+            $params['body'] = ['conditions' => $conditions];
+        }
 
         if ($newIndex !== null) {
             $params['new_index'] = $newIndex;

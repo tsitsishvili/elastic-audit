@@ -16,17 +16,27 @@ class PruneActivityLogCommandTest extends TestCase
         $fake = new class extends FakeLogElasticsearchClient {
             public array $deleteByQueryCalls = [];
 
+            public array $searchCalls = [];
+
             public function search(array $params): array
             {
-                // Return two retention buckets: 30 and 90 days
+                $this->searchCalls[] = $params;
+
+                if (count($this->searchCalls) === 1) {
+                    return [
+                        'aggregations' => [
+                            'retention_buckets' => [
+                                'buckets'   => [['key' => ['retention_days' => 30]]],
+                                'after_key' => ['retention_days' => 30],
+                            ],
+                        ],
+                    ];
+                }
+
                 return [
-                    'hits'         => ['total' => ['value' => 0], 'hits' => []],
                     'aggregations' => [
                         'retention_buckets' => [
-                            'buckets' => [
-                                ['key' => 30],
-                                ['key' => 90],
-                            ],
+                            'buckets' => [['key' => ['retention_days' => 90]]],
                         ],
                     ],
                 ];
@@ -44,6 +54,11 @@ class PruneActivityLogCommandTest extends TestCase
         $this->artisan('activity-logs:prune')->assertExitCode(0);
 
         $this->assertCount(2, $fake->deleteByQueryCalls);
+        $this->assertCount(2, $fake->searchCalls);
+        $this->assertSame(
+            ['retention_days' => 30],
+            $fake->searchCalls[1]['body']['aggs']['retention_buckets']['composite']['after'],
+        );
     }
 
     public function test_returns_success_when_no_documents(): void
@@ -85,7 +100,9 @@ class PruneActivityLogCommandTest extends TestCase
             public function search(array $params): array
             {
                 return [
-                    'aggregations' => ['retention_buckets' => ['buckets' => [['key' => 30]]]],
+                    'aggregations' => ['retention_buckets' => ['buckets' => [
+                        ['key' => ['retention_days' => 30]],
+                    ]]],
                 ];
             }
 
@@ -99,6 +116,119 @@ class PruneActivityLogCommandTest extends TestCase
 
         $this->artisan('activity-logs:prune')
             ->assertExitCode(1)
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    public function test_returns_failure_when_retention_search_times_out(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    'timed_out'    => true,
+                    'aggregations' => ['retention_buckets' => ['buckets' => []]],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to fetch retention_days values');
+    }
+
+    public function test_returns_failure_when_retention_search_has_failed_shards(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    '_shards'      => ['failed' => 1],
+                    'aggregations' => ['retention_buckets' => ['buckets' => []]],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to fetch retention_days values');
+    }
+
+    public function test_returns_failure_when_delete_by_query_times_out(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    'aggregations' => ['retention_buckets' => ['buckets' => [
+                        ['key' => ['retention_days' => 30]],
+                    ]]],
+                ];
+            }
+
+            public function deleteByQuery(array $params): array
+            {
+                return ['timed_out' => true, 'deleted' => 4];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    public function test_returns_failure_when_delete_by_query_returns_failures(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    'aggregations' => ['retention_buckets' => ['buckets' => [
+                        ['key' => ['retention_days' => 30]],
+                    ]]],
+                ];
+            }
+
+            public function deleteByQuery(array $params): array
+            {
+                return ['deleted' => 4, 'failures' => [['cause' => ['reason' => 'shard failed']]]];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertFailed()
+            ->expectsOutputToContain('Failed to prune documents with retention_days=30');
+    }
+
+    public function test_returns_failure_when_delete_by_query_has_version_conflicts(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient {
+            public function search(array $params): array
+            {
+                return [
+                    'aggregations' => ['retention_buckets' => ['buckets' => [
+                        ['key' => ['retention_days' => 30]],
+                    ]]],
+                ];
+            }
+
+            public function deleteByQuery(array $params): array
+            {
+                return ['deleted' => 4, 'version_conflicts' => 1];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('activity-logs:prune')
+            ->assertFailed()
             ->expectsOutputToContain('Failed to prune documents with retention_days=30');
     }
 }

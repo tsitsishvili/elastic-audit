@@ -34,6 +34,11 @@ class HttpLogMappingTest extends TestCase
         }
     }
 
+    public function test_user_id_is_mapped_as_keyword(): void
+    {
+        $this->assertSame('keyword', HttpLogMapping::get()['properties']['user_id']['type']);
+    }
+
     public function test_get_contains_request_and_response_fields(): void
     {
         $props = HttpLogMapping::get()['properties'];

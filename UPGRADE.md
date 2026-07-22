@@ -5,6 +5,154 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 3.2.0
+
+### High impact: review HTTP body capture and redaction defaults
+
+Bodies that do not decode to a JSON or form key/value structure (for example XML/SOAP, plain text, and scalar JSON)
+are no longer stored as raw previews by default. Because the package cannot redact them by field name,
+`HTTP_LOGS_UNDECODABLE_BODY_MODE=metadata` stores only redacted headers and a `sha256:` hash of the raw body. Set the
+mode to `preview` only for providers whose undecodable bodies are known to contain no secrets; it restores clear-text
+storage.
+
+Capture is also bounded by `HTTP_LOGS_BODY_CAPTURE_MAX_BYTES` (default 1 MB). Larger bodies are captured headers-only
+without being decoded or hashed in memory. Empty, binary, streamed, unreadable, and multipart bodies likewise remain
+headers-only. UTF-8 previews and truncation no longer split a multibyte character.
+
+**What you need to do:** publish or add both new settings, review integrations that depend on XML/plain-text previews,
+and run the health command after deployment:
+
+```dotenv
+HTTP_LOGS_BODY_CAPTURE_MAX_BYTES=1048576
+HTTP_LOGS_UNDECODABLE_BODY_MODE=metadata
+```
+
+### Medium impact: successful callback capture runs after the response
+
+`IncomingHttpLogMiddleware` now queues successful callbacks from its `terminate()` method after the response is sent.
+Failed callbacks are still captured inline so exception class, sanitized message, and Symfony HTTP status are
+preserved. Logging failures cannot replace a successful callback response or the handler's original exception.
+
+Laravel's HTTP kernel calls terminable middleware automatically. Direct middleware unit tests that previously expected
+a job immediately after `handle()` must call `terminate($request, $response)` before asserting dispatch.
+
+### Medium impact: activity events wait for database commit
+
+Single and batch activity jobs now implement Laravel's after-commit queue contract. An event emitted inside a database
+transaction is dispatched only when that transaction commits; a rollback intentionally produces no activity document.
+If an application uses activity logs as attempted-operation records, emit an explicit failure event outside the rolled
+back transaction instead.
+
+`ActivityLoggable` also suppresses the ordinary deleted event during a force delete, so a force-deleted model produces
+one `{entity}.force_deleted` record instead of two records. Exceptions from custom actor/entity/metadata hooks are
+isolated and can no longer prevent model persistence.
+
+### Medium impact: Elasticsearch document ids are now raw ULIDs
+
+HTTP and activity indexers now use each DTO's `event_id` ULID directly as Elasticsearch `_id`, replacing its SHA-256
+hash. Queue retries remain idempotent, and separate HTTP calls sharing one correlation `request_id` remain distinct.
+Update external tools that construct a hashed `_id`; querying by `event_id` continues to work across old and new
+documents. Before deploying this change, drain or pause workers running the old package version: an ambiguous job first
+indexed with the old hashed `_id` and replayed after the upgrade can otherwise create a second document under the raw
+ULID `_id`.
+
+### Medium impact: canonical index names and safer topology defaults
+
+Newly published subsystem configs leave `index_alias` and `index_alias_write` as `null`. Package registration derives
+them from one canonical `log_elasticsearch.index_prefix`; the lifecycle policy name is derived the same way when null.
+Existing published non-empty values remain explicit overrides. The `APP_NAME` fallback is now slugged (`Example App`
+becomes `example_app`), while invalid derived or explicitly configured alias names are rejected by health and
+create-index commands.
+
+The default replica count changes from `0` to `1` for new configurations. Keep or set
+`LOG_ELASTICSEARCH_REPLICAS=0` only for an intentional single-node cluster. Re-running a create-index command with an
+existing write alias now uses Elasticsearch rollover instead of manually moving the alias.
+
+**What you need to do:** compare published config with the new defaults. Set existing aliases/policy to `null` if they
+should follow a changed shared prefix, choose the replica count for the actual cluster topology, then run:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
+```
+
+The plain health command validates enabled subsystems. Use `--all` only when aliases for disabled subsystems have also
+been provisioned and should be checked.
+
+### Low impact: sanitization and retention failures are stricter
+
+Stored URLs now remove userinfo, query, and fragment components. URL-valued response headers and exception messages are
+sanitized for URL secrets and common credential key/value forms, and diagnostic messages are capped at 2048 bytes.
+Sensitive activity changes keep their `{old, new}` structure with both values redacted; malformed legacy diffs render
+defensively in the dashboard. Dashboard failures show a generic message while the real Elasticsearch exception goes to
+the application log.
+
+Prune commands now composite-page all retention values and fail on timed-out searches, failed shards, version
+conflicts, or partial delete failures. Treat a new non-zero scheduler/deploy result as incomplete retention work that
+needs investigation, not as an empty data set.
+
+### Low impact: dependency and distribution metadata are stricter
+
+The package now declares `guzzlehttp/promises` and `psr/http-message` directly, requires
+`guzzlehttp/guzzle ^7.15.1`, and drops the unused direct `guzzlehttp/psr7` requirement. Publishable `App\Enums`
+templates moved outside the package PSR-4 source tree; the `vendor:publish` destination is unchanged. If the consuming
+application locks an older Guzzle release, update dependencies while installing v4. CI now validates optimized strict
+PSR-4 loading, PHP syntax, runtime advisories, and real Elasticsearch 8/9 operations.
+
+### High impact: user and actor ids now support strings and UUIDs
+
+`HttpLogContext::$userId` and `ActivityLogContext::$actorId` now accept `int|string|null`. The corresponding data DTOs
+preserve the supplied PHP value, including UUIDs and other string identifiers. `ActivityLoggable` also preserves string
+values returned by `Auth::id()` or an `activityActor()` override instead of discarding them.
+
+Elasticsearch stores HTTP `user_id` and activity `actor.id` as keyword strings. Their mappings changed from `long` to
+`keyword`, which Elasticsearch cannot apply to an existing field in place. The HTTP and activity document schema
+versions are now 4 and 3 respectively.
+
+**What you need to do:** before resuming queue workers or emitting string/UUID ids, create a new physical index for
+each enabled subsystem so its write alias targets the new mapping:
+
+```bash
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
+```
+
+Run only the create-index commands for enabled subsystems. Existing physical indices remain attached to the read alias
+and keep their old numeric mapping. Reindex old documents and detach the old indices when all queries must see one
+uniform field type. In particular, an activity dashboard UUID `actor_id` filter can fail or return partial results while
+the read alias spans both the old `long` mapping and the new `keyword` mapping.
+
+### Medium impact: retention defaults are configurable and validated
+
+`HttpLogContext::forEntity()` and `ActivityLogContext::forActor()` now read `http_logs.retention_days` and
+`activity_logs.retention_days` when no explicit value is supplied. Both defaults remain `360`. Finite values are now
+validated against the Elasticsearch `short` mapping range (`1`–`32767`) instead of accepting values that cannot be
+indexed safely.
+
+The new `HTTP_LOGS_RETAIN_FOREVER` and `ACTIVITY_LOGS_RETAIN_FOREVER` settings make new documents permanent by default.
+Individual contexts can pass `retainForever: true`; an explicit `retentionDays` overrides a permanent subsystem default,
+but passing both options on the same context is invalid. Permanent documents store a null `retention_days` and are
+ignored by prune commands.
+
+ILM retention is independent. To keep permanent documents after rollover, set
+`LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=false` and rerun:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan elastic-audit:health
+```
+
+Disabling only the delete phase preserves rollover. Existing documents are not rewritten; pause pruning and migrate
+their numeric `retention_days` values if historical data must also become permanent.
+
+### Low impact: dashboard assets use same-origin URLs
+
+Package-served CSS and JavaScript URLs are now root-relative. This prevents mixed-content failures when Laravel runs
+behind a TLS-terminating proxy that does not forward the original request scheme. No application change is required.
+
 ## Upgrading from 3.1.1
 
 ### Low impact: agent resources are available

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
+use GuzzleHttp\Psr7\FnStream;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -256,6 +258,20 @@ class HttpLogClientVerbsTest extends TestCase
         });
     }
 
+    public function test_stored_url_removes_userinfo_query_and_fragment(): void
+    {
+        Bus::fake();
+        Http::fake(['*' => Http::response([], 200)]);
+
+        HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $this->context)
+            ->get('https://user:password@api.example/orders?api_key=secret#fragment');
+
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->httpUrl === 'https://api.example/orders',
+        );
+    }
+
     public function test_4xx_response_marks_success_as_false(): void
     {
         Bus::fake();
@@ -351,6 +367,96 @@ class HttpLogClientVerbsTest extends TestCase
             ->post('https://api.example/orders', []);
 
         Bus::assertDispatched(LogHttpRequestJob::class);
+    }
+
+    public function test_retries_share_one_sampling_decision(): void
+    {
+        config(['http_logs.sample_rate' => 0.5]);
+        Bus::fake();
+        Http::fakeSequence()->push([], 500)->push([], 200);
+        mt_srand(1); // First roll captures; the second roll would skip.
+
+        try {
+            $response = HttpLog::make(
+                TestProvider::Delivery,
+                TestEventType::DeliveryOrderCreate,
+                $this->context,
+            )->retry(2, 0)->get('https://api.example/retry');
+        } finally {
+            mt_srand();
+        }
+
+        $this->assertSame(200, $response->status());
+        Bus::assertDispatchedTimes(LogHttpRequestJob::class, 2);
+    }
+
+    public function test_oversized_response_body_is_captured_headers_only(): void
+    {
+        config(['http_logs.body_capture_max_bytes' => 64]);
+        Bus::fake();
+        Http::fake([
+            'https://api.example/*' => Http::response(
+                json_encode(['data' => str_repeat('a', 500)]),
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $this->context)
+            ->get('https://api.example/orders');
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->response->body === null
+                && $job->data->response->bodyPreview === null
+                && $job->data->response->bodyHash === null
+                && $job->data->response->headers !== [];
+        });
+    }
+
+    public function test_oversized_request_body_is_captured_headers_only(): void
+    {
+        config(['http_logs.body_capture_max_bytes' => 64]);
+        Bus::fake();
+        Http::fake(['https://api.example/*' => Http::response([], 200)]);
+
+        HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $this->context)
+            ->post('https://api.example/orders', ['data' => str_repeat('a', 500)]);
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
+            return $job->data->request->body === null
+                && $job->data->request->bodyPreview === null
+                && $job->data->request->bodyHash === null;
+        });
+    }
+
+    public function test_unknown_size_stream_reads_at_most_capture_cap_plus_one_byte(): void
+    {
+        config(['http_logs.body_capture_max_bytes' => 64]);
+        Bus::fake();
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $base        = Utils::streamFor(str_repeat('a', 500));
+        $readLengths = [];
+        $stream      = FnStream::decorate($base, [
+            'getSize' => static fn (): ?int => null,
+            'read'    => function (int $length) use ($base, &$readLengths): string {
+                $readLengths[] = $length;
+
+                return $base->read($length);
+            },
+        ]);
+
+        HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $this->context)
+            ->withBody($stream)
+            ->post('https://api.example/orders');
+
+        $this->assertNotEmpty($readLengths);
+        $this->assertLessThanOrEqual(65, max($readLengths));
+        Bus::assertDispatched(
+            LogHttpRequestJob::class,
+            fn (LogHttpRequestJob $job): bool => $job->data->request->body === null
+                && $job->data->request->bodyHash === null,
+        );
     }
 
     public function test_logging_exception_does_not_propagate_to_caller(): void

@@ -132,6 +132,21 @@ class ActivityLoggableTraitTest extends TestCase
         });
     }
 
+    public function test_authenticated_uuid_actor_id_is_preserved(): void
+    {
+        Bus::fake();
+
+        Auth::shouldReceive('check')->andReturn(true);
+        Auth::shouldReceive('id')->andReturn('550e8400-e29b-41d4-a716-446655440000');
+
+        TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            return $job->data->actorType === 'user'
+                && $job->data->actorId === '550e8400-e29b-41d4-a716-446655440000';
+        });
+    }
+
     public function test_actor_type_is_system_when_not_authenticated(): void
     {
         Bus::fake();
@@ -144,6 +159,19 @@ class ActivityLoggableTraitTest extends TestCase
             return $job->data->actorType === 'system'
                 && $job->data->actorId === null;
         });
+    }
+
+    public function test_automatic_activity_can_use_permanent_default_retention(): void
+    {
+        config(['activity_logs.retain_forever' => true]);
+        Bus::fake();
+
+        TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        Bus::assertDispatched(
+            LogActivityJob::class,
+            fn (LogActivityJob $job): bool => $job->data->retentionDays === null,
+        );
     }
 
     public function test_activity_log_except_excludes_fields(): void
@@ -274,6 +302,8 @@ class ActivityLoggableTraitTest extends TestCase
         $order->forceDelete();
 
         Bus::assertDispatched(LogActivityJob::class, fn (LogActivityJob $job) => $job->data->action === 'order.force_deleted');
+        Bus::assertNotDispatched(LogActivityJob::class, fn (LogActivityJob $job) => $job->data->action === 'order.deleted');
+        Bus::assertDispatchedTimes(LogActivityJob::class, 1);
     }
 
     public function test_model_can_override_activity_actor_and_entity_id(): void
@@ -288,7 +318,7 @@ class ActivityLoggableTraitTest extends TestCase
 
             protected function activityActor(): array
             {
-                return ['job', 99];
+                return ['job', 'worker-a'];
             }
 
             protected function activityEntityId(): string
@@ -301,8 +331,100 @@ class ActivityLoggableTraitTest extends TestCase
 
         Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
             return $job->data->actorType === 'job'
-                && $job->data->actorId === 99
+                && $job->data->actorId === 'worker-a'
                 && str_starts_with($job->data->entityId, 'custom-');
         });
+    }
+
+    public function test_capture_failure_does_not_break_model_persistence(): void
+    {
+        config(['activity_logs.retention_days' => 0]);
+        Bus::fake();
+
+        $order = TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        $this->assertTrue($order->exists);
+        Bus::assertNotDispatched(LogActivityJob::class);
+    }
+
+    public function test_fractional_actor_id_is_preserved_as_string_not_truncated(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+
+            protected $table = 'orders';
+
+            protected $fillable = ['status'];
+
+            public $timestamps = false;
+
+            protected function activityActor(): array
+            {
+                return ['user', '42.5'];
+            }
+        };
+
+        $model->fill(['status' => 'pending'])->save();
+
+        Bus::assertDispatched(
+            LogActivityJob::class,
+            fn (LogActivityJob $job): bool => $job->data->actorId === '42.5',
+        );
+    }
+
+    public function test_numeric_string_actor_id_preserves_public_identifier_semantics(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+
+            protected $table = 'orders';
+
+            protected $fillable = ['status'];
+
+            public $timestamps = false;
+
+            protected function activityActor(): array
+            {
+                return ['user', '77'];
+            }
+        };
+
+        $model->fill(['status' => 'pending'])->save();
+
+        Bus::assertDispatched(
+            LogActivityJob::class,
+            fn (LogActivityJob $job): bool => $job->data->actorId === '77',
+        );
+    }
+
+    public function test_blank_actor_id_is_normalized_to_null(): void
+    {
+        Bus::fake();
+
+        $model = new class extends Model {
+            use ActivityLoggable;
+
+            protected $table = 'orders';
+
+            protected $fillable = ['status'];
+
+            public $timestamps = false;
+
+            protected function activityActor(): array
+            {
+                return ['user', '   '];
+            }
+        };
+
+        $model->fill(['status' => 'pending'])->save();
+
+        Bus::assertDispatched(
+            LogActivityJob::class,
+            fn (LogActivityJob $job): bool => $job->data->actorId === null,
+        );
     }
 }
