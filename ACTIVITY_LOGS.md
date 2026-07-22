@@ -73,7 +73,8 @@ return [
         'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
         'batch_timeout' => env('ACTIVITY_LOGS_BATCH_JOB_TIMEOUT', 60),
     ],
-    'retention_days'    => 360,
+    'retention_days'    => env('ACTIVITY_LOGS_RETENTION_DAYS', 360),
+    'retain_forever'    => env('ACTIVITY_LOGS_RETAIN_FOREVER', false),
 
     'index_alias'       => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs',
     'index_alias_write' => strtolower(env('LOG_ELASTICSEARCH_INDEX_PREFIX', env('APP_NAME'))) . '_activity_logs_write',
@@ -113,6 +114,8 @@ Relevant environment variables:
 | `ACTIVITY_LOGS_JOB_BACKOFF`       | `10,30,120` | Comma-separated retry backoff seconds for activity log jobs                                       |
 | `ACTIVITY_LOGS_JOB_TIMEOUT`       | `30`        | Timeout in seconds for single activity log jobs                                                   |
 | `ACTIVITY_LOGS_BATCH_JOB_TIMEOUT` | `60`        | Timeout in seconds for activity bulk replay jobs                                                  |
+| `ACTIVITY_LOGS_RETENTION_DAYS`    | `360`       | Default finite retention; must be an integer from `1` through `32767`                             |
+| `ACTIVITY_LOGS_RETAIN_FOREVER`    | `false`     | Make permanent retention the default; finite context overrides remain available                  |
 | `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`      | Register the dashboard routes                                                                     |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`    | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
 | `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity`  | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
@@ -188,7 +191,10 @@ ActivityLog::record(
 enum's `->value` if you keep one. `actorType` is a free string — conventionally `user`, `system`, `cron`, or
 `job`. `actorId` accepts `int|string|null`; the DTO preserves the supplied PHP value and the indexer stores every
 non-null actor id as a keyword string. `retentionDays` defaults to `360` and can be overridden per call via
-`ActivityLogContext::forActor(..., retentionDays: 90)`.
+`ActivityLogContext::forActor(..., retentionDays: 90)`. Use
+`ActivityLogContext::forActor(..., retainForever: true)` for a permanent individual event, or set
+`ACTIVITY_LOGS_RETAIN_FOREVER=true` to make that the default. An explicit `retentionDays` overrides the permanent
+default; passing both options on one context is invalid.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 
@@ -341,9 +347,14 @@ php artisan vendor:publish --tag=elastic-audit-assets --force
 php artisan activity-logs:prune
 ```
 
-Deletes documents older than their own `retention_days` value. In v3, ILM is the preferred default retention path for
-new indexes. Use pruning when ILM is disabled, when different actions need different lifetimes, or as a manual cleanup
-fallback.
+Deletes documents older than their own `retention_days` value. Permanent documents store null, so this command ignores
+them. ILM is independent: when `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=true`, it deletes whole indexes without
+inspecting document retention.
+
+To guarantee permanent activity storage, set both `ACTIVITY_LOGS_RETAIN_FOREVER=true` and
+`LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=false`, then rerun `php artisan elastic-audit:lifecycle-policy`. The health
+command rejects a permanent subsystem default that conflicts with enabled index deletion. These defaults affect only
+new documents; migrate historical numeric `retention_days` values before resuming pruning if they must also be kept.
 
 The command exits with a non-zero status when Elasticsearch cannot fetch retention buckets or a `delete_by_query`
 operation fails. This is intentional so CI, cron, and monitoring can detect retention failures.

@@ -107,6 +107,25 @@ class ActivityLogIndexerTest extends TestCase
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $captured['actor']['id']);
     }
 
+    public function test_permanent_document_has_no_indexed_retention_value(): void
+    {
+        $captured = null;
+
+        $this->client
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(function (array $params) use (&$captured): bool {
+                $captured = $params['body'];
+
+                return true;
+            }));
+
+        $this->indexer->index($this->makeData(retainForever: true));
+
+        $this->assertArrayHasKey('retention_days', $captured);
+        $this->assertNull($captured['retention_days']);
+    }
+
     public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
     {
         $captured = null;
@@ -125,7 +144,7 @@ class ActivityLogIndexerTest extends TestCase
         $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
     }
 
-    private function makeData(int|string|null $actorId = 42): ActivityLogData
+    private function makeData(int|string|null $actorId = 42, bool $retainForever = false): ActivityLogData
     {
         $context = ActivityLogContext::forActor(
             actorType: 'user',
@@ -133,6 +152,7 @@ class ActivityLogIndexerTest extends TestCase
             entityType: 'order',
             entityId: '7',
             requestId: 'req-123',
+            retainForever: $retainForever,
         );
 
         return ActivityLogData::make(

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Permanent document and index retention. HTTP and activity logs can default to `retain_forever`, individual contexts
+  accept `retainForever: true`, and `log_elasticsearch.lifecycle.delete_enabled=false` keeps ILM rollover without a
+  delete phase. Health checks reject permanent subsystem defaults that conflict with whole-index deletion.
+
 ### Changed
 
 - HTTP `userId` and activity `actorId` now accept `int|string|null`, including UUIDs and other string identifiers.
@@ -14,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Elasticsearch maps HTTP `user_id` and activity `actor.id` as `keyword` and indexes every non-null id as a string.
   HTTP and activity schema versions are now 4 and 3. Existing installations must run the relevant create-index command
   before logging string ids; see the [Upgrade Guide](UPGRADE.md#upgrading-from-320).
+- Context factories now read validated default retention from `http_logs.retention_days` and
+  `activity_logs.retention_days`. Finite values must be between `1` and `32767`.
+
+### Fixed
+
+- Dashboard CSS and JavaScript assets now use same-origin relative URLs, preventing mixed-content failures when Laravel
+  runs behind a TLS-terminating reverse proxy.
 
 ## [3.2.0] - 2026-07-16
 

@@ -10,6 +10,7 @@ use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
+use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 use Throwable;
 
 class ElasticAuditHealthCommand extends Command
@@ -90,6 +91,7 @@ class ElasticAuditHealthCommand extends Command
         }
 
         $failed = $this->checkJobOptions($label, $configKey) || $failed;
+        $failed = $this->checkRetentionDays($label, $configKey) || $failed;
 
         foreach (['read' => $readAlias, 'write' => $writeAlias] as $kind => $alias) {
             if ($alias === '') {
@@ -112,6 +114,43 @@ class ElasticAuditHealthCommand extends Command
         }
 
         return $failed;
+    }
+
+    private function checkRetentionDays(string $label, string $configKey): bool
+    {
+        $retainForever = config("{$configKey}.retain_forever", false);
+
+        if (! is_bool($retainForever)) {
+            $this->error("{$label}: retain_forever must be a boolean.");
+
+            return true;
+        }
+
+        if ($retainForever) {
+            $this->info("{$label}: default document retention is forever.");
+
+            return false;
+        }
+
+        $retentionDays = config("{$configKey}.retention_days");
+        $validatedDays = $this->validateInteger($retentionDays);
+
+        if ($validatedDays === false
+            || $validatedDays < RetentionDays::MIN
+            || $validatedDays > RetentionDays::MAX) {
+            $this->error(sprintf(
+                '%s: retention_days must be an integer between %d and %d.',
+                $label,
+                RetentionDays::MIN,
+                RetentionDays::MAX,
+            ));
+
+            return true;
+        }
+
+        $this->info("{$label}: retention_days={$retentionDays}.");
+
+        return false;
     }
 
     private function checkJobOptions(string $label, string $configKey): bool
@@ -160,6 +199,15 @@ class ElasticAuditHealthCommand extends Command
         return $failed;
     }
 
+    private function validateInteger(mixed $value): int|false
+    {
+        if (! is_int($value) && ! is_string($value)) {
+            return false;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_INT);
+    }
+
     private function checkHttpEnums(bool $enabled): bool
     {
         if (! $enabled && ! $this->option('all')) {
@@ -206,7 +254,7 @@ class ElasticAuditHealthCommand extends Command
         $failed = false;
 
         if (! ElasticsearchLifecycle::enabled()) {
-            $this->line('Lifecycle disabled; prune commands are the fallback/manual retention path.');
+            $this->line('Lifecycle disabled; indexes are not deleted by this package, and prune commands enforce finite document retention.');
 
             return false;
         }
@@ -224,10 +272,31 @@ class ElasticAuditHealthCommand extends Command
             $failed = true;
         }
 
-        $deleteAfter = config('log_elasticsearch.lifecycle.delete_after');
-        if (! is_string($deleteAfter) || $deleteAfter === '') {
-            $this->error('Lifecycle enabled but log_elasticsearch.lifecycle.delete_after is empty; configure ILM deletion or schedule prune commands as fallback.');
+        $deleteEnabled = config('log_elasticsearch.lifecycle.delete_enabled', true);
+
+        if (! is_bool($deleteEnabled)) {
+            $this->error('Lifecycle enabled but log_elasticsearch.lifecycle.delete_enabled is not a boolean.');
             $failed = true;
+        } elseif (! $deleteEnabled) {
+            $this->info('Lifecycle delete phase disabled; rolled-over indexes are retained forever.');
+        } else {
+            $deleteAfter = config('log_elasticsearch.lifecycle.delete_after');
+
+            if (! is_string($deleteAfter) || $deleteAfter === '') {
+                $this->error('Lifecycle index deletion is enabled but log_elasticsearch.lifecycle.delete_after is empty.');
+                $failed = true;
+            } else {
+                $this->info("Lifecycle index deletion enabled: delete_after={$deleteAfter}.");
+            }
+
+            foreach (['HTTP logs' => 'http_logs', 'Activity logs' => 'activity_logs'] as $label => $configKey) {
+                $checked = (bool) config("{$configKey}.enabled", false) || $this->option('all');
+
+                if ($checked && config("{$configKey}.retain_forever", false) === true) {
+                    $this->error("{$label}: retain_forever cannot guarantee permanent storage while lifecycle index deletion is enabled.");
+                    $failed = true;
+                }
+            }
         }
 
         return $failed;

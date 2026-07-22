@@ -92,6 +92,37 @@ class ElasticAuditOperationsCommandTest extends TestCase
             ->assertFailed();
     }
 
+    public function test_health_command_accepts_permanent_retention_when_index_deletion_is_disabled(): void
+    {
+        config([
+            'activity_logs.retain_forever'               => true,
+            'log_elasticsearch.lifecycle.enabled'        => true,
+            'log_elasticsearch.lifecycle.delete_enabled' => false,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('default document retention is forever')
+            ->expectsOutputToContain('rolled-over indexes are retained forever')
+            ->assertSuccessful();
+    }
+
+    public function test_health_command_rejects_permanent_default_while_index_deletion_is_enabled(): void
+    {
+        config([
+            'activity_logs.retain_forever'               => true,
+            'log_elasticsearch.lifecycle.enabled'        => true,
+            'log_elasticsearch.lifecycle.delete_enabled' => true,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('cannot guarantee permanent storage')
+            ->assertFailed();
+    }
+
     public function test_lifecycle_policy_command_puts_configured_policy(): void
     {
         $fake = new class extends FakeLogElasticsearchClient {
@@ -111,6 +142,42 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
         $this->assertSame(config('log_elasticsearch.lifecycle.policy_name'), $fake->policyName);
         $this->assertArrayHasKey('phases', $fake->policy);
+        $this->assertArrayHasKey('delete', $fake->policy['phases']);
+    }
+
+    public function test_lifecycle_policy_command_fails_when_enabled_delete_phase_has_no_age(): void
+    {
+        config([
+            'log_elasticsearch.lifecycle.delete_enabled' => true,
+            'log_elasticsearch.lifecycle.delete_after'   => null,
+        ]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+
+        $this->artisan('elastic-audit:lifecycle-policy')
+            ->expectsOutputToContain('delete_after must be a non-empty string')
+            ->assertFailed();
+    }
+
+    public function test_lifecycle_policy_omits_delete_phase_when_index_deletion_is_disabled(): void
+    {
+        config(['log_elasticsearch.lifecycle.delete_enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient {
+            public array $policy = [];
+
+            public function putLifecyclePolicy(string $name, array $policy): void
+            {
+                $this->policy = $policy;
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:lifecycle-policy')->assertSuccessful();
+
+        $this->assertArrayHasKey('hot', $fake->policy['phases']);
+        $this->assertArrayNotHasKey('delete', $fake->policy['phases']);
     }
 
     public function test_http_rollover_command_uses_write_alias_and_conditions(): void

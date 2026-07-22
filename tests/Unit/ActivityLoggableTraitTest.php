@@ -161,6 +161,19 @@ class ActivityLoggableTraitTest extends TestCase
         });
     }
 
+    public function test_automatic_activity_can_use_permanent_default_retention(): void
+    {
+        config(['activity_logs.retain_forever' => true]);
+        Bus::fake();
+
+        TraitTestOrder::create(['status' => 'pending', 'amount' => 100]);
+
+        Bus::assertDispatched(
+            LogActivityJob::class,
+            fn (LogActivityJob $job): bool => $job->data->retentionDays === null,
+        );
+    }
+
     public function test_activity_log_except_excludes_fields(): void
     {
         Bus::fake();

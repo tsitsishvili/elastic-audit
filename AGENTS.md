@@ -39,6 +39,11 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
   exception, because allowed values are stored in clear text.
+- Default document retention comes from each subsystem's `retention_days` (both 360) / `retain_forever` config. Pass
+  `retentionDays` for a finite override or `retainForever: true` for a permanent individual event; never pass both.
+  Permanent documents have a null `retention_days` and are ignored by prune commands. ILM independently deletes whole
+  indexes, so permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` and an updated policy.
+  Finite values must be `1`–`32767`.
 - After infrastructure or config changes, run `php artisan elastic-audit:health --all`. Install the lifecycle policy
   before creating indexes on a fresh environment.
 

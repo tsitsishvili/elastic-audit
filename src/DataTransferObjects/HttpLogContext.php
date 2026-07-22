@@ -6,6 +6,8 @@ namespace Tsitsishvili\ElasticAudit\DataTransferObjects;
 
 use Illuminate\Support\Str;
 use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
+use Tsitsishvili\ElasticAudit\Support\PackageConfig;
+use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 final readonly class HttpLogContext
 {
@@ -15,22 +17,27 @@ final readonly class HttpLogContext
         public ?string $externalId,
         public int|string|null $userId,
         public string $requestId,
-        public int $retentionDays,
+        public ?int $retentionDays,
         public ?string $traceId = null,
         public ?string $spanId = null,
         public ?string $traceParent = null,
-    ) {}
+    ) {
+        if ($this->retentionDays !== null) {
+            RetentionDays::validate($this->retentionDays);
+        }
+    }
 
     public static function forEntity(
         EntityTypeContract $entityType,
         string $entityId,
         ?string $externalId = null,
         int|string|null $userId = null,
-        int $retentionDays = 360,
+        ?int $retentionDays = null,
         ?string $requestId = null,
         ?string $traceId = null,
         ?string $spanId = null,
         ?string $traceParent = null,
+        bool $retainForever = false,
     ): self {
         return new self(
             entityType: $entityType,
@@ -38,7 +45,12 @@ final readonly class HttpLogContext
             externalId: $externalId,
             userId: $userId,
             requestId: $requestId ?? (string) Str::ulid(),
-            retentionDays: $retentionDays,
+            retentionDays: RetentionDays::resolve(
+                days: $retentionDays,
+                retainForever: $retainForever,
+                configuredDays: PackageConfig::get('http_logs.retention_days', 360),
+                configuredRetainForever: (bool) PackageConfig::get('http_logs.retain_forever', false),
+            ),
             traceId: $traceId,
             spanId: $spanId,
             traceParent: $traceParent,

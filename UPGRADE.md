@@ -31,6 +31,34 @@ and keep their old numeric mapping. Reindex old documents and detach the old ind
 uniform field type. In particular, an activity dashboard UUID `actor_id` filter can fail or return partial results while
 the read alias spans both the old `long` mapping and the new `keyword` mapping.
 
+### Medium impact: retention defaults are configurable and validated
+
+`HttpLogContext::forEntity()` and `ActivityLogContext::forActor()` now read `http_logs.retention_days` and
+`activity_logs.retention_days` when no explicit value is supplied. Both defaults remain `360`. Finite values are now
+validated against the Elasticsearch `short` mapping range (`1`–`32767`) instead of accepting values that cannot be
+indexed safely.
+
+The new `HTTP_LOGS_RETAIN_FOREVER` and `ACTIVITY_LOGS_RETAIN_FOREVER` settings make new documents permanent by default.
+Individual contexts can pass `retainForever: true`; an explicit `retentionDays` overrides a permanent subsystem default,
+but passing both options on the same context is invalid. Permanent documents store a null `retention_days` and are
+ignored by prune commands.
+
+ILM retention is independent. To keep permanent documents after rollover, set
+`LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=false` and rerun:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan elastic-audit:health --all
+```
+
+Disabling only the delete phase preserves rollover. Existing documents are not rewritten; pause pruning and migrate
+their numeric `retention_days` values if historical data must also become permanent.
+
+### Low impact: dashboard assets use same-origin URLs
+
+Package-served CSS and JavaScript URLs are now root-relative. This prevents mixed-content failures when Laravel runs
+behind a TLS-terminating proxy that does not forward the original request scheme. No application change is required.
+
 ## Upgrading from 3.1.1
 
 ### Low impact: agent resources are available

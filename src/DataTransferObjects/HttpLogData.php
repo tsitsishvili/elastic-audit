@@ -34,7 +34,7 @@ final readonly class HttpLogData
         public int|string|null $userId,
         public int $attempt,
         public bool $success,
-        public int $retentionDays,
+        public ?int $retentionDays,
         public RedactedHttpPayload $request,
         public RedactedHttpPayload $response,
         public ?string $errorClass,

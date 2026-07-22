@@ -9,6 +9,11 @@ return [
         'timeout'       => env('HTTP_LOGS_JOB_TIMEOUT', 30),
         'batch_timeout' => env('HTTP_LOGS_BATCH_JOB_TIMEOUT', 60),
     ],
+    // Default per-document retention, used when a log context does not set one
+    // explicitly. retain_forever takes precedence over this default. The prune
+    // command ignores permanent documents; ILM deletion still applies per index.
+    'retention_days'     => env('HTTP_LOGS_RETENTION_DAYS', 360),
+    'retain_forever'     => env('HTTP_LOGS_RETAIN_FOREVER', false),
     'sample_rate'        => env('HTTP_LOGS_SAMPLE_RATE', 1.0),
     'body_preview_bytes' => env('HTTP_LOGS_BODY_PREVIEW_BYTES', 4096),
     'body_max_bytes'     => env('HTTP_LOGS_BODY_MAX_BYTES', 32768),

@@ -107,6 +107,7 @@ class ActivityDashboardTest extends TestCase
             ->assertSee('Activity trail')
             ->assertSee('Activity over time')
             ->assertSee('id="activityChart"', false)
+            ->assertSee('src="/vendor/elastic-audit/chart-', false)
             ->assertSee('Interval')
             ->assertSee('Success rate')
             ->assertSee('80%');

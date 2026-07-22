@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
+use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 trait ActivityLoggable
 {
@@ -52,7 +53,12 @@ trait ActivityLoggable
             entityType: $entityType,
             entityId: $this->activityEntityId(),
             requestId: (string) Str::ulid(),
-            retentionDays: (int) config('activity_logs.retention_days', 360),
+            retentionDays: RetentionDays::resolve(
+                days: null,
+                retainForever: false,
+                configuredDays: config('activity_logs.retention_days', 360),
+                configuredRetainForever: (bool) config('activity_logs.retain_forever', false),
+            ),
             traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
         );
 

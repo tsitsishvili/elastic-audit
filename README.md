@@ -74,6 +74,10 @@ For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-reques
 [logging incoming callbacks](AUDIT_LOGS.md#logging-incoming-callbacks), and
 [recording activity](ACTIVITY_LOGS.md#manual-logging).
 
+Permanent retention is supported independently for documents and indexes. Use a subsystem's `retain_forever` setting
+or a context's `retainForever: true` for documents, and disable `log_elasticsearch.lifecycle.delete_enabled` to keep
+rolled-over indexes. See [Lifecycle, Rollover, and Health](AUDIT_LOGS.md#lifecycle-rollover-and-health).
+
 ## Requirements
 
 - PHP `^8.2`

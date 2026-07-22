@@ -19,6 +19,9 @@ logs and activity logs are independent subsystems with separate configuration, q
   exception because allowed values are stored in clear text.
 - After infrastructure or configuration changes, run `php artisan elastic-audit:health --all`. Install the lifecycle
   policy before creating HTTP or activity indexes on a fresh environment.
+- Finite `retentionDays` values must be `1`–`32767`; use `retainForever: true` for a permanent event and never pass both.
+  Permanent documents are ignored by prune commands, but permanent storage also requires
+  `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes independently.
 
 @boostsnippet('Outgoing audited request', 'php')
 $response = HttpLog::make(

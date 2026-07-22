@@ -68,9 +68,10 @@ class DashboardTest extends TestCase
 
         $this->get(route('http-logs.overview', [], false))
             ->assertOk()
-            ->assertSee('vendor/elastic-audit/styles-', false)
-            ->assertSee('vendor/elastic-audit/alpine-', false)
-            ->assertSee('vendor/elastic-audit/chart-', false)
+            ->assertSee('href="/vendor/elastic-audit/styles-', false)
+            ->assertSee('src="/vendor/elastic-audit/alpine-', false)
+            ->assertSee('src="/vendor/elastic-audit/chart-', false)
+            ->assertDontSee('http://localhost/vendor/elastic-audit/', false)
             ->assertDontSee('cdn.tailwindcss.com', false)
             ->assertDontSee('cdn.jsdelivr.net', false);
     }

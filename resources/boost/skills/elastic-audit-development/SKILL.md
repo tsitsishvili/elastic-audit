@@ -139,8 +139,12 @@ php artisan elastic-audit:health --all
 ```
 
 Run only the index command for enabled subsystems. Keep a worker running for `HTTP_LOGS_QUEUE` and
-`ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Configure dashboard authorization
-with `Dashboard::auth(...)` before exposing either dashboard outside `local`.
+`ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Default document retention comes
+from each subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays` for a finite override or
+`retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but
+permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes
+independently. Finite values must be `1`–`32767`. Configure dashboard authorization with `Dashboard::auth(...)` before
+exposing either dashboard outside `local`.
 
 ## Verify changes
 

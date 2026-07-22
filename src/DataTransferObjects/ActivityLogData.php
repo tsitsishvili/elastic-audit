@@ -23,7 +23,7 @@ final readonly class ActivityLogData
         public array $changes,
         public array $metadata,
         public bool $success,
-        public int $retentionDays,
+        public ?int $retentionDays,
         public ?string $errorClass,
         public ?string $errorMessage,
         public ?string $traceId = null,

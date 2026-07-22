@@ -109,6 +109,25 @@ class HttpLogIndexerTest extends TestCase
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $captured['user_id']);
     }
 
+    public function test_permanent_document_has_no_indexed_retention_value(): void
+    {
+        $captured = null;
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(function (array $params) use (&$captured): bool {
+                $captured = $params['body'];
+
+                return true;
+            }));
+
+        $this->indexer->index($this->makeLogData(retainForever: true));
+
+        $this->assertArrayHasKey('retention_days', $captured);
+        $this->assertNull($captured['retention_days']);
+    }
+
     public function test_bulk_indexes_multiple_documents_with_single_bulk_call(): void
     {
         $captured = null;
@@ -128,13 +147,17 @@ class HttpLogIndexerTest extends TestCase
         $this->assertSame(self::WRITE_ALIAS, $captured[0]['index']['_index']);
     }
 
-    private function makeLogData(bool $timedOut = false, int|string|null $userId = null): HttpLogData
-    {
+    private function makeLogData(
+        bool $timedOut = false,
+        int|string|null $userId = null,
+        bool $retainForever = false,
+    ): HttpLogData {
         $empty   = new RedactedHttpPayload([], null, null, null, false);
         $context = HttpLogContext::forEntity(
             entityType: TestEntityType::Order,
             entityId: '123',
             userId: $userId,
+            retainForever: $retainForever,
         );
 
         return HttpLogData::make(

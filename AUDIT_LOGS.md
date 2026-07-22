@@ -139,6 +139,8 @@ HTTP_LOGS_JOB_BACKOFF=10,30,120
 HTTP_LOGS_JOB_TIMEOUT=30
 HTTP_LOGS_BATCH_JOB_TIMEOUT=60
 HTTP_LOGS_SAMPLE_RATE=1.0
+HTTP_LOGS_RETENTION_DAYS=360
+HTTP_LOGS_RETAIN_FOREVER=false
 HTTP_LOGS_BODY_PREVIEW_BYTES=4096
 HTTP_LOGS_BODY_MAX_BYTES=32768
 HTTP_LOGS_PAYMENT_BODY_MODE=preview
@@ -151,6 +153,7 @@ LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=true
 LOG_ELASTICSEARCH_LIFECYCLE_POLICY=my_app_elastic_audit_policy
 LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE=30d
 LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE=50gb
+LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=true
 LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER=360d
 
 LOG_ELASTICSEARCH_HOST=localhost
@@ -171,6 +174,8 @@ LOG_ELASTICSEARCH_REPLICAS=0
 | `HTTP_LOGS_JOB_TIMEOUT`                     | Timeout in seconds for single HTTP log jobs.                                                                                       |
 | `HTTP_LOGS_BATCH_JOB_TIMEOUT`               | Timeout in seconds for HTTP bulk replay jobs.                                                                                      |
 | `HTTP_LOGS_SAMPLE_RATE`                     | Float `0.0`–`1.0`. `1.0` = log all, `0.0` = log none. Intermediate values sample randomly.                                         |
+| `HTTP_LOGS_RETENTION_DAYS`                  | Default finite document retention; must be an integer from `1` through `32767`.                                                    |
+| `HTTP_LOGS_RETAIN_FOREVER`                  | When `true`, HTTP documents default to permanent retention and are ignored by the prune command.                                  |
 | `HTTP_LOGS_BODY_PREVIEW_BYTES`              | Max bytes stored as sanitized body preview.                                                                                        |
 | `HTTP_LOGS_BODY_MAX_BYTES`                  | Max raw body size before truncation.                                                                                               |
 | `HTTP_LOGS_PAYMENT_BODY_MODE`               | Body handling mode for payment providers (`preview` or `metadata`).                                                                |
@@ -181,7 +186,8 @@ LOG_ELASTICSEARCH_REPLICAS=0
 | `LOG_ELASTICSEARCH_LIFECYCLE_POLICY`        | Shared ILM policy name for HTTP and activity log indexes.                                                                          |
 | `LOG_ELASTICSEARCH_ROLLOVER_MAX_AGE`        | Max index age condition used by rollover.                                                                                          |
 | `LOG_ELASTICSEARCH_ROLLOVER_MAX_SHARD_SIZE` | Max primary shard size condition used by rollover.                                                                                 |
-| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER`  | ILM delete phase age. Set empty only if prune commands are your retention fallback.                                                |
+| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED` | Include the ILM whole-index delete phase. Set to `false` to retain rolled-over indexes forever.                                   |
+| `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER`  | Whole-index ILM delete age; it does not enforce document `retention_days`.                                                         |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`:
 
@@ -203,6 +209,8 @@ my_app_http_logs_write
 | `job.timeout`               | `30`                       | Timeout in seconds for `LogHttpRequestJob`.                                                                                                                                             |
 | `job.batch_timeout`         | `60`                       | Timeout in seconds for `LogHttpRequestBatchJob`.                                                                                                                                        |
 | `sample_rate`               | `1.0`                      | Float between `0.0` and `1.0`. `1.0` logs every request, `0.0` logs none, intermediate values use probabilistic sampling (e.g. `0.1` logs ~10%). Controlled by `HTTP_LOGS_SAMPLE_RATE`. |
+| `retention_days`            | `360`                      | Integer `1`–`32767`; default finite document retention when the context does not set one.                                                                                               |
+| `retain_forever`            | `false`                    | Makes permanent retention the default. An explicit context `retentionDays` still opts that document into finite retention.                                                             |
 | `body_preview_bytes`        | `4096`                     | Maximum number of sanitized body bytes stored as preview.                                                                                                                               |
 | `body_max_bytes`            | `32768`                    | Maximum raw body size considered before truncation handling.                                                                                                                            |
 | `payment_body_mode`         | `preview`                  | Controls payment provider body handling.                                                                                                                                                |
@@ -238,7 +246,8 @@ my_app_http_logs_write
 | `lifecycle.policy_name`             | `{prefix}_elastic_audit_policy` | ILM policy name used by both HTTP and activity log indexes.                                                                |
 | `lifecycle.rollover_max_age`        | `30d`                           | Max index age condition passed to rollover.                                                                                |
 | `lifecycle.rollover_max_shard_size` | `50gb`                          | Max primary shard size condition passed to rollover.                                                                       |
-| `lifecycle.delete_after`            | `360d`                          | ILM delete phase age for index-level retention. Leave empty only when prune commands are the retention fallback.           |
+| `lifecycle.delete_enabled`          | `true`                          | Adds the ILM delete phase. Set to `false` to keep rollover active without deleting old indexes.                             |
+| `lifecycle.delete_after`            | `360d`                          | ILM delete phase age for whole-index retention; it does not inspect document `retention_days`.                              |
 
 ## Register Application Enums
 
@@ -335,7 +344,7 @@ data, and failure information.
 | `user_id`           | Optional integer, string, or UUID application user id, indexed as a keyword string.       |
 | `attempt`           | Queue/job attempt or request attempt value.                                               |
 | `success`           | Boolean success flag.                                                                     |
-| `retention_days`    | Retention window used by `http-logs:prune`.                                               |
+| `retention_days`    | Finite retention window used by `http-logs:prune`; null means permanent.                   |
 | `request`           | Sanitized request headers, body preview, body hash, and truncation flag.                  |
 | `response`          | Sanitized response headers, body preview, body hash, and truncation flag.                 |
 | `error.class`       | Exception class for failed outgoing calls or failed incoming callbacks when available.    |
@@ -381,8 +390,15 @@ php artisan http-logs:create-index
 `LOG_ELASTICSEARCH_LIFECYCLE_POLICY`. You may run it even while `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=false`; the command
 will warn, but still creates the policy so CI/deploy pipelines can prepare the cluster ahead of time. New indexes only
 receive ILM settings when `LOG_ELASTICSEARCH_LIFECYCLE_ENABLED=true` at `http-logs:create-index` /
-`activity-logs:create-index` time. Use prune commands as a fallback when ILM is disabled or when you need per-document
-retention based on `retention_days`.
+`activity-logs:create-index` time. When `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=true`, ILM deletes complete indexes
+according to `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER`; it never reads a document's `retention_days`. Schedule prune
+commands whenever finite per-document retention must be enforced.
+
+For permanent storage, set `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_ENABLED=false` and rerun
+`php artisan elastic-audit:lifecycle-policy`. This keeps rollover active but removes the delete phase. Then set
+`HTTP_LOGS_RETAIN_FOREVER=true` for a permanent default or pass `retainForever: true` to one `HttpLogContext`. A
+permanent document has a null `retention_days`, so prune commands ignore it. The health command rejects a permanent
+subsystem default while whole-index deletion remains enabled.
 
 Rollover can be run manually or scheduled:
 
@@ -708,9 +724,13 @@ asset build. The package's precompiled assets only cover the bundled templates.
 
 ## Pruning Old Logs
 
-Each log document stores `retention_days` from `HttpLogContext`. In v3, ILM is the preferred default retention path for
-new indexes. Use this command when ILM is disabled, when you need per-document retention windows, or as a manual cleanup
-fallback.
+Each finitely retained log document stores `retention_days` from `HttpLogContext`. A context created with
+`retainForever: true`, or from an `HTTP_LOGS_RETAIN_FOREVER=true` default, stores null and is ignored by pruning. ILM is
+independent and can still delete the whole backing index. Finite values must be between `1` and `32767`; use
+`retainForever: true` instead of a sentinel value, and never pass it together with `retentionDays`.
+
+Changing the default does not rewrite existing documents. Historical documents with numeric `retention_days` remain
+eligible for deletion, so pause pruning until they are migrated if they must also become permanent.
 
 Run pruning manually:
 
