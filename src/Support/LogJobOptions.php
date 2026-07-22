@@ -8,7 +8,7 @@ final class LogJobOptions
 {
     public static function tries(string $configKey, int $default = 3): int
     {
-        return max(1, (int) config("{$configKey}.tries", $default));
+        return max(1, self::integer(config("{$configKey}.tries", $default)) ?? $default);
     }
 
     /**
@@ -29,13 +29,17 @@ final class LogJobOptions
         $backoff = [];
 
         foreach ($value as $item) {
-            $item = trim((string) $item);
+            if (is_string($item)) {
+                $item = trim($item);
+            }
 
-            if (! is_numeric($item) || (int) $item < 0) {
+            $integer = self::integer($item);
+
+            if ($integer === null || $integer < 0) {
                 continue;
             }
 
-            $backoff[] = (int) $item;
+            $backoff[] = $integer;
         }
 
         return $backoff !== [] ? $backoff : [10, 30, 120];
@@ -43,6 +47,22 @@ final class LogJobOptions
 
     public static function timeout(string $configKey, int $default): int
     {
-        return max(1, (int) config("{$configKey}.timeout", $default));
+        return max(1, self::integer(config("{$configKey}.timeout", $default)) ?? $default);
+    }
+
+    public static function batchTimeout(string $configKey, int $default = 60): int
+    {
+        return max(1, self::integer(config("{$configKey}.batch_timeout", $default)) ?? $default);
+    }
+
+    private static function integer(mixed $value): ?int
+    {
+        if (! is_int($value) && ! is_string($value)) {
+            return null;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT);
+
+        return $validated === false ? null : $validated;
     }
 }

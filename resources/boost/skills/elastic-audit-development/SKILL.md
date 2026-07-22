@@ -144,12 +144,13 @@ For a fresh environment, apply infrastructure in this order:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
-php artisan http-logs:create-index
-php artisan activity-logs:create-index
-php artisan elastic-audit:health --all
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
 ```
 
-Run only the index command for enabled subsystems. Keep a worker running for `HTTP_LOGS_QUEUE` and
+The plain health command validates enabled subsystems. Use `--all` only when aliases for disabled subsystems have also
+been provisioned and should be checked. Keep a worker running for `HTTP_LOGS_QUEUE` and
 `ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Default document retention comes
 from each subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays` for a finite override or
 `retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but
@@ -165,4 +166,5 @@ exposing either dashboard outside `local`.
 - Test callback attribute mapping, especially invalid or absent enum values, and exercise the terminable success path.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
 - Run the focused tests first, then the full application suite.
-- Run `php artisan elastic-audit:health --all` in an environment that is allowed to reach the logs cluster.
+- Run `php artisan elastic-audit:health` in an environment that is allowed to reach the logs cluster. Add `--all` only
+  when provisioned aliases for disabled subsystems should also be checked.

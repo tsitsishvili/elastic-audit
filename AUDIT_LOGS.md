@@ -45,35 +45,34 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Quick Start
 
-1. Add the package repository to the consuming application's `composer.json`.
-2. Install the package:
+1. Once v4.0.0 is published, install the stable v4 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit
+    composer require tsitsishvili/elastic-audit:^4.0
     ```
 
-3. Publish the config files and enum stubs:
+2. Publish the config files and enum stubs:
 
     ```bash
     php artisan vendor:publish --tag=elastic-audit
     ```
 
-4. Register the application's provider, event type, and entity type enums in `config/http_logs.php`.
-5. Configure Elasticsearch and enable logging in `.env`.
-6. Install the lifecycle policy, then create the Elasticsearch index and aliases:
+3. Register the application's provider, event type, and entity type enums in `config/http_logs.php`.
+4. Configure Elasticsearch and enable logging in `.env`.
+5. Install the lifecycle policy, then create the Elasticsearch index and aliases:
 
     ```bash
     php artisan elastic-audit:lifecycle-policy
     php artisan http-logs:create-index
     ```
 
-7. Run a queue worker for the configured logs queue:
+6. Run a queue worker for the configured logs queue:
 
     ```bash
     php artisan queue:work --queue=default
     ```
 
-8. Use `HttpLog::make(...)` for outgoing provider calls or `IncomingHttpLogMiddleware` for incoming callbacks.
+7. Use `HttpLog::make(...)` for outgoing provider calls or `IncomingHttpLogMiddleware` for incoming callbacks.
 
 ## Requirements
 
@@ -84,23 +83,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Installation
 
-Add the package repository to the consuming application's `composer.json`.
-
-```json
-{
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/tsitsishvili/elastic-audit.git"
-    }
-  ]
-}
-```
-
-Install a tagged version:
+Once v4.0.0 is published, install the stable v4 release from Packagist:
 
 ```bash
-composer require tsitsishvili/elastic-audit
+composer require tsitsishvili/elastic-audit:^4.0
 ```
 
 Laravel auto-discovers the package service provider.
@@ -432,9 +418,10 @@ php artisan elastic-audit:health
 php artisan elastic-audit:health --all
 ```
 
-The default command checks feature-specific configuration and aliases only for enabled subsystems. `--all` additionally
-checks alias existence and write-index topology for disabled subsystems; it does not require their unused enum, queue,
-retention, or body-capture configuration to be valid.
+The default command checks feature-specific configuration and aliases only for enabled subsystems. Use `--all` only
+when aliases for disabled subsystems have also been provisioned and should be checked: it additionally verifies their
+alias existence and write-index topology, but does not require their unused enum, queue, retention, or body-capture
+configuration to be valid.
 
 ## Logging Outgoing Requests
 
@@ -915,7 +902,8 @@ LOG_ELASTICSEARCH_USERNAME=
 LOG_ELASTICSEARCH_PASSWORD=
 ```
 
-Run `php artisan elastic-audit:health --all` to confirm the configured aliases are reachable.
+Run `php artisan elastic-audit:health` to confirm the enabled subsystems' configured aliases are reachable. Add `--all`
+only when aliases for disabled subsystems have also been provisioned and should be checked.
 
 ### Incoming callback logs are skipped
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-22
+
 ### Added
 
 - Permanent document and index retention. HTTP and activity logs can default to `retain_forever`, individual contexts
@@ -15,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bounded HTTP body capture through `body_capture_max_bytes` / `HTTP_LOGS_BODY_CAPTURE_MAX_BYTES` (default 1 MB), plus
   `undecodable_body_mode` / `HTTP_LOGS_UNDECODABLE_BODY_MODE` for choosing hash-only metadata (default) or an explicitly
   reviewed clear-text preview for XML, plain text, scalar JSON, and other bodies that cannot be key-redacted.
+- Release CI now includes runtime dependency auditing, SemVer tag triggers, and real Elasticsearch 8/9 lifecycle,
+  indexing, rollover, health, and pruning smoke tests.
 
 ### Changed
 
@@ -34,9 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subsystem aliases and the default lifecycle policy are derived from one canonical index prefix when their config is
   `null`. `APP_NAME` fallbacks are slugged, explicit invalid Elasticsearch names are rejected, and new configurations
   default to one replica instead of zero.
-- Composer now declares the Promise and PSR HTTP interfaces used by the middleware directly and removes the unused
-  direct PSR-7 implementation requirement. Publishable application enum templates moved outside the package's PSR-4
-  source tree, and CI validates strict optimized autoloading plus PHP syntax on `v4.x`.
+- Composer now declares the Promise and PSR HTTP interfaces used by the middleware directly, requires the patched
+  `guzzlehttp/guzzle ^7.15.1` floor, and removes the unused direct PSR-7 implementation requirement. Publishable
+  application enum templates moved outside the package's PSR-4 source tree, and CI validates strict optimized
+  autoloading plus PHP syntax on `v4.x`.
 
 ### Fixed
 
@@ -60,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browser.
 - `elastic-audit:health --all` can verify aliases for disabled subsystems without rejecting their intentionally unused
   enum, queue, retention, or capture configuration.
+- Malformed retry and timeout configuration now falls back safely instead of coercing fractional/non-scalar values;
+  failed HTTP job diagnostics include the unique `event_id`.
 
 ## [3.2.0] - 2026-07-16
 
@@ -258,9 +265,10 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...HEAD
-[3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.1...v3.2.0
-[3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v3.1.1
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0
+[3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v.3.1.1...v3.2.0
+[3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v.3.1.1
 [3.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.3...v3.1.0
 [3.0.3]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.2...v3.0.3
 [3.0.2]: https://github.com/tsitsishvili/elastic-audit/compare/v3.0.1...v3.0.2

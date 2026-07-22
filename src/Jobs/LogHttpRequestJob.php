@@ -10,10 +10,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
-use Throwable;
 
 class LogHttpRequestJob implements ShouldQueue
 {
@@ -29,8 +29,8 @@ class LogHttpRequestJob implements ShouldQueue
         public readonly HttpLogData $data,
     ) {
         // Queue is configurable so different apps can route to their preferred worker queue
-        $this->queue = config('http_logs.queue', 'default');
-        $this->tries = LogJobOptions::tries('http_logs.job');
+        $this->queue   = config('http_logs.queue', 'default');
+        $this->tries   = LogJobOptions::tries('http_logs.job');
         $this->backoff = LogJobOptions::backoff('http_logs.job');
         $this->timeout = LogJobOptions::timeout('http_logs.job', 30);
     }
@@ -45,6 +45,7 @@ class LogHttpRequestJob implements ShouldQueue
         Log::error('LogHttpRequestJob failed', [
             'provider'   => (string) $this->data->provider->value,
             'event_type' => (string) $this->data->eventType->value,
+            'event_id'   => $this->data->eventId,
             'request_id' => $this->data->requestId,
             'error'      => $e->getMessage(),
         ]);

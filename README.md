@@ -38,33 +38,31 @@ application can enable only what it needs.
 
 ## Quick Start
 
-1. Add the package repository to the consuming application's `composer.json`
-   (see [Installation](AUDIT_LOGS.md#installation)).
-2. Install the package:
+1. Once v4.0.0 is published, install the stable v4 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit
+    composer require tsitsishvili/elastic-audit:^4.0
     ```
 
-3. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
+2. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
 
     ```bash
     php artisan vendor:publish --tag=elastic-audit
     ```
 
-4. Configure Elasticsearch and enable the subsystem you need in `.env`
+3. Configure Elasticsearch and enable the subsystem you need in `.env`
    (see [Environment Variables](AUDIT_LOGS.md#environment-variables) and
    [Register Application Enums](AUDIT_LOGS.md#register-application-enums)).
-5. Install the lifecycle policy, then create the Elasticsearch indices and aliases
+4. Install the lifecycle policy, then create the Elasticsearch indices and aliases
    ([HTTP](AUDIT_LOGS.md#create-elasticsearch-index) · [Activity](ACTIVITY_LOGS.md#create-the-activity-index)):
 
     ```bash
     php artisan elastic-audit:lifecycle-policy
-    php artisan http-logs:create-index
-    php artisan activity-logs:create-index
+    php artisan http-logs:create-index       # when HTTP logs are enabled
+    php artisan activity-logs:create-index   # when activity logs are enabled
     ```
 
-6. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
+5. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
 
     ```bash
     php artisan queue:work --queue=default
@@ -177,7 +175,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^3.0"
+    "tsitsishvili/elastic-audit": "^4.0"
   }
 }
 ```

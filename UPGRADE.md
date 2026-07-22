@@ -75,8 +75,11 @@ should follow a changed shared prefix, choose the replica count for the actual c
 php artisan elastic-audit:lifecycle-policy
 php artisan http-logs:create-index       # when HTTP logs are enabled
 php artisan activity-logs:create-index   # when activity logs are enabled
-php artisan elastic-audit:health --all
+php artisan elastic-audit:health
 ```
+
+The plain health command validates enabled subsystems. Use `--all` only when aliases for disabled subsystems have also
+been provisioned and should be checked.
 
 ### Low impact: sanitization and retention failures are stricter
 
@@ -92,10 +95,11 @@ needs investigation, not as an empty data set.
 
 ### Low impact: dependency and distribution metadata are stricter
 
-The package now declares `guzzlehttp/promises` and `psr/http-message` directly and drops the unused direct
-`guzzlehttp/psr7` requirement. Publishable `App\Enums` templates moved outside the package PSR-4 source tree; the
-`vendor:publish` destination is unchanged. CI now validates optimized strict PSR-4 loading and PHP syntax on the active
-`v4.x` branch. No consuming-application code change is required.
+The package now declares `guzzlehttp/promises` and `psr/http-message` directly, requires
+`guzzlehttp/guzzle ^7.15.1`, and drops the unused direct `guzzlehttp/psr7` requirement. Publishable `App\Enums`
+templates moved outside the package PSR-4 source tree; the `vendor:publish` destination is unchanged. If the consuming
+application locks an older Guzzle release, update dependencies while installing v4. CI now validates optimized strict
+PSR-4 loading, PHP syntax, runtime advisories, and real Elasticsearch 8/9 operations.
 
 ### High impact: user and actor ids now support strings and UUIDs
 
@@ -111,9 +115,9 @@ versions are now 4 and 3 respectively.
 each enabled subsystem so its write alias targets the new mapping:
 
 ```bash
-php artisan http-logs:create-index
-php artisan activity-logs:create-index
-php artisan elastic-audit:health --all
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
 ```
 
 Run only the create-index commands for enabled subsystems. Existing physical indices remain attached to the read alias
@@ -138,7 +142,7 @@ ILM retention is independent. To keep permanent documents after rollover, set
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
-php artisan elastic-audit:health --all
+php artisan elastic-audit:health
 ```
 
 Disabling only the delete phase preserves rollover. Existing documents are not rewritten; pause pruning and migrate

@@ -51,8 +51,9 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   Permanent documents have a null `retention_days` and are ignored by prune commands. ILM independently deletes whole
   indexes, so permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` and an updated policy.
   Finite values must be `1`–`32767`.
-- After infrastructure or config changes, run `php artisan elastic-audit:health --all`. Install the lifecycle policy
-  before creating indexes on a fresh environment.
+- After infrastructure or config changes, run `php artisan elastic-audit:health`. Use `--all` only when aliases for
+  disabled subsystems have also been provisioned and should be checked. Install the lifecycle policy before creating
+  indexes on a fresh environment.
 
 ## Log an outgoing provider request
 
@@ -131,7 +132,7 @@ php artisan vendor:publish --tag=elastic-audit   # config + enum stubs
 php artisan elastic-audit:lifecycle-policy       # install first
 php artisan http-logs:create-index               # only if HTTP logs are enabled
 php artisan activity-logs:create-index           # only if activity logs are enabled
-php artisan elastic-audit:health --all
+php artisan elastic-audit:health
 ```
 
 Capture dispatches jobs rather than indexing synchronously, so keep a worker running for the `HTTP_LOGS_QUEUE` and
@@ -146,7 +147,8 @@ dashboard outside `local`.
 - Test callback attribute mapping, especially invalid or absent enum values. Direct middleware unit tests must invoke
   `terminate()` for successful callbacks; full Laravel HTTP tests do this through the kernel.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
-- Run `php artisan elastic-audit:health --all` only where the logs cluster is reachable.
+- Run `php artisan elastic-audit:health` only where the logs cluster is reachable. Add `--all` only when provisioned
+  aliases for disabled subsystems should also be checked.
 
 ## Deeper reference
 
