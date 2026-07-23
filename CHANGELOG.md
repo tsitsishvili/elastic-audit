@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-07-23
+
 ### Added
 
 - Added sanitized, non-blocking `AuditOperationFailed` Laravel events for complete HTTP/activity capture loss and jobs
@@ -281,7 +283,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0
 [3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v.3.1.1...v3.2.0
 [3.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v3.1.0...v.3.1.1
