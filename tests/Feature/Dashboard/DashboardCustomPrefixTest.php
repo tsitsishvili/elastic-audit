@@ -8,6 +8,16 @@ use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class DashboardCustomPrefixTest extends TestCase
 {
+    public function test_empty_prefix_collapses_to_subpath_only(): void
+    {
+        $this->assertSame('/http', route('http-logs.overview', [], false));
+    }
+
+    public function test_nested_custom_prefix_is_applied(): void
+    {
+        $this->assertSame('/admin/logs/activity', route('activity-logs.overview', [], false));
+    }
+
     protected function getEnvironmentSetUp($app): void
     {
         parent::getEnvironmentSetUp($app);
@@ -19,15 +29,5 @@ class DashboardCustomPrefixTest extends TestCase
         // Activity dashboard: a nested custom group prefix.
         $app['config']->set('activity_logs.dashboard.prefix', 'admin/logs');
         $app['config']->set('activity_logs.dashboard.path', 'activity');
-    }
-
-    public function test_empty_prefix_collapses_to_subpath_only(): void
-    {
-        $this->assertSame('/http', route('http-logs.overview', [], false));
-    }
-
-    public function test_nested_custom_prefix_is_applied(): void
-    {
-        $this->assertSame('/admin/logs/activity', route('activity-logs.overview', [], false));
     }
 }

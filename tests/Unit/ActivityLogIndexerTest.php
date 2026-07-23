@@ -59,6 +59,7 @@ class ActivityLogIndexerTest extends TestCase
             ->method('index')
             ->with($this->callback(function (array $p) use (&$captured) {
                 $captured = $p['body'];
+
                 return true;
             }));
 
@@ -84,6 +85,7 @@ class ActivityLogIndexerTest extends TestCase
 
         $this->client->method('index')->with($this->callback(function (array $p) use (&$captured) {
             $captured = $p['body'];
+
             return true;
         }));
 
@@ -100,6 +102,7 @@ class ActivityLogIndexerTest extends TestCase
 
         $this->client->method('index')->with($this->callback(function (array $p) use (&$captured) {
             $captured = $p['body'];
+
             return true;
         }));
 
@@ -152,6 +155,7 @@ class ActivityLogIndexerTest extends TestCase
             ->method('bulk')
             ->with($this->callback(function (array $p) use (&$captured) {
                 $captured = $p['body'];
+
                 return true;
             }));
 

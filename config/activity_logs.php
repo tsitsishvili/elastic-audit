@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'enabled'           => env('ACTIVITY_LOGS_ENABLED', true),
-    'queue'             => env('ACTIVITY_LOGS_QUEUE', 'default'),
-    'job'               => [
+    'enabled' => env('ACTIVITY_LOGS_ENABLED', true),
+    'queue'   => env('ACTIVITY_LOGS_QUEUE', 'default'),
+    'job'     => [
         'tries'         => env('ACTIVITY_LOGS_JOB_TRIES', 3),
         'backoff'       => explode(',', (string) env('ACTIVITY_LOGS_JOB_BACKOFF', '10,30,120')),
         'timeout'       => env('ACTIVITY_LOGS_JOB_TIMEOUT', 30),
@@ -12,8 +12,8 @@ return [
     // retain_forever makes the default document lifetime permanent. Individual
     // contexts can still pass retentionDays to opt into a finite lifetime. The
     // lifecycle delete phase must also be disabled to retain whole indexes.
-    'retention_days'    => env('ACTIVITY_LOGS_RETENTION_DAYS', 360),
-    'retain_forever'    => env('ACTIVITY_LOGS_RETAIN_FOREVER', false),
+    'retention_days' => env('ACTIVITY_LOGS_RETENTION_DAYS', 360),
+    'retain_forever' => env('ACTIVITY_LOGS_RETAIN_FOREVER', false),
 
     // Null derives aliases from log_elasticsearch.index_prefix. Set a string
     // only when this subsystem intentionally needs custom aliases.

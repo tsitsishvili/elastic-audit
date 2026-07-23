@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests;
 
+use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
-use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
 
 abstract class TestCase extends OrchestraTestCase
 {
@@ -19,7 +19,7 @@ abstract class TestCase extends OrchestraTestCase
 
     protected function getEnvironmentSetUp($app): void
     {
-        $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         $app['config']->set('http_logs.enums.provider', TestProvider::class);
         $app['config']->set('http_logs.enums.event_type', TestEventType::class);
         $app['config']->set('http_logs.enums.entity_type', TestEntityType::class);

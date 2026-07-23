@@ -7,11 +7,15 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 use GuzzleHttp\Psr7\FnStream;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
+use Tsitsishvili\ElasticAudit\Http\OutgoingHttpLogMiddleware;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -153,7 +157,7 @@ class HttpLogClientVerbsTest extends TestCase
         HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $this->context)
             ->post('https://api.example/orders', ['name' => 'test']);
 
-        Http::assertSent(fn (\Illuminate\Http\Client\Request $request) => $request->isJson());
+        Http::assertSent(fn (Request $request) => $request->isJson());
     }
 
     public function test_as_form_sends_form_encoded_request(): void
@@ -165,7 +169,7 @@ class HttpLogClientVerbsTest extends TestCase
             ->asForm()
             ->post('https://api.example/orders', ['name' => 'test', 'qty' => 2]);
 
-        Http::assertSent(fn (\Illuminate\Http\Client\Request $request) => $request->isForm()
+        Http::assertSent(fn (Request $request) => $request->isForm()
             && $request->body() === 'name=test&qty=2');
 
         Bus::assertDispatched(LogHttpRequestJob::class);
@@ -209,7 +213,7 @@ class HttpLogClientVerbsTest extends TestCase
             ->asJson()
             ->post('https://api.example/orders', ['name' => 'test']);
 
-        Http::assertSent(fn (\Illuminate\Http\Client\Request $request) => $request->isJson());
+        Http::assertSent(fn (Request $request) => $request->isJson());
     }
 
     public function test_head_dispatches_log_job(): void
@@ -238,7 +242,7 @@ class HttpLogClientVerbsTest extends TestCase
             ->withHeaders(['X-Test' => '1'])
             ->post('https://api.example/orders', ['name' => 'test']);
 
-        Http::assertSent(fn (\Illuminate\Http\Client\Request $request) => $request->hasHeader('Accept', 'application/json')
+        Http::assertSent(fn (Request $request) => $request->hasHeader('Accept', 'application/json')
             && $request->hasHeader('User-Agent', 'delivery-agent/1.0')
             && $request->hasHeader('X-Test', '1'));
 
@@ -464,14 +468,14 @@ class HttpLogClientVerbsTest extends TestCase
         Bus::fake();
         Http::fake(['https://api.example/*' => Http::response([], 200)]);
 
-        $failingRedactor = $this->createStub(\Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor::class);
+        $failingRedactor = $this->createStub(SensitiveDataRedactor::class);
         $failingRedactor->method('buildPayload')->willThrowException(new \RuntimeException('redactor failure'));
 
         // Attach the logging middleware directly with a redactor that always throws, to prove
         // a logging failure neither breaks the request nor lets a job slip through.
-        $client = $this->app->make(\Illuminate\Http\Client\Factory::class)
+        $client = $this->app->make(Factory::class)
             ->createPendingRequest()
-            ->withMiddleware(new \Tsitsishvili\ElasticAudit\Http\OutgoingHttpLogMiddleware(
+            ->withMiddleware(new OutgoingHttpLogMiddleware(
                 provider: TestProvider::Delivery,
                 eventType: TestEventType::DeliveryOrderCreate,
                 context: $this->context,

@@ -26,7 +26,7 @@ class HttpLogIndexer
     }
 
     /**
-     * @param iterable<HttpLogData> $items
+     * @param  iterable<HttpLogData>  $items
      */
     public function bulk(iterable $items): void
     {
@@ -64,7 +64,7 @@ class HttpLogIndexer
                 'span_id'     => isset($d->spanId) ? $d->spanId : null,
                 'traceparent' => isset($d->traceParent) ? $d->traceParent : null,
             ],
-            'http'           => [
+            'http' => [
                 'method'       => $d->httpMethod,
                 'url'          => $d->httpUrl,
                 'host'         => $d->httpHost,
@@ -74,14 +74,14 @@ class HttpLogIndexer
                 'latency_ms'   => $d->latencyMs,
                 'timed_out'    => $d->timedOut,
             ],
-            'entity'   => [
+            'entity' => [
                 'type' => $d->entityType,
                 'id'   => $d->entityId,
             ],
             'external' => [
                 'id' => $d->externalId,
             ],
-            'request'  => [
+            'request' => [
                 'headers'        => $d->request->headers,
                 'body'           => $d->request->body,
                 'body_preview'   => $d->request->bodyPreview,
@@ -95,7 +95,7 @@ class HttpLogIndexer
                 'body_hash'      => $d->response->bodyHash,
                 'body_truncated' => $d->response->bodyTruncated,
             ],
-            'error'    => [
+            'error' => [
                 'class'   => $d->errorClass,
                 'message' => $d->errorMessage,
             ],

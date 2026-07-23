@@ -12,20 +12,25 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 
 class HttpLogClientFactory
 {
     private readonly HttpPayloadRedactorResolver $redactorResolver;
 
+    private readonly AuditFailureReporter $failureReporter;
+
     public function __construct(
         private readonly HttpFactory $httpFactory,
         PaymentRedactor $paymentRedactor,
         SensitiveDataRedactor $sensitiveDataRedactor,
         ?HttpPayloadRedactorResolver $redactorResolver = null,
+        ?AuditFailureReporter $failureReporter = null,
     ) {
         $this->redactorResolver = $redactorResolver
             ?? new HttpPayloadRedactorResolver($sensitiveDataRedactor, $paymentRedactor);
+        $this->failureReporter = $failureReporter ?? new AuditFailureReporter($sensitiveDataRedactor);
     }
 
     /**
@@ -47,6 +52,7 @@ class HttpLogClientFactory
                 $context,
                 $this->redactorResolver->forProvider($provider),
                 CaptureSampling::shouldCapture(),
+                $this->failureReporter,
             ));
     }
 }

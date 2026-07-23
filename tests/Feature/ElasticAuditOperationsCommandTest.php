@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
+use Illuminate\Support\Facades\Artisan;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\IntBackedProvider;
@@ -15,14 +16,164 @@ class ElasticAuditOperationsCommandTest extends TestCase
     {
         config(['http_logs.enabled' => true, 'activity_logs.enabled' => true]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')->assertSuccessful();
     }
 
+    public function test_health_json_emits_one_machine_readable_success_result(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => true]);
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
+
+        $status = Artisan::call('elastic-audit:health', ['--json' => true]);
+        $result = json_decode(trim(Artisan::output()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(0, $status);
+        $this->assertTrue($result['ok']);
+        $this->assertNotEmpty($result['checks']);
+        $this->assertContains('ok', array_column($result['checks'], 'status'));
+    }
+
+    public function test_health_json_preserves_failure_exit_code_and_error_check(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function ping(): bool
+            {
+                return false;
+            }
+        };
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $status = Artisan::call('elastic-audit:health', ['--json' => true]);
+        $result = json_decode(trim(Artisan::output()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(1, $status);
+        $this->assertFalse($result['ok']);
+        $this->assertSame('error', $result['checks'][0]['status']);
+    }
+
+    public function test_health_fails_when_write_index_mapping_is_incompatible(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getMapping(string $index): array
+            {
+                $mapping                                                      = parent::getMapping($index);
+                $mapping[$index]['mappings']['properties']['user_id']['type'] = 'long';
+
+                return $mapping;
+            }
+        };
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('properties.user_id.type expected "keyword"')
+            ->assertFailed();
+    }
+
+    public function test_health_fails_when_index_template_mapping_is_incompatible(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getIndexTemplate(string $name): array
+            {
+                $template                                                                                                   = parent::getIndexTemplate($name);
+                $template['index_templates'][0]['index_template']['template']['mappings']['properties']['event_id']['type'] = 'text';
+
+                return $template;
+            }
+        };
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('properties.event_id.type expected "keyword"')
+            ->assertFailed();
+    }
+
+    public function test_health_accepts_structurally_compatible_mapping_without_schema_metadata(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getMapping(string $index): array
+            {
+                $mapping = parent::getMapping($index);
+                unset($mapping[$index]['mappings']['_meta']);
+
+                return $mapping;
+            }
+
+            public function getIndexTemplate(string $name): array
+            {
+                $template = parent::getIndexTemplate($name);
+                unset($template['index_templates'][0]['index_template']['template']['mappings']['_meta']);
+
+                return $template;
+            }
+        };
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('has no Elastic Audit schema metadata; structural mapping is compatible')
+            ->assertSuccessful();
+    }
+
+    public function test_health_fails_when_schema_metadata_is_incompatible(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getMapping(string $index): array
+            {
+                $mapping                                                                 = parent::getMapping($index);
+                $mapping[$index]['mappings']['_meta']['elastic_audit']['schema_version'] = 99;
+
+                return $mapping;
+            }
+        };
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('schema metadata is incompatible')
+            ->assertFailed();
+    }
+
+    public function test_health_remains_compatible_with_custom_clients_that_do_not_support_schema_inspection(): void
+    {
+        config(['http_logs.enabled' => false, 'activity_logs.enabled' => true]);
+
+        $client = $this->createStub(LogElasticsearchClientInterface::class);
+        $client->method('ping')->willReturn(true);
+        $client->method('existsAlias')->willReturn(true);
+        $client->method('getAlias')->willReturnCallback(static function (string $name): array {
+            $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
+            return [
+                "{$baseName}-000001" => [
+                    'aliases' => [$name => ['is_write_index' => true]],
+                ],
+            ];
+        });
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $client);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('schema inspection unavailable for the custom Elasticsearch client')
+            ->assertSuccessful();
+    }
+
     public function test_health_command_fails_when_cluster_is_unreachable(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function ping(): bool
             {
                 return false;
@@ -37,11 +188,11 @@ class ElasticAuditOperationsCommandTest extends TestCase
     public function test_health_command_fails_when_http_enum_config_is_invalid(): void
     {
         config([
-            'http_logs.enabled' => true,
+            'http_logs.enabled'        => true,
             'http_logs.enums.provider' => null,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('HTTP logs: enums.provider')
@@ -64,7 +215,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'http_logs.body_capture_max_bytes' => 50,
         ]);
 
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             /** @var list<string> */
             public array $checkedAliases = [];
 
@@ -93,7 +245,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'http_logs.enums.provider' => IntBackedProvider::class,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('must be a string-backed enum')
@@ -112,7 +264,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'http_logs.payment_body_mode'      => 'raw',
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('sample_rate must be a number between 0.0 and 1.0')
@@ -125,12 +277,12 @@ class ElasticAuditOperationsCommandTest extends TestCase
     public function test_health_command_fails_when_job_options_are_invalid(): void
     {
         config([
-            'activity_logs.enabled' => true,
-            'activity_logs.job.tries' => 0,
+            'activity_logs.enabled'     => true,
+            'activity_logs.job.tries'   => 0,
             'activity_logs.job.backoff' => ['10', '-1'],
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: job.tries')
@@ -148,7 +300,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'activity_logs.job.backoff'       => ['10', '20.5'],
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: job.tries')
@@ -165,7 +317,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'activity_logs.retention_days' => 0,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: retention_days must be an integer between 1 and 32767.')
@@ -175,12 +327,12 @@ class ElasticAuditOperationsCommandTest extends TestCase
     public function test_health_command_fails_when_alias_config_is_invalid(): void
     {
         config([
-            'activity_logs.enabled' => true,
-            'activity_logs.index_alias' => 'same_alias',
+            'activity_logs.enabled'           => true,
+            'activity_logs.index_alias'       => 'same_alias',
             'activity_logs.index_alias_write' => 'same_alias',
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: read and write aliases must be different.')
@@ -194,7 +346,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'activity_logs.index_alias' => 'Example App activity',
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('Activity logs: read alias [Example App activity] is invalid')
@@ -205,7 +357,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
     {
         config(['activity_logs.enabled' => true]);
 
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function getAlias(string $name): array
             {
                 $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
@@ -229,7 +382,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
     {
         config(['http_logs.enabled' => false, 'activity_logs.enabled' => true]);
 
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function getAlias(string $name): array
             {
                 $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
@@ -254,7 +408,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'activity_logs.enabled' => true,
         ]);
 
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function getAlias(string $name): array
             {
                 $index = str_ends_with($name, '_write') ? 'activity-000002' : 'activity-000001';
@@ -277,11 +432,11 @@ class ElasticAuditOperationsCommandTest extends TestCase
     public function test_health_command_fails_when_lifecycle_delete_phase_is_missing(): void
     {
         config([
-            'log_elasticsearch.lifecycle.enabled' => true,
+            'log_elasticsearch.lifecycle.enabled'      => true,
             'log_elasticsearch.lifecycle.delete_after' => null,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('lifecycle.delete_after is empty')
@@ -296,7 +451,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'log_elasticsearch.lifecycle.delete_enabled' => false,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('default document retention is forever')
@@ -312,7 +467,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'log_elasticsearch.lifecycle.delete_enabled' => true,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:health')
             ->expectsOutputToContain('cannot guarantee permanent storage')
@@ -321,8 +476,10 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
     public function test_lifecycle_policy_command_puts_configured_policy(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public ?string $policyName = null;
+
             public array $policy = [];
 
             public function putLifecyclePolicy(string $name, array $policy): void
@@ -348,7 +505,7 @@ class ElasticAuditOperationsCommandTest extends TestCase
             'log_elasticsearch.lifecycle.delete_after'   => null,
         ]);
 
-        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient());
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
         $this->artisan('elastic-audit:lifecycle-policy')
             ->expectsOutputToContain('delete_after must be a non-empty string')
@@ -359,7 +516,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
     {
         config(['log_elasticsearch.lifecycle.delete_enabled' => false]);
 
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public array $policy = [];
 
             public function putLifecyclePolicy(string $name, array $policy): void
@@ -378,9 +536,12 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
     public function test_http_rollover_command_uses_write_alias_and_conditions(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public ?string $alias = null;
+
             public array $conditions = [];
+
             public ?string $newIndex = 'unset';
 
             public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
@@ -404,7 +565,8 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
     public function test_http_rollover_command_explicitly_names_next_index_for_legacy_write_index(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public ?string $newIndex = null;
 
             public function getAlias(string $name): array
@@ -435,6 +597,6 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
         $this->artisan('http-logs:rollover')->assertSuccessful();
 
-        $this->assertSame(config('http_logs.index_alias') . '-000001', $fake->newIndex);
+        $this->assertSame(config('http_logs.index_alias').'-000001', $fake->newIndex);
     }
 }

@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
-use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
+use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionProperty;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
-use PHPUnit\Framework\MockObject\MockObject;
-use PHPUnit\Framework\TestCase;
-use ReflectionClass;
-use ReflectionProperty;
 
 class HttpLogIndexerTest extends TestCase
 {

@@ -40,6 +40,8 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   keyword strings; preserve the application's real identifier instead of coercing UUIDs or string ids to integers.
 - Logging dispatches queued jobs. Keep a worker running for the configured queues, and use `Bus::fake()` when asserting
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
+- Complete capture or terminal indexing failures emit the sanitized `AuditOperationFailed` Laravel event. Listen to it
+  for metrics or alerting; it intentionally contains no raw exception, headers, payloads, changes, or metadata.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
   exception, because allowed values are stored in clear text.
 - Bodies that do not decode to JSON or form key/value data (XML/SOAP, plain text) are stored as headers plus a raw-body
@@ -51,7 +53,8 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   Permanent documents have a null `retention_days` and are ignored by prune commands. ILM independently deletes whole
   indexes, so permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` and an updated policy.
   Finite values must be `1`–`32767`.
-- After infrastructure or config changes, run `php artisan elastic-audit:health`. Use `--all` only when aliases for
+- After infrastructure or config changes, run `php artisan elastic-audit:health`. Add `--json` for deployment
+  automation. Use `--all` only when aliases for
   disabled subsystems have also been provisioned and should be checked. Install the lifecycle policy before creating
   indexes on a fresh environment.
 

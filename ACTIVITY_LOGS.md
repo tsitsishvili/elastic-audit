@@ -381,15 +381,16 @@ creates or updates the shared policy named by `LOG_ELASTICSEARCH_LIFECYCLE_POLIC
 settings when lifecycle is enabled before `activity-logs:create-index` runs.
 
 Use `php artisan elastic-audit:health` to verify cluster reachability, canonical names, aliases and write-index topology,
-job retry options, and lifecycle state.
+write-index and template mappings, job retry options, and lifecycle state. Add `--json` for one machine-readable result
+that retains the command's success/failure exit code.
 For high-volume replays, `LogActivityBatchJob` accepts a list of `ActivityLogData` DTOs and indexes them through the
 Elasticsearch bulk API. Bulk responses with per-item Elasticsearch failures are treated as job failures, even when
 Elasticsearch returns HTTP 200.
 
 ### Guarantees
 
-- **Capture never throws.** A logging failure can never break the surrounding request — errors are swallowed and
-  the job's own failures are logged, not propagated.
+- **Capture never throws.** A logging failure can never break the surrounding request. Complete capture loss and jobs
+  that exhaust their retries emit a sanitized application error and `AuditOperationFailed`, but are not propagated.
 - **Transactional events reflect committed state.** Single and batch activity jobs dispatch after commit and are not
   indexed when the surrounding database transaction rolls back.
 - **Disabled is a true no-op.** With `activity_logs.enabled = false`, `record()` returns immediately and no job

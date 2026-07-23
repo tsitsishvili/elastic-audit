@@ -7,12 +7,12 @@ namespace Tsitsishvili\ElasticAudit\Console;
 use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
 use RuntimeException;
-use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
-use Throwable;
 
 class CreateHttpLogIndexCommand extends Command
 {
@@ -22,8 +22,8 @@ class CreateHttpLogIndexCommand extends Command
 
     public function handle(LogElasticsearchClientInterface $client): int
     {
-        $readAlias     = (string) config('http_logs.index_alias');
-        $writeAlias    = (string) config('http_logs.index_alias_write');
+        $readAlias  = (string) config('http_logs.index_alias');
+        $writeAlias = (string) config('http_logs.index_alias_write');
 
         try {
             ElasticsearchIndexNames::assertValid($readAlias, 'HTTP logs read alias');
@@ -72,12 +72,12 @@ class CreateHttpLogIndexCommand extends Command
             $this->attachAlias($client, $physicalIndex, $readAlias);
             $this->attachAlias($client, $physicalIndex, $writeAlias, ['is_write_index' => true]);
         } catch (NoNodeAvailableException $e) {
-            $this->error('Cannot reach log Elasticsearch cluster: ' . $e->getMessage());
+            $this->error('Cannot reach log Elasticsearch cluster: '.$e->getMessage());
             $this->error('Check LOG_ELASTICSEARCH_HOST / LOG_ELASTICSEARCH_PORT in your .env.');
 
             return self::FAILURE;
         } catch (Throwable $e) {
-            $this->error('Failed to create or roll over the HTTP logs index: ' . $e->getMessage());
+            $this->error('Failed to create or roll over the HTTP logs index: '.$e->getMessage());
 
             return self::FAILURE;
         }

@@ -6,18 +6,32 @@ Before contributing, read the [Coding Standards](CODING_STANDARDS.md).
 
 ## Local Setup
 
-Install dependencies:
+Composer lock files are intentionally not committed for this library. Confirm the active PHP binary first, then resolve
+dependencies for that runtime:
 
 ```bash
-composer install
+php -v
+composer update
 npm ci
 ```
+
+If multiple PHP versions are installed, invoke Composer through the intended binary. For example, a Homebrew PHP 8.4
+installation may use:
+
+```bash
+/opt/homebrew/opt/php@8.4/bin/php /usr/local/bin/composer update
+```
+
+Do not reuse a `vendor/` directory resolved by a newer PHP version when testing an older runtime. Either resolve
+dependencies again with that runtime or use a clean container.
 
 Validate Composer metadata:
 
 ```bash
 composer validate --no-check-publish
 composer audit --no-dev
+composer analyse
+composer format:test
 ```
 
 Run the package tests after a test runner is configured (see
@@ -72,6 +86,14 @@ Breaking changes include:
 - Changing queue behavior in a way consuming applications must adapt to.
 - Changing redaction behavior in a way that affects security assumptions.
 
+### Branch Policy
+
+- `main` is the source of the latest stable release and must remain releasable.
+- Use short-lived topic branches for features and fixes.
+- Keep `vN.x` branches only when an older major is receiving intentional backports.
+- Do not use a permanent `dev` branch as an integration branch; it obscures which line is releasable.
+- Tag releases from `main`. Backport tags may be created from the corresponding supported maintenance branch.
+
 ## Release Checklist
 
 Before tagging a release:
@@ -80,6 +102,7 @@ Before tagging a release:
 - Run Composer validation.
 - Run the runtime dependency audit.
 - Run tests.
+- Run static analysis and the formatting check.
 - Run the PHP compatibility matrix and Elasticsearch 8/9 smoke matrix.
 - Rebuild dashboard assets.
 - Review redaction-sensitive changes carefully.

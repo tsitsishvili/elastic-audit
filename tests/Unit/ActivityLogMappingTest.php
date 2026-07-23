@@ -31,6 +31,14 @@ class ActivityLogMappingTest extends TestCase
         $this->assertSame('keyword', $actor['id']['type']);
     }
 
+    public function test_mapping_contains_schema_metadata(): void
+    {
+        $this->assertSame(
+            ['subsystem' => 'activity_logs', 'schema_version' => 3],
+            ActivityLogMapping::get()['_meta']['elastic_audit'],
+        );
+    }
+
     public function test_mapping_has_entity_with_type_and_id(): void
     {
         $entity = ActivityLogMapping::get()['properties']['entity']['properties'];

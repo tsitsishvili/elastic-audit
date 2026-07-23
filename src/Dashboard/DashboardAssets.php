@@ -8,7 +8,7 @@ use RuntimeException;
 
 final class DashboardAssets
 {
-    private const DIRECTORY = __DIR__ . '/../../public/vendor/elastic-audit';
+    private const DIRECTORY = __DIR__.'/../../public/vendor/elastic-audit';
 
     /** @var array<string, array{file: string}>|null */
     private ?array $manifest = null;
@@ -24,7 +24,7 @@ final class DashboardAssets
             return $this->manifest;
         }
 
-        $manifestPath = self::DIRECTORY . '/manifest.json';
+        $manifestPath = self::DIRECTORY.'/manifest.json';
 
         if (! is_file($manifestPath)) {
             throw new RuntimeException('Elastic Audit dashboard assets are missing. Run `npm run build` before packaging the library.');
@@ -50,7 +50,7 @@ final class DashboardAssets
             return null;
         }
 
-        $path = self::DIRECTORY . '/' . $asset;
+        $path = self::DIRECTORY.'/'.$asset;
 
         return is_file($path) ? $path : null;
     }

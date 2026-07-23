@@ -14,19 +14,11 @@ class DashboardTest extends TestCase
 {
     private FakeLogElasticsearchClient $fake;
 
-    protected function getEnvironmentSetUp($app): void
-    {
-        parent::getEnvironmentSetUp($app);
-
-        // The shared header links to the activity dashboard, so its routes must be registered.
-        $app['config']->set('activity_logs.dashboard.enabled', true);
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->fake = new FakeLogElasticsearchClient();
+        $this->fake = new FakeLogElasticsearchClient;
         $this->app->instance(LogElasticsearchClientInterface::class, $this->fake);
 
         Dashboard::auth(fn () => true);
@@ -59,11 +51,11 @@ class DashboardTest extends TestCase
     public function test_overview_uses_versioned_local_assets_without_cdn_dependencies(): void
     {
         $this->fake->searchResponse = [
-            'hits' => ['total' => ['value' => 1]],
+            'hits'         => ['total' => ['value' => 1]],
             'aggregations' => [
                 'by_status_class' => ['buckets' => [['key' => '2xx', 'doc_count' => 1]]],
-                'success' => ['buckets' => [['key' => 1, 'key_as_string' => 'true', 'doc_count' => 1]]],
-                'over_time' => ['buckets' => []],
+                'success'         => ['buckets' => [['key' => 1, 'key_as_string' => 'true', 'doc_count' => 1]]],
+                'over_time'       => ['buckets' => []],
             ],
         ];
 
@@ -227,5 +219,13 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Activity Logs')
             ->assertSee(route('activity-logs.overview', [], false), false);
+    }
+
+    protected function getEnvironmentSetUp($app): void
+    {
+        parent::getEnvironmentSetUp($app);
+
+        // The shared header links to the activity dashboard, so its routes must be registered.
+        $app['config']->set('activity_logs.dashboard.enabled', true);
     }
 }

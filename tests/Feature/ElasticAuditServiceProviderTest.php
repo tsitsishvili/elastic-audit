@@ -7,9 +7,9 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\ServiceProvider;
-use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
+use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
@@ -71,7 +71,7 @@ class ElasticAuditServiceProviderTest extends TestCase
             'elastic-audit',
         );
 
-        $stubSource = realpath(__DIR__ . '/../../stubs/Enums/ElasticAudit');
+        $stubSource = realpath(__DIR__.'/../../stubs/Enums/ElasticAudit');
         $sources    = array_map('realpath', array_keys($paths));
 
         $this->assertNotFalse($stubSource);
@@ -94,7 +94,7 @@ class ElasticAuditServiceProviderTest extends TestCase
             public_path('vendor/elastic-audit'),
             array_values($paths)[0],
         );
-        $this->assertFileExists(array_keys($paths)[0] . '/manifest.json');
+        $this->assertFileExists(array_keys($paths)[0].'/manifest.json');
     }
 
     public function test_registers_log_elasticsearch_client_as_singleton(): void

@@ -18,12 +18,15 @@ class TraitTestOrder extends Model
 {
     use ActivityLoggable;
 
-    protected $table    = 'orders';
+    public $timestamps = false;
+
+    protected $table = 'orders';
+
     protected $fillable = ['status', 'amount', 'note'];
-    public $timestamps  = false;
 
     protected string $activityEntityType = 'order';
-    protected array $activityLogExcept   = [];
+
+    protected array $activityLogExcept = [];
 }
 
 class TraitTestSoftOrder extends Model
@@ -31,12 +34,15 @@ class TraitTestSoftOrder extends Model
     use ActivityLoggable;
     use SoftDeletes;
 
-    protected $table    = 'orders';
+    public $timestamps = false;
+
+    protected $table = 'orders';
+
     protected $fillable = ['status', 'amount', 'note'];
-    public $timestamps  = false;
 
     protected string $activityEntityType = 'order';
-    protected array $activityLogExcept   = [];
+
+    protected array $activityLogExcept = [];
 }
 
 class ActivityLoggableTraitTest extends TestCase
@@ -54,7 +60,7 @@ class ActivityLoggableTraitTest extends TestCase
         // activity listeners against the current test's dispatcher.
         Model::clearBootedModels();
 
-        $capsule = new Capsule();
+        $capsule = new Capsule;
         $capsule->addConnection(['driver' => 'sqlite', 'database' => ':memory:']);
         $capsule->setAsGlobal();
         $capsule->bootEloquent();
@@ -179,13 +185,19 @@ class ActivityLoggableTraitTest extends TestCase
         Bus::fake();
 
         // Model that excludes 'note' from diffs
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
-            protected $table    = 'orders';
+
+            protected $table = 'orders';
+
             protected $fillable = ['status', 'amount', 'note'];
-            public $timestamps  = false;
+
+            public $timestamps = false;
+
             protected string $activityEntityType = 'order';
-            protected array $activityLogExcept   = ['note'];
+
+            protected array $activityLogExcept = ['note'];
         };
 
         $model->fill(['status' => 'pending', 'amount' => 100, 'note' => 'secret'])->save();
@@ -199,13 +211,19 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
-            protected $table    = 'orders';
+
+            protected $table = 'orders';
+
             protected $fillable = ['status', 'amount', 'note'];
-            public $timestamps  = false;
+
+            public $timestamps = false;
+
             protected string $activityEntityType = 'order';
-            protected array $activityLogOnly     = ['status'];
+
+            protected array $activityLogOnly = ['status'];
         };
 
         $model->fill(['status' => 'pending', 'amount' => 100, 'note' => 'text'])->save();
@@ -232,19 +250,24 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
-            protected $table    = 'orders';
+
+            protected $table = 'orders';
+
             protected $fillable = ['status', 'amount', 'note'];
-            public $timestamps  = false;
+
+            public $timestamps = false;
+
             protected string $activityEntityType = 'order';
 
             protected function activityMetadata(string $event, array $changes): array
             {
                 return [
-                    'event'   => $event,
-                    'tags'    => ['import', 'bulk'],
-                    'nested'  => ['source' => 'api', 'flags' => [1, 2, 3]],
+                    'event'  => $event,
+                    'tags'   => ['import', 'bulk'],
+                    'nested' => ['source' => 'api', 'flags' => [1, 2, 3]],
                 ];
             }
         };
@@ -262,11 +285,16 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
-            protected $table    = 'orders';
+
+            protected $table = 'orders';
+
             protected $fillable = ['status', 'amount', 'note'];
-            public $timestamps  = false;
+
+            public $timestamps = false;
+
             protected string $activityEntityType = 'order';
 
             protected function activityMetadata(string $event, array $changes): array
@@ -310,11 +338,15 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
-            protected $table    = 'orders';
+
+            protected $table = 'orders';
+
             protected $fillable = ['status', 'amount', 'note'];
-            public $timestamps  = false;
+
+            public $timestamps = false;
 
             protected function activityActor(): array
             {
@@ -323,7 +355,7 @@ class ActivityLoggableTraitTest extends TestCase
 
             protected function activityEntityId(): string
             {
-                return 'custom-' . $this->getKey();
+                return 'custom-'.$this->getKey();
             }
         };
 
@@ -351,7 +383,8 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
 
             protected $table = 'orders';
@@ -378,7 +411,8 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
 
             protected $table = 'orders';
@@ -405,7 +439,8 @@ class ActivityLoggableTraitTest extends TestCase
     {
         Bus::fake();
 
-        $model = new class extends Model {
+        $model = new class extends Model
+        {
             use ActivityLoggable;
 
             protected $table = 'orders';

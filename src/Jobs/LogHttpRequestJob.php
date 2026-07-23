@@ -9,10 +9,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 
 class LogHttpRequestJob implements ShouldQueue
@@ -42,12 +43,17 @@ class LogHttpRequestJob implements ShouldQueue
 
     public function failed(Throwable $e): void
     {
-        Log::error('LogHttpRequestJob failed', [
-            'provider'   => (string) $this->data->provider->value,
-            'event_type' => (string) $this->data->eventType->value,
-            'event_id'   => $this->data->eventId,
-            'request_id' => $this->data->requestId,
-            'error'      => $e->getMessage(),
-        ]);
+        AuditFailureReporter::reportUsingContainer(
+            subsystem: AuditOperationFailed::SUBSYSTEM_HTTP,
+            stage: AuditOperationFailed::STAGE_INDEXING,
+            exception: $e,
+            context: [
+                'provider'   => $this->data->provider,
+                'event_type' => $this->data->eventType,
+                'event_id'   => $this->data->eventId,
+                'request_id' => $this->data->requestId,
+            ],
+            logMessage: 'LogHttpRequestJob failed',
+        );
     }
 }

@@ -13,19 +13,11 @@ class ActivityNavDisabledTest extends TestCase
 {
     private FakeLogElasticsearchClient $fake;
 
-    protected function getEnvironmentSetUp($app): void
-    {
-        parent::getEnvironmentSetUp($app);
-
-        // HTTP dashboard off: its routes are never registered.
-        $app['config']->set('http_logs.dashboard.enabled', false);
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->fake = new FakeLogElasticsearchClient();
+        $this->fake                 = new FakeLogElasticsearchClient;
         $this->fake->searchResponse = [
             'hits'         => ['total' => ['value' => 0], 'hits' => []],
             'aggregations' => [
@@ -51,5 +43,13 @@ class ActivityNavDisabledTest extends TestCase
         $this->get(route('activity-logs.overview', [], false))
             ->assertOk()
             ->assertDontSee('HTTP Logs');
+    }
+
+    protected function getEnvironmentSetUp($app): void
+    {
+        parent::getEnvironmentSetUp($app);
+
+        // HTTP dashboard off: its routes are never registered.
+        $app['config']->set('http_logs.dashboard.enabled', false);
     }
 }

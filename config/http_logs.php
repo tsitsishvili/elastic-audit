@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'enabled'            => env('HTTP_LOGS_ENABLED', false),
-    'queue'              => env('HTTP_LOGS_QUEUE', 'default'),
-    'job'                => [
+    'enabled' => env('HTTP_LOGS_ENABLED', false),
+    'queue'   => env('HTTP_LOGS_QUEUE', 'default'),
+    'job'     => [
         'tries'         => env('HTTP_LOGS_JOB_TRIES', 3),
         'backoff'       => explode(',', (string) env('HTTP_LOGS_JOB_BACKOFF', '10,30,120')),
         'timeout'       => env('HTTP_LOGS_JOB_TIMEOUT', 30),
@@ -40,7 +40,7 @@ return [
        * preview = store sanitized body;
        * metadata = drop body, keep only status/host/path
     */
-    'payment_body_mode'  => env('HTTP_LOGS_PAYMENT_BODY_MODE', 'preview'),
+    'payment_body_mode' => env('HTTP_LOGS_PAYMENT_BODY_MODE', 'preview'),
 
     // Null derives aliases from log_elasticsearch.index_prefix. Set a string
     // only when this subsystem intentionally needs custom aliases.

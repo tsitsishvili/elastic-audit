@@ -9,11 +9,12 @@ use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
-use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
-use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
-use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 use Throwable;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
+use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 
 class LogActivityJob implements ShouldQueueAfterCommit
 {
@@ -28,8 +29,8 @@ class LogActivityJob implements ShouldQueueAfterCommit
     public function __construct(
         public readonly ActivityLogData $data,
     ) {
-        $this->queue = config('activity_logs.queue', 'default');
-        $this->tries = LogJobOptions::tries('activity_logs.job');
+        $this->queue   = config('activity_logs.queue', 'default');
+        $this->tries   = LogJobOptions::tries('activity_logs.job');
         $this->backoff = LogJobOptions::backoff('activity_logs.job');
         $this->timeout = LogJobOptions::timeout('activity_logs.job', 30);
     }
@@ -41,10 +42,16 @@ class LogActivityJob implements ShouldQueueAfterCommit
 
     public function failed(Throwable $e): void
     {
-        Log::error('LogActivityJob failed', [
-            'action'   => $this->data->action,
-            'event_id' => $this->data->eventId,
-            'error'    => $e->getMessage(),
-        ]);
+        AuditFailureReporter::reportUsingContainer(
+            subsystem: AuditOperationFailed::SUBSYSTEM_ACTIVITY,
+            stage: AuditOperationFailed::STAGE_INDEXING,
+            exception: $e,
+            context: [
+                'action'     => $this->data->action,
+                'event_id'   => $this->data->eventId,
+                'request_id' => $this->data->requestId,
+            ],
+            logMessage: 'LogActivityJob failed',
+        );
     }
 }

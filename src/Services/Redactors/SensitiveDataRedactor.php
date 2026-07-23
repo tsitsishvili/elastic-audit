@@ -188,26 +188,13 @@ class SensitiveDataRedactor
             $normalizedName = $this->normalizeName((string) $name);
 
             $result[$name] = match (true) {
-                in_array($normalizedName, self::URL_VALUE_HEADERS, true)     => $this->sanitizeUrlHeaderValue($value),
+                in_array($normalizedName, self::URL_VALUE_HEADERS, true)    => $this->sanitizeUrlHeaderValue($value),
                 in_array($normalizedName, self::EMBEDDED_URL_HEADERS, true) => $this->sanitizeEmbeddedUrlHeaderValue($value),
-                default                                                      => $value,
+                default                                                     => $value,
             };
         }
 
         return $result;
-    }
-
-    private function isSensitiveHeader(string $name): bool
-    {
-        if (in_array($this->normalizeName($name), $this->headerAllow, true)) {
-            return false;
-        }
-
-        return $this->matchesSecretWord(
-            $name,
-            [...self::REDACTED_HEADER_WORDS, ...$this->headerBlock],
-            self::REDACTED_HEADER_TRAILING_WORDS,
-        );
     }
 
     public function redactBody(mixed $body): mixed
@@ -231,79 +218,13 @@ class SensitiveDataRedactor
         return $result;
     }
 
-    private function isSensitiveBodyKey(string $key): bool
-    {
-        $normalized = $this->normalizeName($key);
-
-        if (in_array($normalized, $this->bodyAllow, true)) {
-            return false;
-        }
-
-        if (in_array($normalized, self::REDACTED_BODY_KEYS, true)) {
-            return true;
-        }
-
-        return $this->matchesSecretWord(
-            $key,
-            [...self::REDACTED_BODY_WORDS, ...$this->bodyBlock],
-            self::REDACTED_BODY_TRAILING_WORDS,
-        );
-    }
-
-    /**
-     * Normalize a header or key name to lower snake_case so camelCase,
-     * kebab-case, dotted and spaced variants compare equal: 'accessToken',
-     * 'access-token', 'access.token' and 'access_token' all become
-     * 'access_token'.
-     */
-    private function normalizeName(string $name): string
-    {
-        $name = (string)preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $name);
-
-        return strtolower((string)preg_replace('/[-.\s]+/', '_', $name));
-    }
-
-    /**
-     * Word-aware match against secret words. The name is normalized first, then
-     * patterns are matched on '_' word boundaries (with an optional plural 's'),
-     * so they never fire mid-word. Words in $anywhere match in any position;
-     * words in $trailing match only as the final word, keeping qualifier
-     * prefixes like 'token_type' visible.
-     *
-     * @param string[] $anywhere
-     * @param string[] $trailing
-     */
-    private function matchesSecretWord(string $name, array $anywhere, array $trailing): bool
-    {
-        $name = $this->normalizeName($name);
-
-        if ($anywhere !== [] && preg_match($this->wordPattern($anywhere, '(?:_|$)'), $name) === 1) {
-            return true;
-        }
-
-        return $trailing !== [] && preg_match($this->wordPattern($trailing, '$'), $name) === 1;
-    }
-
-    /**
-     * Build a regex matching any of $words as a whole word (optionally plural)
-     * starting on a '_' boundary and ending with $suffix.
-     *
-     * @param string[] $words
-     */
-    private function wordPattern(array $words, string $suffix): string
-    {
-        $group = implode('|', array_map(static fn (string $w): string => preg_quote($w, '/'), $words));
-
-        return '/(?:^|_)(?:' . $group . ')s?' . $suffix . '/';
-    }
-
     /**
      * Truncate, hash, and decode a string that has already been redacted.
      * Binary detection is included for direct callers (e.g. test utilities).
      */
     public function truncateAndHash(string $body, int $maxBytes, int $previewBytes): RedactedHttpPayload
     {
-        if (str_contains($body, "\0") || !mb_check_encoding($body, 'UTF-8')) {
+        if (str_contains($body, "\0") || ! mb_check_encoding($body, 'UTF-8')) {
             return new RedactedHttpPayload(
                 headers: [],
                 body: null,
@@ -379,32 +300,6 @@ class SensitiveDataRedactor
         );
     }
 
-    private function decodeBody(array $headers, string $rawBody): mixed
-    {
-        if ($this->isFormUrlEncoded($headers)) {
-            parse_str($rawBody, $parsed);
-
-            return $parsed;
-        }
-
-        return json_decode($rawBody, true);
-    }
-
-    private function isFormUrlEncoded(array $headers): bool
-    {
-        foreach ($headers as $name => $value) {
-            if (strcasecmp((string) $name, 'Content-Type') !== 0) {
-                continue;
-            }
-
-            $line = is_array($value) ? implode(';', array_map('strval', $value)) : (string) $value;
-
-            return str_contains(strtolower($line), 'application/x-www-form-urlencoded');
-        }
-
-        return false;
-    }
-
     /** Remove URI userinfo, query, and fragment components before storage. */
     public function sanitizeUrl(string $url): string
     {
@@ -475,6 +370,111 @@ class SensitiveDataRedactor
         );
 
         return mb_strcut($message, 0, self::ERROR_MESSAGE_MAX_BYTES, 'UTF-8');
+    }
+
+    private function isSensitiveHeader(string $name): bool
+    {
+        if (in_array($this->normalizeName($name), $this->headerAllow, true)) {
+            return false;
+        }
+
+        return $this->matchesSecretWord(
+            $name,
+            [...self::REDACTED_HEADER_WORDS, ...$this->headerBlock],
+            self::REDACTED_HEADER_TRAILING_WORDS,
+        );
+    }
+
+    private function isSensitiveBodyKey(string $key): bool
+    {
+        $normalized = $this->normalizeName($key);
+
+        if (in_array($normalized, $this->bodyAllow, true)) {
+            return false;
+        }
+
+        if (in_array($normalized, self::REDACTED_BODY_KEYS, true)) {
+            return true;
+        }
+
+        return $this->matchesSecretWord(
+            $key,
+            [...self::REDACTED_BODY_WORDS, ...$this->bodyBlock],
+            self::REDACTED_BODY_TRAILING_WORDS,
+        );
+    }
+
+    /**
+     * Normalize a header or key name to lower snake_case so camelCase,
+     * kebab-case, dotted and spaced variants compare equal: 'accessToken',
+     * 'access-token', 'access.token' and 'access_token' all become
+     * 'access_token'.
+     */
+    private function normalizeName(string $name): string
+    {
+        $name = (string) preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $name);
+
+        return strtolower((string) preg_replace('/[-.\s]+/', '_', $name));
+    }
+
+    /**
+     * Word-aware match against secret words. The name is normalized first, then
+     * patterns are matched on '_' word boundaries (with an optional plural 's'),
+     * so they never fire mid-word. Words in $anywhere match in any position;
+     * words in $trailing match only as the final word, keeping qualifier
+     * prefixes like 'token_type' visible.
+     *
+     * @param  string[]  $anywhere
+     * @param  string[]  $trailing
+     */
+    private function matchesSecretWord(string $name, array $anywhere, array $trailing): bool
+    {
+        $name = $this->normalizeName($name);
+
+        if ($anywhere !== [] && preg_match($this->wordPattern($anywhere, '(?:_|$)'), $name) === 1) {
+            return true;
+        }
+
+        return $trailing !== [] && preg_match($this->wordPattern($trailing, '$'), $name) === 1;
+    }
+
+    /**
+     * Build a regex matching any of $words as a whole word (optionally plural)
+     * starting on a '_' boundary and ending with $suffix.
+     *
+     * @param  string[]  $words
+     */
+    private function wordPattern(array $words, string $suffix): string
+    {
+        $group = implode('|', array_map(static fn (string $w): string => preg_quote($w, '/'), $words));
+
+        return '/(?:^|_)(?:'.$group.')s?'.$suffix.'/';
+    }
+
+    private function decodeBody(array $headers, string $rawBody): mixed
+    {
+        if ($this->isFormUrlEncoded($headers)) {
+            parse_str($rawBody, $parsed);
+
+            return $parsed;
+        }
+
+        return json_decode($rawBody, true);
+    }
+
+    private function isFormUrlEncoded(array $headers): bool
+    {
+        foreach ($headers as $name => $value) {
+            if (strcasecmp((string) $name, 'Content-Type') !== 0) {
+                continue;
+            }
+
+            $line = is_array($value) ? implode(';', array_map('strval', $value)) : (string) $value;
+
+            return str_contains(strtolower($line), 'application/x-www-form-urlencoded');
+        }
+
+        return false;
     }
 
     private function sanitizeUrlHeaderValue(mixed $value): mixed

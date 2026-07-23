@@ -23,7 +23,7 @@ final class ElasticsearchIndexTemplate
                 ],
                 'mappings' => $mappings,
                 'aliases'  => [
-                    $readAlias => new \stdClass(),
+                    $readAlias => new \stdClass,
                 ],
             ],
         ];

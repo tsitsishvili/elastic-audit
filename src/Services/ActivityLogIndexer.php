@@ -24,7 +24,7 @@ class ActivityLogIndexer
     }
 
     /**
-     * @param iterable<ActivityLogData> $items
+     * @param  iterable<ActivityLogData>  $items
      */
     public function bulk(iterable $items): void
     {
@@ -55,19 +55,19 @@ class ActivityLogIndexer
                 'span_id'     => isset($d->spanId) ? $d->spanId : null,
                 'traceparent' => isset($d->traceParent) ? $d->traceParent : null,
             ],
-            'actor'          => [
+            'actor' => [
                 'type' => $d->actorType,
                 'id'   => $d->actorId !== null ? (string) $d->actorId : null,
             ],
-            'action'         => $d->action,
-            'entity'         => [
+            'action' => $d->action,
+            'entity' => [
                 'type' => $d->entityType,
                 'id'   => $d->entityId,
             ],
-            'changes'        => $d->changes,
-            'metadata'       => $d->metadata,
-            'success'        => $d->success,
-            'error'          => [
+            'changes'  => $d->changes,
+            'metadata' => $d->metadata,
+            'success'  => $d->success,
+            'error'    => [
                 'class'   => $d->errorClass,
                 'message' => $d->errorMessage,
             ],

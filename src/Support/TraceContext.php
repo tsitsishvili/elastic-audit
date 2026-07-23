@@ -20,7 +20,7 @@ final readonly class TraceContext
         $traceParent = self::normalizeHeader($traceParent);
 
         if ($traceParent === null) {
-            return new self();
+            return new self;
         }
 
         $parts = explode('-', $traceParent);

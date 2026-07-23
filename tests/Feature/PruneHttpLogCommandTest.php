@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
-use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
-use Tsitsishvili\ElasticAudit\Tests\TestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use RuntimeException;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class PruneHttpLogCommandTest extends TestCase
 {

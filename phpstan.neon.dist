@@ -1,0 +1,23 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+    parallel:
+        maximumNumberOfProcesses: 1
+    tmpDir: .cache/phpstan
+    viewDirectories:
+        - resources/views
+    ignoreErrors:
+        -
+            message: '#Parameter \#1 \$view of function view expects view-string\|null, string given#'
+            paths:
+                - src/Http/Controllers/*
+        -
+            identifier: trait.unused
+            path: src/Traits/ActivityLoggable.php
+        -
+            identifier: method.notFound
+            path: src/Services/Elasticsearch/LogElasticsearchClient.php

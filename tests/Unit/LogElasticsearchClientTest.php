@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
-use Elastic\Elasticsearch\Endpoints\Indices;
 use Elastic\Elasticsearch\Endpoints\Ilm;
+use Elastic\Elasticsearch\Endpoints\Indices;
 use Elastic\Elasticsearch\Response\Elasticsearch;
 use Elastic\Transport\Exception\NoNodeAvailableException;
+use PHPUnit\Framework\MockObject\Stub;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\SpyElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
-use PHPUnit\Framework\MockObject\Stub;
-use RuntimeException;
 
 class LogElasticsearchClientTest extends TestCase
 {
@@ -175,6 +175,24 @@ class LogElasticsearchClientTest extends TestCase
         $client->putIndexTemplate('logs_template', $template);
     }
 
+    public function test_get_mapping_returns_array(): void
+    {
+        $expected = ['logs-000001' => ['mappings' => ['dynamic' => 'strict']]];
+        $this->esResponse->method('asArray')->willReturn($expected);
+        $this->indices->method('getMapping')->willReturn($this->esResponse);
+
+        $this->assertSame($expected, $this->client->getMapping('logs-000001'));
+    }
+
+    public function test_get_index_template_returns_array(): void
+    {
+        $expected = ['index_templates' => [['name' => 'logs_template']]];
+        $this->esResponse->method('asArray')->willReturn($expected);
+        $this->indices->method('getIndexTemplate')->willReturn($this->esResponse);
+
+        $this->assertSame($expected, $this->client->getIndexTemplate('logs_template'));
+    }
+
     public function test_exists_index_returns_true(): void
     {
         $this->esResponse->method('asBool')->willReturn(true);
@@ -192,7 +210,7 @@ class LogElasticsearchClientTest extends TestCase
 
     public function test_exists_index_rethrows_no_node_available_exception(): void
     {
-        $this->indices->method('exists')->willThrowException(new NoNodeAvailableException());
+        $this->indices->method('exists')->willThrowException(new NoNodeAvailableException);
 
         $this->expectException(NoNodeAvailableException::class);
 
@@ -242,7 +260,7 @@ class LogElasticsearchClientTest extends TestCase
 
     public function test_exists_alias_rethrows_no_node_available_exception(): void
     {
-        $this->indices->method('existsAlias')->willThrowException(new NoNodeAvailableException());
+        $this->indices->method('existsAlias')->willThrowException(new NoNodeAvailableException);
 
         $this->expectException(NoNodeAvailableException::class);
 

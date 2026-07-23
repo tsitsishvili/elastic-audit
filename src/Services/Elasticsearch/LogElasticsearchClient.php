@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
-class LogElasticsearchClient implements LogElasticsearchClientInterface
+class LogElasticsearchClient implements LogElasticsearchClientInterface, LogElasticsearchSchemaInspectorInterface
 {
     public function __construct(
         private readonly ClientInterface $client,
@@ -129,6 +129,28 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
         }
     }
 
+    public function getMapping(string $index): array
+    {
+        try {
+            return $this->client->indices()->getMapping(['index' => $index])->asArray();
+        } catch (Throwable $e) {
+            $this->logError('LogES: get mapping failed', $e);
+
+            throw $e;
+        }
+    }
+
+    public function getIndexTemplate(string $name): array
+    {
+        try {
+            return $this->client->indices()->getIndexTemplate(['name' => $name])->asArray();
+        } catch (Throwable $e) {
+            $this->logError('LogES: get index template failed', $e);
+
+            throw $e;
+        }
+    }
+
     public function updateAliases(array $actions): void
     {
         $this->client->indices()->updateAliases(['body' => ['actions' => $actions]]);
@@ -176,8 +198,8 @@ class LogElasticsearchClient implements LogElasticsearchClientInterface
                     continue;
                 }
 
-                $error = $details['error'];
-                $type  = is_array($error) ? ($error['type'] ?? 'unknown') : 'unknown';
+                $error  = $details['error'];
+                $type   = is_array($error) ? ($error['type'] ?? 'unknown') : 'unknown';
                 $reason = is_array($error) ? ($error['reason'] ?? '') : (string) $error;
 
                 return trim("Bulk {$operation} failed: {$type} {$reason}");

@@ -33,6 +33,8 @@
         "psr/http-message": "^1.1 || ^2.0"
     },
     "require-dev": {
+        "larastan/larastan": "^3.10",
+        "laravel/pint": "^1.29",
         "orchestra/testbench": "^10.0 || ^11.0",
         "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
     },
@@ -58,6 +60,9 @@
         }
     },
     "scripts": {
+        "analyse": "phpstan analyse --memory-limit=1G --no-progress --debug",
+        "format": "pint",
+        "format:test": "pint --test",
         "test": "phpunit"
     },
     "minimum-stability": "stable",

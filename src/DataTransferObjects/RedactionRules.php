@@ -13,14 +13,13 @@ namespace Tsitsishvili\ElasticAudit\DataTransferObjects;
 final readonly class RedactionRules
 {
     /**
-     * @param string[] $allow Names to NEVER redact, even when a built-in or $block
-     *                        rule matches. Matched exactly; takes precedence over everything.
-     * @param string[] $block Extra names to ALWAYS redact, in addition to the defaults.
-     *                        Matched as whole words in any position, like the built-ins.
+     * @param  string[]  $allow  Names to NEVER redact, even when a built-in or $block
+     *                           rule matches. Matched exactly; takes precedence over everything.
+     * @param  string[]  $block  Extra names to ALWAYS redact, in addition to the defaults.
+     *                           Matched as whole words in any position, like the built-ins.
      */
     public function __construct(
         public array $allow = [],
         public array $block = [],
-    ) {
-    }
+    ) {}
 }

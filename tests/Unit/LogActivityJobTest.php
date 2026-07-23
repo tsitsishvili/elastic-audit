@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use Illuminate\Support\Facades\Event;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityBatchJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
@@ -77,6 +80,35 @@ class LogActivityJobTest extends TestCase
         $this->assertSame(3, $batchJob->tries);
         $this->assertSame([2, 8], $batchJob->backoff);
         $this->assertSame(60, $batchJob->timeout);
+    }
+
+    public function test_terminal_failure_dispatches_observability_event(): void
+    {
+        Event::fake([AuditOperationFailed::class]);
+        $data = $this->makeData();
+
+        (new LogActivityJob($data))->failed(new RuntimeException('indexing failed'));
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->subsystem === AuditOperationFailed::SUBSYSTEM_ACTIVITY
+                && $event->stage === AuditOperationFailed::STAGE_INDEXING
+                && $event->context['event_id'] === $data->eventId,
+        );
+    }
+
+    public function test_terminal_batch_failure_dispatches_observability_event(): void
+    {
+        Event::fake([AuditOperationFailed::class]);
+
+        (new LogActivityBatchJob([$this->makeData()]))->failed(new RuntimeException('indexing failed'));
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->subsystem === AuditOperationFailed::SUBSYSTEM_ACTIVITY
+                && $event->stage === AuditOperationFailed::STAGE_INDEXING
+                && $event->context['count'] === 1,
+        );
     }
 
     private function makeData(): ActivityLogData

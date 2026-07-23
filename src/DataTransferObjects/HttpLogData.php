@@ -73,7 +73,7 @@ final readonly class HttpLogData
         );
 
         $statusClass = $httpStatusCode !== null
-            ? (string) (intdiv($httpStatusCode, 100)) . 'xx'
+            ? (string) (intdiv($httpStatusCode, 100)).'xx'
             : null;
 
         return new self(

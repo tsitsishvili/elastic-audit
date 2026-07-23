@@ -14,7 +14,7 @@ class PaymentRedactorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->redactor = new PaymentRedactor();
+        $this->redactor = new PaymentRedactor;
     }
 
     public function test_metadata_mode_returns_null_body_and_null_preview(): void

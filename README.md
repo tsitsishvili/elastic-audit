@@ -38,7 +38,7 @@ application can enable only what it needs.
 
 ## Quick Start
 
-1. Once v4.0.0 is published, install the stable v4 release from Packagist:
+1. Install the stable v4 release from Packagist:
 
     ```bash
     composer require tsitsishvili/elastic-audit:^4.0
@@ -152,6 +152,7 @@ Published files are copies. Re-run the command with `--force` after upgrading th
 
 - [Changelog](CHANGELOG.md)
 - [Upgrade Guide](UPGRADE.md)
+- [Security Policy and Threat Model](SECURITY.md)
 - [Contributing](https://github.com/tsitsishvili/elastic-audit/blob/main/CONTRIBUTING.md)
 - [Coding Standards](https://github.com/tsitsishvili/elastic-audit/blob/main/CODING_STANDARDS.md)
 
