@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
-use RuntimeException;
 
 class PruneActivityLogCommandTest extends TestCase
 {
     public function test_prunes_documents_for_each_retention_value(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public array $deleteByQueryCalls = [];
 
             public array $searchCalls = [];
@@ -45,6 +46,7 @@ class PruneActivityLogCommandTest extends TestCase
             public function deleteByQuery(array $params): array
             {
                 $this->deleteByQueryCalls[] = $params;
+
                 return ['deleted' => 5];
             }
         };
@@ -63,7 +65,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_success_when_no_documents(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -80,7 +83,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_search_fails(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 throw new RuntimeException('ES down');
@@ -96,7 +100,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_delete_by_query_fails(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -121,7 +126,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_retention_search_times_out(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -140,7 +146,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_retention_search_has_failed_shards(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -159,7 +166,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_delete_by_query_times_out(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -184,7 +192,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_delete_by_query_returns_failures(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [
@@ -209,7 +218,8 @@ class PruneActivityLogCommandTest extends TestCase
 
     public function test_returns_failure_when_delete_by_query_has_version_conflicts(): void
     {
-        $fake = new class extends FakeLogElasticsearchClient {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
             public function search(array $params): array
             {
                 return [

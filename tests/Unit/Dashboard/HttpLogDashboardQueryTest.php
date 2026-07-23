@@ -10,14 +10,9 @@ use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class HttpLogDashboardQueryTest extends TestCase
 {
-    private function dashboardQuery(FakeLogElasticsearchClient $client): HttpLogDashboardQuery
-    {
-        return new HttpLogDashboardQuery($client, 'test_alias');
-    }
-
     public function test_search_builds_pagination_and_sort(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = ['hits' => ['total' => ['value' => 42], 'hits' => []]];
 
         $result = $this->dashboardQuery($client)->search([], page: 2, perPage: 10);
@@ -33,7 +28,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_search_translates_filters_into_term_clauses(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client = new FakeLogElasticsearchClient;
 
         $this->dashboardQuery($client)->search([
             'provider'     => 'delivery',
@@ -54,7 +49,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_search_translates_timeout_filter_into_term_clause(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client = new FakeLogElasticsearchClient;
 
         $this->dashboardQuery($client)->search(['timeout' => '1']);
 
@@ -65,7 +60,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_search_ignores_falsey_timeout_filter(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client = new FakeLogElasticsearchClient;
 
         $this->dashboardQuery($client)->search(['timeout' => '0']);
 
@@ -76,7 +71,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_search_builds_timestamp_range_from_dates(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client = new FakeLogElasticsearchClient;
 
         $this->dashboardQuery($client)->search(['from' => '2026-01-01T00:00', 'to' => '2026-02-01T00:00']);
 
@@ -90,7 +85,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_search_returns_sources_with_id(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = [
             'hits' => [
                 'total' => ['value' => 1],
@@ -107,7 +102,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_find_queries_by_event_id_and_returns_source(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = [
             'hits' => ['hits' => [['_id' => 'doc-1', '_source' => ['event_id' => 'evt-9']]]],
         ];
@@ -120,7 +115,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_find_returns_null_when_missing(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = ['hits' => ['hits' => []]];
 
         $this->assertNull($this->dashboardQuery($client)->find('missing'));
@@ -128,7 +123,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_metrics_requests_aggregations(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = [
             'hits'         => ['total' => ['value' => 5]],
             'aggregations' => ['by_provider' => ['buckets' => []]],
@@ -146,7 +141,7 @@ class HttpLogDashboardQueryTest extends TestCase
 
     public function test_filter_options_extracts_bucket_keys(): void
     {
-        $client = new FakeLogElasticsearchClient();
+        $client                 = new FakeLogElasticsearchClient;
         $client->searchResponse = [
             'aggregations' => [
                 'providers'   => ['buckets' => [['key' => 'delivery'], ['key' => 'payment']]],
@@ -158,5 +153,10 @@ class HttpLogDashboardQueryTest extends TestCase
 
         $this->assertSame(['delivery', 'payment'], $options['providers']);
         $this->assertSame(['order_create'], $options['event_types']);
+    }
+
+    private function dashboardQuery(FakeLogElasticsearchClient $client): HttpLogDashboardQuery
+    {
+        return new HttpLogDashboardQuery($client, 'test_alias');
     }
 }

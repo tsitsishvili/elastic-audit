@@ -411,12 +411,20 @@ php artisan http-logs:rollover
 ```
 
 Use the health command during deploys or runbooks to validate cluster reachability, aliases and write-index topology,
-Elasticsearch names, HTTP enum classes, queue retry and body-capture options, and lifecycle configuration:
+the current write-index and index-template mappings, Elasticsearch names, HTTP enum classes, queue retry and
+body-capture options, and lifecycle configuration:
 
 ```bash
 php artisan elastic-audit:health
 php artisan elastic-audit:health --all
+php artisan elastic-audit:health --json
 ```
+
+`--json` emits one object with an `ok` boolean and a `checks` array, and preserves the command's success/failure exit
+code for deployment automation. New mappings carry package schema metadata. Existing v4 mappings without that metadata
+remain valid when their concrete field structure is compatible. Custom Elasticsearch client implementations that do
+not implement `LogElasticsearchSchemaInspectorInterface` continue to work; health reports schema inspection as
+unavailable instead of failing.
 
 The default command checks feature-specific configuration and aliases only for enabled subsystems. Use `--all` only
 when aliases for disabled subsystems have also been provisioned and should be checked: it additionally verifies their
@@ -655,6 +663,30 @@ HTTP_LOGS_BATCH_JOB_TIMEOUT=120
 For high-volume backfills or replay tools, use `LogHttpRequestBatchJob` with a list of `HttpLogData` DTOs. It uses the
 Elasticsearch bulk API through `HttpLogIndexer::bulk(...)` and sends the batch in one ES request. Bulk responses with
 per-item Elasticsearch failures are treated as job failures, even when Elasticsearch returns HTTP 200.
+
+### Failure visibility
+
+Audit capture must never change a provider response or exception, but complete record loss is observable. When payload
+preparation or queue dispatch fails, or when an HTTP indexing job exhausts its retries, the package:
+
+1. Writes a sanitized application error without headers or payload data.
+2. Dispatches `Tsitsishvili\ElasticAudit\Events\AuditOperationFailed`.
+
+The event exposes `subsystem`, `stage`, `exceptionClass`, a sanitized `message`, and shallow scalar `context`. It does
+not expose the raw exception, request/response payload, headers, activity changes, or metadata. Listener exceptions are
+isolated from the audited application flow.
+
+```php
+use Illuminate\Support\Facades\Event;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
+
+Event::listen(AuditOperationFailed::class, function (AuditOperationFailed $event): void {
+    // Increment a metric or notify the application's monitoring service.
+});
+```
+
+Disabled and sampled-out capture is an intentional no-op and does not emit a failure event. Oversized, binary, streamed,
+or unreadable bodies that still produce a metadata-only audit record are likewise not failures.
 
 ## Dashboard
 

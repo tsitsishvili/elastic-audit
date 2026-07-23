@@ -5,6 +5,29 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 4.0.0
+
+### Low impact: audit failures are now observable
+
+Complete capture/preparation/queue-dispatch failures and indexing jobs that exhaust their retries now write a sanitized
+application error and dispatch `Tsitsishvili\ElasticAudit\Events\AuditOperationFailed`. The event contains no raw
+exception or audit payload. Existing application/provider behavior remains non-blocking, and applications that do not
+listen for the event require no change.
+
+### Low impact: health validates mappings and supports JSON
+
+The health command now checks the current write-index and index-template mappings when the built-in Elasticsearch
+client is used. Run the relevant create-index command if health reports an incompatible write mapping or template:
+
+```bash
+php artisan http-logs:create-index
+php artisan activity-logs:create-index
+php artisan elastic-audit:health
+```
+
+New indexes/templates include Elastic Audit schema metadata. Existing structurally compatible v4 mappings without that
+metadata continue to pass. `php artisan elastic-audit:health --json` is available for deployment automation.
+
 ## Upgrading from 3.2.0
 
 ### High impact: review HTTP body capture and redaction defaults

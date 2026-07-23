@@ -10,17 +10,17 @@ use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class AgentResourcesTest extends TestCase
 {
-    private const ROOT = __DIR__ . '/../..';
+    private const ROOT = __DIR__.'/../..';
 
-    private const GUIDELINE_DIR = self::ROOT . '/resources/boost/guidelines';
+    private const GUIDELINE_DIR = self::ROOT.'/resources/boost/guidelines';
 
-    private const GUIDELINE = self::GUIDELINE_DIR . '/core.blade.php';
+    private const GUIDELINE = self::GUIDELINE_DIR.'/core.blade.php';
 
-    private const SKILL_DIR = self::ROOT . '/resources/boost/skills/elastic-audit-development';
+    private const SKILL_DIR = self::ROOT.'/resources/boost/skills/elastic-audit-development';
 
-    private const SKILL = self::SKILL_DIR . '/SKILL.md';
+    private const SKILL = self::SKILL_DIR.'/SKILL.md';
 
-    private const AGENTS = self::ROOT . '/AGENTS.md';
+    private const AGENTS = self::ROOT.'/AGENTS.md';
 
     public function test_package_ships_a_boost_guideline(): void
     {
@@ -40,7 +40,7 @@ class AgentResourcesTest extends TestCase
      */
     public function test_boost_guideline_directory_holds_exactly_one_file(): void
     {
-        $files = glob(self::GUIDELINE_DIR . '/*');
+        $files = glob(self::GUIDELINE_DIR.'/*');
 
         $this->assertIsArray($files);
         $this->assertCount(1, $files, 'A second guideline file would replace core.blade.php in Boost output.');

@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Services\Elasticsearch;
 
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+
 class ActivityLogMapping
 {
     public static function get(): array
     {
         return [
-            'dynamic'    => 'strict',
+            'dynamic' => 'strict',
+            '_meta'   => [
+                'elastic_audit' => [
+                    'subsystem'      => 'activity_logs',
+                    'schema_version' => ActivityLogData::SCHEMA_VERSION,
+                ],
+            ],
             'properties' => [
                 '@timestamp'     => ['type' => 'date'],
                 'event_id'       => ['type' => 'keyword'],
@@ -22,23 +30,23 @@ class ActivityLogMapping
                         'traceparent' => ['type' => 'keyword', 'index' => false],
                     ],
                 ],
-                'actor'          => [
+                'actor' => [
                     'properties' => [
                         'type' => ['type' => 'keyword'],
                         'id'   => ['type' => 'keyword'],
                     ],
                 ],
-                'action'         => ['type' => 'keyword'],
-                'entity'         => [
+                'action' => ['type' => 'keyword'],
+                'entity' => [
                     'properties' => [
                         'type' => ['type' => 'keyword'],
                         'id'   => ['type' => 'keyword'],
                     ],
                 ],
-                'changes'        => ['type' => 'object', 'enabled' => false],
-                'metadata'       => ['type' => 'object', 'enabled' => false],
-                'success'        => ['type' => 'boolean'],
-                'error'          => [
+                'changes'  => ['type' => 'object', 'enabled' => false],
+                'metadata' => ['type' => 'object', 'enabled' => false],
+                'success'  => ['type' => 'boolean'],
+                'error'    => [
                     'properties' => [
                         'class'   => ['type' => 'keyword'],
                         'message' => ['type' => 'text'],

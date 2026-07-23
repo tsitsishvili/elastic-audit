@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
+use PHPUnit\Framework\TestCase;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactionRules;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
-use PHPUnit\Framework\TestCase;
 
 class SensitiveDataRedactorTest extends TestCase
 {
@@ -15,7 +15,7 @@ class SensitiveDataRedactorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->redactor = new SensitiveDataRedactor();
+        $this->redactor = new SensitiveDataRedactor;
     }
 
     // ── Header redaction ────────────────────────────────────────────────────
@@ -63,17 +63,17 @@ class SensitiveDataRedactorTest extends TestCase
     public function test_redacts_vendor_prefixed_headers_by_word(): void
     {
         $headers = [
-            'X-Asd-Signature'   => 'sig-abc',
-            'Postman-Token'     => 'tok-xyz',
-            'X-Csrf-Token'      => 'csrf-123',
-            'X-Hub-Signature'   => 'sha256=...',
-            'X-Hmac'            => 'mac-1',
-            'X-Client-Secret'   => 'shhh',
-            'X-Api-Key'         => 'ak-1',
-            'X-Functions-Key'   => 'func-key',
-            'Idempotency-Key'   => 'idem-1',
-            'X-Request-Id'      => 'req-1',
-            'Content-Type'      => 'application/json',
+            'X-Asd-Signature' => 'sig-abc',
+            'Postman-Token'   => 'tok-xyz',
+            'X-Csrf-Token'    => 'csrf-123',
+            'X-Hub-Signature' => 'sha256=...',
+            'X-Hmac'          => 'mac-1',
+            'X-Client-Secret' => 'shhh',
+            'X-Api-Key'       => 'ak-1',
+            'X-Functions-Key' => 'func-key',
+            'Idempotency-Key' => 'idem-1',
+            'X-Request-Id'    => 'req-1',
+            'Content-Type'    => 'application/json',
         ];
 
         $result = $this->redactor->redactHeaders($headers);
@@ -211,11 +211,11 @@ class SensitiveDataRedactorTest extends TestCase
     public function test_redacts_camel_case_body_keys(): void
     {
         $body = [
-            'accessToken'    => 'at',  // word-matched after normalization
-            'webhookSecret'  => 'sh',
-            'cardNumber'     => '4111111111111111', // exact key after normalization
-            'apiKey'         => 'ak',
-            'orderId'        => 5,
+            'accessToken'   => 'at',  // word-matched after normalization
+            'webhookSecret' => 'sh',
+            'cardNumber'    => '4111111111111111', // exact key after normalization
+            'apiKey'        => 'ak',
+            'orderId'       => 5,
         ];
 
         $result = $this->redactor->redactBody($body);
@@ -481,7 +481,7 @@ class SensitiveDataRedactorTest extends TestCase
         $payload = $this->redactor->buildPayload([], $rawBody, 32768, 4096);
 
         $redactedBody = json_encode(['password' => '[REDACTED]', 'order_id' => 1]);
-        $expectedHash = 'sha256:' . hash('sha256', $redactedBody);
+        $expectedHash = 'sha256:'.hash('sha256', $redactedBody);
 
         $this->assertSame($expectedHash, $payload->bodyHash);
     }

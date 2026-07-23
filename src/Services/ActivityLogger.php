@@ -4,20 +4,22 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Services;
 
+use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
-use Throwable;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 
 class ActivityLogger
 {
     private const ERROR_MESSAGE_MAX_BYTES = 2048;
 
     public function __construct(
-        private readonly SensitiveDataRedactor $redactor = new SensitiveDataRedactor(),
-    ) {
-    }
+        private readonly SensitiveDataRedactor $redactor = new SensitiveDataRedactor,
+        private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
+    ) {}
 
     public function record(
         string $action,
@@ -44,8 +46,16 @@ class ActivityLogger
             );
 
             LogActivityJob::dispatch($data);
-        } catch (Throwable) {
-            // Never let logging failures propagate.
+        } catch (Throwable $e) {
+            $this->failureReporter->report(
+                subsystem: AuditOperationFailed::SUBSYSTEM_ACTIVITY,
+                stage: AuditOperationFailed::STAGE_CAPTURE,
+                exception: $e,
+                context: [
+                    'action'     => $action,
+                    'request_id' => $context->requestId,
+                ],
+            );
         }
     }
 

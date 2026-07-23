@@ -49,6 +49,10 @@ declare(strict_types=1);
 
 - Logging must never break the consuming application's provider call or callback response.
 - Catch and isolate failures in logging, redaction, queue dispatch preparation, and indexing failure callbacks.
+- Report complete audit-record loss through `AuditFailureReporter`; never silently swallow capture or terminal indexing
+  failures.
+- Keep failure context shallow and scalar. Never attach headers, payloads, model changes, arbitrary metadata, or raw
+  exception objects to fallback diagnostics.
 - Preserve the original exception behavior of outgoing provider calls.
 
 ## Security and Redaction
@@ -79,6 +83,8 @@ Add or update tests when changing:
 - Config defaults or config resolution.
 
 Prefer focused tests that assert behavior instead of implementation details.
+
+Run `composer analyse` and `composer format:test` before submitting a change.
 
 ## Documentation
 

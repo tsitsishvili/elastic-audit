@@ -7,10 +7,12 @@ namespace Tsitsishvili\ElasticAudit\Traits;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
-use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
-use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 use Throwable;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
+use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 trait ActivityLoggable
 {
@@ -44,39 +46,6 @@ trait ActivityLoggable
             static::forceDeleted(function (self $model): void {
                 $model->logActivityEvent('force_deleted', []);
             });
-        }
-    }
-
-    private function logActivityEvent(string $event, array $changes): void
-    {
-        try {
-            $entityType = $this->activityEntityType();
-
-            [$actorType, $actorId] = $this->resolveActivityActor();
-
-            $context = new ActivityLogContext(
-                actorType: $actorType,
-                actorId: $actorId,
-                entityType: $entityType,
-                entityId: $this->activityEntityId(),
-                requestId: (string) Str::ulid(),
-                retentionDays: RetentionDays::resolve(
-                    days: null,
-                    retainForever: false,
-                    configuredDays: config('activity_logs.retention_days', 360),
-                    configuredRetainForever: (bool) config('activity_logs.retain_forever', false),
-                ),
-                traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
-            );
-
-            app(ActivityLogger::class)->record(
-                action: $entityType . '.' . $event,
-                context: $context,
-                changes: $changes,
-                metadata: $this->activityMetadata($event, $changes),
-            );
-        } catch (Throwable) {
-            // Model persistence must never depend on audit capture succeeding.
         }
     }
 
@@ -117,6 +86,57 @@ trait ActivityLoggable
         }
 
         return ['system', null];
+    }
+
+    private function logActivityEvent(string $event, array $changes): void
+    {
+        try {
+            $entityType = $this->activityEntityType();
+
+            [$actorType, $actorId] = $this->resolveActivityActor();
+
+            $context = new ActivityLogContext(
+                actorType: $actorType,
+                actorId: $actorId,
+                entityType: $entityType,
+                entityId: $this->activityEntityId(),
+                requestId: (string) Str::ulid(),
+                retentionDays: RetentionDays::resolve(
+                    days: null,
+                    retainForever: false,
+                    configuredDays: config('activity_logs.retention_days', 360),
+                    configuredRetainForever: (bool) config('activity_logs.retain_forever', false),
+                ),
+                traceParent: app()->bound('request') ? request()->headers->get('traceparent') : null,
+            );
+
+            app(ActivityLogger::class)->record(
+                action: $entityType.'.'.$event,
+                context: $context,
+                changes: $changes,
+                metadata: $this->activityMetadata($event, $changes),
+            );
+        } catch (Throwable $e) {
+            AuditFailureReporter::reportUsingContainer(
+                subsystem: AuditOperationFailed::SUBSYSTEM_ACTIVITY,
+                stage: AuditOperationFailed::STAGE_CAPTURE,
+                exception: $e,
+                context: [
+                    'event'       => $event,
+                    'model_class' => static::class,
+                    'entity_id'   => $this->activityEntityIdSafely(),
+                ],
+            );
+        }
+    }
+
+    private function activityEntityIdSafely(): ?string
+    {
+        try {
+            return $this->activityEntityId();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function resolveActivityActor(): array

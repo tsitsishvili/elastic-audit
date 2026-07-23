@@ -26,11 +26,13 @@ final class ElasticsearchLifecycle
         $conditions = [];
 
         $maxAge = config('log_elasticsearch.lifecycle.rollover_max_age');
+
         if (is_string($maxAge) && $maxAge !== '') {
             $conditions['max_age'] = $maxAge;
         }
 
         $maxShardSize = config('log_elasticsearch.lifecycle.rollover_max_shard_size');
+
         if (is_string($maxShardSize) && $maxShardSize !== '') {
             $conditions['max_primary_shard_size'] = $maxShardSize;
         }
@@ -59,7 +61,7 @@ final class ElasticsearchLifecycle
 
             $phases['delete'] = [
                 'min_age' => $deleteAfter,
-                'actions' => ['delete' => new \stdClass()],
+                'actions' => ['delete' => new \stdClass],
             ];
         }
 

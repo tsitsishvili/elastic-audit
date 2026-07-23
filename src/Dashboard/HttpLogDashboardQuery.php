@@ -51,7 +51,7 @@ class HttpLogDashboardQuery
         ]);
 
         return [
-            'hits'  => array_map(
+            'hits' => array_map(
                 static fn (array $hit): array => ($hit['_source'] ?? []) + ['_id' => $hit['_id'] ?? null],
                 $result['hits']['hits'] ?? [],
             ),
@@ -122,12 +122,12 @@ class HttpLogDashboardQuery
                         'terms' => ['field' => 'provider', 'size' => 20],
                         'aggs'  => ['latency_avg' => ['avg' => ['field' => 'http.latency_ms']]],
                     ],
-                    'by_direction'    => ['terms' => ['field' => 'direction', 'size' => 5]],
-                    'success'         => ['terms' => ['field' => 'success', 'size' => 2]],
-                    'timeouts'        => ['filter' => ['term' => ['http.timed_out' => true]]],
-                    'latency'         => ['stats' => ['field' => 'http.latency_ms']],
-                    'latency_pct'     => ['percentiles' => ['field' => 'http.latency_ms', 'percents' => [50, 95, 99]]],
-                    'over_time'       => [
+                    'by_direction' => ['terms' => ['field' => 'direction', 'size' => 5]],
+                    'success'      => ['terms' => ['field' => 'success', 'size' => 2]],
+                    'timeouts'     => ['filter' => ['term' => ['http.timed_out' => true]]],
+                    'latency'      => ['stats' => ['field' => 'http.latency_ms']],
+                    'latency_pct'  => ['percentiles' => ['field' => 'http.latency_ms', 'percents' => [50, 95, 99]]],
+                    'over_time'    => [
                         'date_histogram' => $dateHistogram,
                         'aggs'           => [
                             'by_status_class' => ['terms' => ['field' => 'http.status_class', 'size' => 10]],

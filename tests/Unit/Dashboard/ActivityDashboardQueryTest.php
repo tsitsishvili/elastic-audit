@@ -13,11 +13,12 @@ class ActivityDashboardQueryTest extends TestCase
     private const READ_ALIAS = 'app_activity_logs';
 
     private FakeLogElasticsearchClient $client;
+
     private ActivityDashboardQuery $query;
 
     protected function setUp(): void
     {
-        $this->client = new FakeLogElasticsearchClient();
+        $this->client = new FakeLogElasticsearchClient;
         $this->query  = new ActivityDashboardQuery($this->client, self::READ_ALIAS);
     }
 

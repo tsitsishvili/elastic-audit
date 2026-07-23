@@ -9,9 +9,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
-use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
@@ -61,7 +61,7 @@ class HttpLogFacadeTest extends TestCase
             context: $this->context,
         )
             ->withHeaders([
-                'Authorization' => 'Bearer secret-token',
+                'Authorization'    => 'Bearer secret-token',
                 'X-Correlation-ID' => 'corr-1',
             ])
             ->post('https://provider.example/orders', ['order_id' => 1]);

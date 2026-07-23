@@ -6,23 +6,26 @@ namespace Tsitsishvili\ElasticAudit\Services;
 
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
-use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
-use Throwable;
 
 class HttpLogger
 {
     public function __construct(
         private readonly SensitiveDataRedactor $redactor,
         private readonly ?HttpPayloadRedactorResolver $redactorResolver = null,
+        private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
     ) {}
 
     public function logIncoming(
@@ -92,8 +95,17 @@ class HttpLogger
             );
 
             LogHttpRequestJob::dispatch($data);
-        } catch (Throwable) {
-            // Never let logging failures propagate
+        } catch (Throwable $e) {
+            $this->failureReporter->report(
+                subsystem: AuditOperationFailed::SUBSYSTEM_HTTP,
+                stage: AuditOperationFailed::STAGE_CAPTURE,
+                exception: $e,
+                context: [
+                    'provider'   => $provider,
+                    'event_type' => $eventType,
+                    'request_id' => $context->requestId,
+                ],
+            );
         }
     }
 

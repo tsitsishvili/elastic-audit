@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Fixtures;
 
 use Closure;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchSchemaInspectorInterface;
 
 /**
  * In-memory test double for the logs Elasticsearch client. Records every search
  * call and returns a configurable response so tests can drive the dashboard
  * without a live cluster.
  */
-class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
+class FakeLogElasticsearchClient implements LogElasticsearchClientInterface, LogElasticsearchSchemaInspectorInterface
 {
     /** @var list<array<string, mixed>> Captured params from every search() call. */
     public array $searchCalls = [];
@@ -87,6 +90,29 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
         ];
     }
 
+    public function getMapping(string $index): array
+    {
+        return [
+            $index => [
+                'mappings' => $this->mappingFor($index),
+            ],
+        ];
+    }
+
+    public function getIndexTemplate(string $name): array
+    {
+        return [
+            'index_templates' => [[
+                'name'           => $name,
+                'index_template' => [
+                    'template' => [
+                        'mappings' => $this->mappingFor($name),
+                    ],
+                ],
+            ]],
+        ];
+    }
+
     public function updateAliases(array $actions): void {}
 
     public function putLifecyclePolicy(string $name, array $policy): void {}
@@ -94,5 +120,12 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface
     public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
     {
         return [];
+    }
+
+    private function mappingFor(string $name): array
+    {
+        return str_contains($name, 'activity')
+            ? ActivityLogMapping::get()
+            : HttpLogMapping::get();
     }
 }

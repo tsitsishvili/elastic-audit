@@ -9,10 +9,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 
 class LogHttpRequestBatchJob implements ShouldQueue
@@ -44,9 +45,12 @@ class LogHttpRequestBatchJob implements ShouldQueue
 
     public function failed(Throwable $e): void
     {
-        Log::error('LogHttpRequestBatchJob failed', [
-            'count' => count($this->items),
-            'error' => $e->getMessage(),
-        ]);
+        AuditFailureReporter::reportUsingContainer(
+            subsystem: AuditOperationFailed::SUBSYSTEM_HTTP,
+            stage: AuditOperationFailed::STAGE_INDEXING,
+            exception: $e,
+            context: ['count' => count($this->items)],
+            logMessage: 'LogHttpRequestBatchJob failed',
+        );
     }
 }

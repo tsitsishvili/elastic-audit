@@ -16,15 +16,17 @@ logs and activity logs are independent subsystems with separate configuration, q
   events. Activity entity and actor types are free string labels.
 - Logging dispatches queued jobs. Keep the configured queue worker running and use `Bus::fake()` when asserting job
   dispatch in tests; unit tests should not require a live Elasticsearch cluster.
+- Complete capture or terminal indexing failures emit a sanitized `AuditOperationFailed` Laravel event. It contains no
+  raw exception, headers, payloads, changes, or arbitrary metadata.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
   exception because allowed values are stored in clear text.
 - Undecodable bodies default to headers plus a raw-body hash. `HTTP_LOGS_UNDECODABLE_BODY_MODE=preview` stores them in
   clear text and needs explicit security review. Bodies over the 1 MB default capture cap are headers-only.
 - Successful incoming callbacks are queued in terminable middleware after the response is sent. Activity jobs dispatch
   after database commit, so rolled-back changes intentionally produce no activity document.
-- After infrastructure or configuration changes, run `php artisan elastic-audit:health`. Use `--all` only when aliases
-  for disabled subsystems have also been provisioned and should be checked. Install the lifecycle policy before
-  creating HTTP or activity indexes on a fresh environment.
+- After infrastructure or configuration changes, run `php artisan elastic-audit:health`; add `--json` for deployment
+  automation. Use `--all` only when aliases for disabled subsystems have also been provisioned and should be checked.
+  Install the lifecycle policy before creating HTTP or activity indexes on a fresh environment.
 - Finite `retentionDays` values must be `1`–`32767`; use `retainForever: true` for a permanent event and never pass both.
   Permanent documents are ignored by prune commands, but permanent storage also requires
   `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes independently.

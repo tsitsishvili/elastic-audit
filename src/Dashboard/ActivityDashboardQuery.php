@@ -39,7 +39,7 @@ class ActivityDashboardQuery
         ]);
 
         return [
-            'hits'  => array_map(
+            'hits' => array_map(
                 static fn (array $hit): array => ($hit['_source'] ?? []) + ['_id' => $hit['_id'] ?? null],
                 $result['hits']['hits'] ?? [],
             ),
@@ -89,10 +89,10 @@ class ActivityDashboardQuery
                 'track_total_hits' => true,
                 'query'            => ['bool' => ['filter' => $this->filterClauses($filters)]],
                 'aggs'             => [
-                    'by_action'  => ['terms' => ['field' => 'action', 'size' => 20]],
-                    'by_actor'   => ['terms' => ['field' => 'actor.type', 'size' => 10]],
-                    'success'    => ['terms' => ['field' => 'success', 'size' => 2]],
-                    'over_time'  => [
+                    'by_action' => ['terms' => ['field' => 'action', 'size' => 20]],
+                    'by_actor'  => ['terms' => ['field' => 'actor.type', 'size' => 10]],
+                    'success'   => ['terms' => ['field' => 'success', 'size' => 2]],
+                    'over_time' => [
                         'date_histogram' => $dateHistogram,
                         'aggs'           => [
                             'success' => ['terms' => ['field' => 'success', 'size' => 2]],

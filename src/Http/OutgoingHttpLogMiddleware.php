@@ -9,15 +9,17 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
 use RuntimeException;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
-use Throwable;
 
 /**
  * Guzzle handler-stack middleware that logs outgoing third-party HTTP traffic.
@@ -40,6 +42,7 @@ final class OutgoingHttpLogMiddleware
         private readonly HttpLogContext $context,
         private readonly SensitiveDataRedactor $redactor,
         ?bool $capture = null,
+        private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
     ) {
         // Keep one decision for the lifetime of this audited PendingRequest so
         // Laravel retries cannot be sampled independently from each other.
@@ -150,7 +153,7 @@ final class OutgoingHttpLogMiddleware
                 $chunk      = $body->read($readLength);
 
                 if ($chunk === '') {
-                    return $body->eof() ? $raw : '';
+                    return $this->streamReachedEof($body) ? $raw : '';
                 }
 
                 $raw .= $chunk;
@@ -164,6 +167,17 @@ final class OutgoingHttpLogMiddleware
         }
 
         return strlen($raw) > $cap ? '' : $raw;
+    }
+
+    /**
+     * Stream reads can mutate EOF state even though PSR-7 does not annotate
+     * eof() as impure.
+     *
+     * @phpstan-impure
+     */
+    private function streamReachedEof(StreamInterface $body): bool
+    {
+        return $body->eof();
     }
 
     private function dispatch(
@@ -237,8 +251,17 @@ final class OutgoingHttpLogMiddleware
             );
 
             LogHttpRequestJob::dispatch($data);
-        } catch (Throwable) {
-            // Never let logging failures affect the provider call result
+        } catch (Throwable $e) {
+            $this->failureReporter->report(
+                subsystem: AuditOperationFailed::SUBSYSTEM_HTTP,
+                stage: AuditOperationFailed::STAGE_CAPTURE,
+                exception: $e,
+                context: [
+                    'provider'   => $this->provider,
+                    'event_type' => $this->eventType,
+                    'request_id' => $this->context->requestId,
+                ],
+            );
         }
     }
 

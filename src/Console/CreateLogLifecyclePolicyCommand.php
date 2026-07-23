@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Console;
 
 use Illuminate\Console\Command;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
-use Throwable;
 
 class CreateLogLifecyclePolicyCommand extends Command
 {
@@ -27,12 +27,12 @@ class CreateLogLifecyclePolicyCommand extends Command
                 ElasticsearchLifecycle::policy(),
             );
         } catch (Throwable $e) {
-            $this->error('Failed to create lifecycle policy: ' . $e->getMessage());
+            $this->error('Failed to create lifecycle policy: '.$e->getMessage());
 
             return self::FAILURE;
         }
 
-        $this->info('Lifecycle policy created: ' . ElasticsearchLifecycle::policyName());
+        $this->info('Lifecycle policy created: '.ElasticsearchLifecycle::policyName());
 
         if (! ElasticsearchLifecycle::deleteEnabled()) {
             $this->warn('Lifecycle delete phase is disabled; rolled-over indexes will be retained forever.');

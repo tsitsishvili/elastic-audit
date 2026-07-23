@@ -6,9 +6,9 @@ namespace Tsitsishvili\ElasticAudit\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchRetentionPruner;
-use Throwable;
 
 class PruneActivityLogCommand extends Command
 {

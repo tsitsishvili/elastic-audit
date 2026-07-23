@@ -6,14 +6,16 @@ namespace Tsitsishvili\ElasticAudit\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Services\HttpLogger;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Throwable;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 
 class IncomingHttpLogMiddleware
 {
@@ -26,6 +28,7 @@ class IncomingHttpLogMiddleware
 
     public function __construct(
         private readonly HttpLogger $logger,
+        private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
     ) {}
 
     /**
@@ -57,8 +60,8 @@ class IncomingHttpLogMiddleware
         } catch (Throwable $e) {
             try {
                 $this->logException($request, $start, $e);
-            } catch (Throwable) {
-                // Audit logging must never replace the callback's exception.
+            } catch (Throwable $auditException) {
+                $this->reportFailure($request, $auditException);
             }
 
             throw $e;
@@ -89,9 +92,22 @@ class IncomingHttpLogMiddleware
 
         try {
             $this->logResponse($request, $response, $latencyMs);
-        } catch (Throwable) {
-            // Audit logging must never affect the request lifecycle.
+        } catch (Throwable $e) {
+            $this->reportFailure($request, $e);
         }
+    }
+
+    private function reportFailure(Request $request, Throwable $exception): void
+    {
+        $this->failureReporter->report(
+            subsystem: AuditOperationFailed::SUBSYSTEM_HTTP,
+            stage: AuditOperationFailed::STAGE_CAPTURE,
+            exception: $exception,
+            context: [
+                'provider'   => $request->attributes->get('third_party_provider'),
+                'event_type' => $request->attributes->get('third_party_event_type'),
+            ],
+        );
     }
 
     private function logResponse(Request $request, Response $response, int $latencyMs): void
@@ -236,7 +252,7 @@ class IncomingHttpLogMiddleware
     }
 
     /**
-     * @param class-string $contract
+     * @param  class-string  $contract
      */
     private function isBackedEnumContract(mixed $class, string $contract): bool
     {
@@ -254,8 +270,8 @@ class IncomingHttpLogMiddleware
      * Resolve only scalar backing values or a case of the configured enum.
      * Arbitrary objects are rejected instead of being cast through __toString().
      *
-     * @param class-string<\BackedEnum> $class
-     * @param class-string $contract
+     * @param  class-string<\BackedEnum>  $class
+     * @param  class-string  $contract
      */
     private function resolveEnumValue(string $class, string $contract, mixed $value): ?\BackedEnum
     {

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added sanitized, non-blocking `AuditOperationFailed` Laravel events for complete HTTP/activity capture loss and jobs
+  that exhaust their indexing retries. Failure context is shallow and excludes raw exceptions, headers, payloads,
+  model changes, and arbitrary metadata.
+- Added `elastic-audit:health --json` for deployment automation and schema-aware health checks for current write-index
+  and index-template mappings. New mappings carry subsystem/schema metadata; structurally compatible v4 mappings
+  created before that metadata remain valid.
+- Added Larastan static analysis, Pint formatting, CI quality gates, and a security policy with an explicit threat
+  model.
+
+### Changed
+
+- Documented a releasable-`main`, short-lived-topic-branch workflow and local dependency resolution for the active PHP
+  runtime.
+
 ## [4.0.0] - 2026-07-22
 
 ### Added

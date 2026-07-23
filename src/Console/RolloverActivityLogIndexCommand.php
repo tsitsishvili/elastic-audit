@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Console;
 
 use Illuminate\Console\Command;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
-use Throwable;
 
 class RolloverActivityLogIndexCommand extends Command
 {
@@ -25,7 +25,7 @@ class RolloverActivityLogIndexCommand extends Command
             $newIndex = $this->explicitRolloverIndex($client, $readAlias, $writeAlias);
             $result   = $client->rollover($writeAlias, ElasticsearchLifecycle::rolloverConditions(), $newIndex);
         } catch (Throwable $e) {
-            $this->error("Failed to roll over {$writeAlias}: " . $e->getMessage());
+            $this->error("Failed to roll over {$writeAlias}: ".$e->getMessage());
 
             return self::FAILURE;
         }

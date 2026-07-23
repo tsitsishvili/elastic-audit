@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Services\Elasticsearch;
 
+use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
+
 class HttpLogMapping
 {
     public static function get(): array
     {
         return [
-            'dynamic'    => 'strict',
+            'dynamic' => 'strict',
+            '_meta'   => [
+                'elastic_audit' => [
+                    'subsystem'      => 'http_logs',
+                    'schema_version' => HttpLogData::SCHEMA_VERSION,
+                ],
+            ],
             'properties' => [
                 '@timestamp'     => ['type' => 'date'],
                 'event_id'       => ['type' => 'keyword'],
@@ -24,12 +32,12 @@ class HttpLogMapping
                 'retention_days' => ['type' => 'short'],
                 'trace'          => [
                     'properties' => [
-                        'id'           => ['type' => 'keyword'],
-                        'span_id'      => ['type' => 'keyword'],
+                        'id'          => ['type' => 'keyword'],
+                        'span_id'     => ['type' => 'keyword'],
                         'traceparent' => ['type' => 'keyword', 'index' => false],
                     ],
                 ],
-                'http'           => [
+                'http' => [
                     'properties' => [
                         'method'       => ['type' => 'keyword'],
                         'url'          => ['type' => 'keyword', 'index' => false],
@@ -41,7 +49,7 @@ class HttpLogMapping
                         'timed_out'    => ['type' => 'boolean'],
                     ],
                 ],
-                'entity'   => [
+                'entity' => [
                     'properties' => [
                         'type' => ['type' => 'keyword'],
                         'id'   => ['type' => 'keyword'],
@@ -52,7 +60,7 @@ class HttpLogMapping
                         'id' => ['type' => 'keyword'],
                     ],
                 ],
-                'request'  => [
+                'request' => [
                     'properties' => [
                         'headers'        => ['type' => 'object', 'enabled' => false],
                         'body'           => ['type' => 'object', 'enabled' => false],
@@ -70,7 +78,7 @@ class HttpLogMapping
                         'body_truncated' => ['type' => 'boolean'],
                     ],
                 ],
-                'error'    => [
+                'error' => [
                     'properties' => [
                         'class'   => ['type' => 'keyword'],
                         'message' => ['type' => 'text'],

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestBatchJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
@@ -92,16 +94,37 @@ class LogHttpRequestJobTest extends TestCase
     public function test_failed_log_includes_event_id(): void
     {
         $data = $this->makeLogData();
+        Event::fake([AuditOperationFailed::class]);
 
-        Log::shouldReceive('error')->once()->with('LogHttpRequestJob failed', [
-            'provider'   => (string) $data->provider->value,
-            'event_type' => (string) $data->eventType->value,
-            'event_id'   => $data->eventId,
-            'request_id' => $data->requestId,
-            'error'      => 'indexing failed',
-        ]);
+        Log::shouldReceive('error')->once()->withArgs(
+            fn (string $message, array $context): bool => $message === 'LogHttpRequestJob failed'
+                && $context['subsystem'] === AuditOperationFailed::SUBSYSTEM_HTTP
+                && $context['stage'] === AuditOperationFailed::STAGE_INDEXING
+                && $context['event_id'] === $data->eventId
+                && $context['request_id'] === $data->requestId
+                && $context['error'] === 'indexing failed',
+        );
 
         (new LogHttpRequestJob($data))->failed(new RuntimeException('indexing failed'));
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->context['event_id'] === $data->eventId,
+        );
+    }
+
+    public function test_terminal_batch_failure_dispatches_observability_event(): void
+    {
+        Event::fake([AuditOperationFailed::class]);
+
+        (new LogHttpRequestBatchJob([$this->makeLogData()]))->failed(new RuntimeException('indexing failed'));
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->subsystem === AuditOperationFailed::SUBSYSTEM_HTTP
+                && $event->stage === AuditOperationFailed::STAGE_INDEXING
+                && $event->context['count'] === 1,
+        );
     }
 
     private function makeLogData(): HttpLogData

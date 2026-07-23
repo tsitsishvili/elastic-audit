@@ -28,20 +28,20 @@ use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
-use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\HttpLogger;
+use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
-use Tsitsishvili\ElasticAudit\HttpLogManager;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/http_logs.php', 'http_logs');
-        $this->mergeConfigFrom(__DIR__ . '/../config/log_elasticsearch.php', 'log_elasticsearch');
-        $this->mergeConfigFrom(__DIR__ . '/../config/activity_logs.php', 'activity_logs');
+        $this->mergeConfigFrom(__DIR__.'/../config/http_logs.php', 'http_logs');
+        $this->mergeConfigFrom(__DIR__.'/../config/log_elasticsearch.php', 'log_elasticsearch');
+        $this->mergeConfigFrom(__DIR__.'/../config/activity_logs.php', 'activity_logs');
         $this->configureIndexNames();
 
         $this->app->singleton(LogElasticsearchClientInterface::class, function (Application $app) {
@@ -67,28 +67,33 @@ class ElasticAuditServiceProvider extends ServiceProvider
             return new LogElasticsearchClient($builder->build());
         });
 
-        $this->app->singleton(SensitiveDataRedactor::class, fn(): SensitiveDataRedactor => new SensitiveDataRedactor(
+        $this->app->singleton(SensitiveDataRedactor::class, fn (): SensitiveDataRedactor => new SensitiveDataRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
             undecodableBodyMode: $this->undecodableBodyMode(),
             captureMaxBytes: $this->captureMaxBytes(),
         ));
 
-        $this->app->singleton(PaymentRedactor::class, fn(): PaymentRedactor => new PaymentRedactor(
+        $this->app->singleton(PaymentRedactor::class, fn (): PaymentRedactor => new PaymentRedactor(
             headers: $this->redactionRules('http_logs.redaction.headers'),
             body: $this->redactionRules('http_logs.redaction.body'),
             undecodableBodyMode: $this->undecodableBodyMode(),
             captureMaxBytes: $this->captureMaxBytes(),
         ));
 
-        $this->app->singleton(HttpPayloadRedactorResolver::class, fn(Application $app): HttpPayloadRedactorResolver => new HttpPayloadRedactorResolver(
+        $this->app->singleton(AuditFailureReporter::class, fn (Application $app): AuditFailureReporter => new AuditFailureReporter(
+            $app->make(SensitiveDataRedactor::class),
+        ));
+
+        $this->app->singleton(HttpPayloadRedactorResolver::class, fn (Application $app): HttpPayloadRedactorResolver => new HttpPayloadRedactorResolver(
             defaultRedactor: $app->make(SensitiveDataRedactor::class),
             paymentRedactor: $app->make(PaymentRedactor::class),
         ));
 
-        $this->app->singleton(HttpLogger::class, fn(Application $app): HttpLogger => new HttpLogger(
+        $this->app->singleton(HttpLogger::class, fn (Application $app): HttpLogger => new HttpLogger(
             redactor: $app->make(SensitiveDataRedactor::class),
             redactorResolver: $app->make(HttpPayloadRedactorResolver::class),
+            failureReporter: $app->make(AuditFailureReporter::class),
         ));
 
         $this->app->singleton(HttpLogClientFactory::class);
@@ -116,8 +121,9 @@ class ElasticAuditServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(ActivityLogger::class, fn(): ActivityLogger => new ActivityLogger(
-            new SensitiveDataRedactor(body: $this->redactionRules('activity_logs.redaction')),
+        $this->app->singleton(ActivityLogger::class, fn (Application $app): ActivityLogger => new ActivityLogger(
+            redactor: new SensitiveDataRedactor(body: $this->redactionRules('activity_logs.redaction')),
+            failureReporter: $app->make(AuditFailureReporter::class),
         ));
 
         $this->app->singleton(ActivityDashboardQuery::class, function (Application $app) {
@@ -128,14 +134,68 @@ class ElasticAuditServiceProvider extends ServiceProvider
         });
     }
 
+    public function boot(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'elastic-audit');
+        View::composer(
+            'elastic-audit::*',
+            fn ($view) => $view->with(
+                'elasticAuditAssets',
+                $this->app->make(DashboardAssets::class)->manifest(),
+            ),
+        );
+
+        $this->registerDashboardAssetRoute();
+        $this->registerDashboardRoutes();
+        $this->registerActivityDashboardRoutes();
+
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/http_logs.php'         => config_path('http_logs.php'),
+                __DIR__.'/../config/log_elasticsearch.php' => config_path('log_elasticsearch.php'),
+                __DIR__.'/../config/activity_logs.php'     => config_path('activity_logs.php'),
+                __DIR__.'/../stubs/Enums/ElasticAudit'     => app_path('Enums/ElasticAudit'),
+            ], 'elastic-audit');
+
+            $this->publishes([
+                __DIR__.'/../resources/views' => resource_path('views/vendor/elastic-audit'),
+            ], 'elastic-audit-views');
+
+            // Agent resources for applications that do not use Laravel Boost. Boost discovers
+            // resources/boost itself; these copies give other agents the same guidance.
+            $this->publishes([
+                __DIR__.'/../resources/boost/skills/elastic-audit-development' => base_path('.ai/skills/elastic-audit-development'),
+                __DIR__.'/../AGENTS.md'                                        => base_path('AGENTS.elastic-audit.md'),
+            ], 'elastic-audit-ai');
+
+            $dashboardAssets = [
+                __DIR__.'/../public/vendor/elastic-audit' => public_path('vendor/elastic-audit'),
+            ];
+
+            $this->publishes($dashboardAssets, 'elastic-audit');
+            $this->publishes($dashboardAssets, 'elastic-audit-assets');
+        }
+
+        $this->commands([
+            CreateHttpLogIndexCommand::class,
+            PruneHttpLogCommand::class,
+            CreateActivityLogIndexCommand::class,
+            PruneActivityLogCommand::class,
+            CreateLogLifecyclePolicyCommand::class,
+            RolloverHttpLogIndexCommand::class,
+            RolloverActivityLogIndexCommand::class,
+            ElasticAuditHealthCommand::class,
+        ]);
+    }
+
     /**
      * Build a RedactionRules from the 'allow'/'block' arrays under a config key.
      */
     private function redactionRules(string $configKey): RedactionRules
     {
         return new RedactionRules(
-            allow: (array)config("{$configKey}.allow", []),
-            block: (array)config("{$configKey}.block", []),
+            allow: (array) config("{$configKey}.allow", []),
+            block: (array) config("{$configKey}.block", []),
         );
     }
 
@@ -175,61 +235,6 @@ class ElasticAuditServiceProvider extends ServiceProvider
         }
     }
 
-    public function boot(): void
-    {
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'elastic-audit');
-        View::composer(
-            'elastic-audit::*',
-            fn ($view) => $view->with(
-                'elasticAuditAssets',
-                $this->app->make(DashboardAssets::class)->manifest(),
-            ),
-        );
-
-        $this->registerDashboardAssetRoute();
-        $this->registerDashboardRoutes();
-        $this->registerActivityDashboardRoutes();
-
-        if ($this->app->runningInConsole()) {
-            $this->publishes([
-                __DIR__ . '/../config/http_logs.php'         => config_path('http_logs.php'),
-                __DIR__ . '/../config/log_elasticsearch.php' => config_path('log_elasticsearch.php'),
-                __DIR__ . '/../config/activity_logs.php'     => config_path('activity_logs.php'),
-                __DIR__ . '/../stubs/Enums/ElasticAudit'     => app_path('Enums/ElasticAudit'),
-            ], 'elastic-audit');
-
-            $this->publishes([
-                __DIR__ . '/../resources/views' => resource_path('views/vendor/elastic-audit'),
-            ], 'elastic-audit-views');
-
-            // Agent resources for applications that do not use Laravel Boost. Boost discovers
-            // resources/boost itself; these copies give other agents the same guidance.
-            $this->publishes([
-                __DIR__ . '/../resources/boost/skills/elastic-audit-development'
-                    => base_path('.ai/skills/elastic-audit-development'),
-                __DIR__ . '/../AGENTS.md' => base_path('AGENTS.elastic-audit.md'),
-            ], 'elastic-audit-ai');
-
-            $dashboardAssets = [
-                __DIR__ . '/../public/vendor/elastic-audit' => public_path('vendor/elastic-audit'),
-            ];
-
-            $this->publishes($dashboardAssets, 'elastic-audit');
-            $this->publishes($dashboardAssets, 'elastic-audit-assets');
-        }
-
-        $this->commands([
-            CreateHttpLogIndexCommand::class,
-            PruneHttpLogCommand::class,
-            CreateActivityLogIndexCommand::class,
-            PruneActivityLogCommand::class,
-            CreateLogLifecyclePolicyCommand::class,
-            RolloverHttpLogIndexCommand::class,
-            RolloverActivityLogIndexCommand::class,
-            ElasticAuditHealthCommand::class,
-        ]);
-    }
-
     private function registerDashboardAssetRoute(): void
     {
         $httpDashboardEnabled     = (bool) ($this->app['config']['http_logs']['dashboard']['enabled'] ?? false);
@@ -254,10 +259,10 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
         Route::group([
             'prefix'     => $this->composeDashboardPrefix($dashboard, 'http-logs'),
-            'middleware' => array_merge((array)($dashboard['middleware'] ?? ['web']), [AuthorizeDashboard::class]),
+            'middleware' => array_merge((array) ($dashboard['middleware'] ?? ['web']), [AuthorizeDashboard::class]),
             'as'         => 'http-logs.',
         ], function (): void {
-            $this->loadRoutesFrom(__DIR__ . '/../routes/dashboard.php');
+            $this->loadRoutesFrom(__DIR__.'/../routes/dashboard.php');
         });
     }
 
@@ -271,10 +276,10 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
         Route::group([
             'prefix'     => $this->composeDashboardPrefix($dashboard, 'activity'),
-            'middleware' => array_merge((array)($dashboard['middleware'] ?? ['web']), [AuthorizeDashboard::class]),
+            'middleware' => array_merge((array) ($dashboard['middleware'] ?? ['web']), [AuthorizeDashboard::class]),
             'as'         => 'activity-logs.',
         ], function (): void {
-            $this->loadRoutesFrom(__DIR__ . '/../routes/activity_dashboard.php');
+            $this->loadRoutesFrom(__DIR__.'/../routes/activity_dashboard.php');
         });
     }
 
@@ -284,9 +289,9 @@ class ElasticAuditServiceProvider extends ServiceProvider
      */
     private function composeDashboardPrefix(array $dashboard, string $defaultPath): string
     {
-        $prefix = trim((string)($dashboard['prefix'] ?? ''), '/');
-        $path   = trim((string)($dashboard['path'] ?? $defaultPath), '/');
+        $prefix = trim((string) ($dashboard['prefix'] ?? ''), '/');
+        $path   = trim((string) ($dashboard['path'] ?? $defaultPath), '/');
 
-        return trim($prefix . '/' . $path, '/');
+        return trim($prefix.'/'.$path, '/');
     }
 }

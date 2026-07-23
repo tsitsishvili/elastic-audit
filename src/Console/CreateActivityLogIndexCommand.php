@@ -7,12 +7,12 @@ namespace Tsitsishvili\ElasticAudit\Console;
 use Elastic\Transport\Exception\NoNodeAvailableException;
 use Illuminate\Console\Command;
 use RuntimeException;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
-use Throwable;
 
 class CreateActivityLogIndexCommand extends Command
 {
@@ -22,8 +22,8 @@ class CreateActivityLogIndexCommand extends Command
 
     public function handle(LogElasticsearchClientInterface $client): int
     {
-        $readAlias     = (string) config('activity_logs.index_alias');
-        $writeAlias    = (string) config('activity_logs.index_alias_write');
+        $readAlias  = (string) config('activity_logs.index_alias');
+        $writeAlias = (string) config('activity_logs.index_alias_write');
 
         try {
             ElasticsearchIndexNames::assertValid($readAlias, 'Activity logs read alias');
@@ -72,12 +72,12 @@ class CreateActivityLogIndexCommand extends Command
             $this->attachAlias($client, $physicalIndex, $readAlias);
             $this->attachAlias($client, $physicalIndex, $writeAlias, ['is_write_index' => true]);
         } catch (NoNodeAvailableException $e) {
-            $this->error('Cannot reach log Elasticsearch cluster: ' . $e->getMessage());
+            $this->error('Cannot reach log Elasticsearch cluster: '.$e->getMessage());
             $this->error('Check LOG_ELASTICSEARCH_HOST / LOG_ELASTICSEARCH_PORT in your .env.');
 
             return self::FAILURE;
         } catch (Throwable $e) {
-            $this->error('Failed to create or roll over the activity logs index: ' . $e->getMessage());
+            $this->error('Failed to create or roll over the activity logs index: '.$e->getMessage());
 
             return self::FAILURE;
         }

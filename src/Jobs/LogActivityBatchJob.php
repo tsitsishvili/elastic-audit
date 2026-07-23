@@ -9,10 +9,11 @@ use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
+use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\LogJobOptions;
 
 class LogActivityBatchJob implements ShouldQueueAfterCommit
@@ -44,9 +45,12 @@ class LogActivityBatchJob implements ShouldQueueAfterCommit
 
     public function failed(Throwable $e): void
     {
-        Log::error('LogActivityBatchJob failed', [
-            'count' => count($this->items),
-            'error' => $e->getMessage(),
-        ]);
+        AuditFailureReporter::reportUsingContainer(
+            subsystem: AuditOperationFailed::SUBSYSTEM_ACTIVITY,
+            stage: AuditOperationFailed::STAGE_INDEXING,
+            exception: $e,
+            context: ['count' => count($this->items)],
+            logMessage: 'LogActivityBatchJob failed',
+        );
     }
 }

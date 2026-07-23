@@ -6,10 +6,12 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
-use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
+use Tsitsishvili\ElasticAudit\Services\ActivityLogIndexer;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ActivityLoggerTest extends TestCase
@@ -22,7 +24,7 @@ class ActivityLoggerTest extends TestCase
     {
         parent::setUp();
 
-        $this->logger  = new ActivityLogger();
+        $this->logger  = new ActivityLogger;
         $this->context = ActivityLogContext::forActor(
             actorType: 'user',
             actorId: 5,
@@ -88,12 +90,18 @@ class ActivityLoggerTest extends TestCase
     public function test_record_does_not_propagate_internal_exceptions(): void
     {
         config(['activity_logs.enabled' => true]);
-
-        $this->expectNotToPerformAssertions();
+        Event::fake([AuditOperationFailed::class]);
 
         Bus::shouldReceive('dispatch')->andThrow(new \RuntimeException('bus broken'));
 
         $this->logger->record(action: 'order.updated', context: $this->context);
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->subsystem === AuditOperationFailed::SUBSYSTEM_ACTIVITY
+                && $event->stage === AuditOperationFailed::STAGE_CAPTURE
+                && $event->context['action'] === 'order.updated',
+        );
     }
 
     public function test_record_passes_metadata_and_success_flag(): void
@@ -128,8 +136,8 @@ class ActivityLoggerTest extends TestCase
             success: false,
             errorClass: 'ProviderException',
             errorMessage: 'password=plain-secret Authorization: Bearer token-123 '
-                . 'https://user:pass@example.test/orders?api_key=query-secret '
-                . str_repeat('ü', 2000),
+                .'https://user:pass@example.test/orders?api_key=query-secret '
+                .str_repeat('ü', 2000),
         );
 
         Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job): bool {

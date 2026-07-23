@@ -48,12 +48,12 @@ class HttpLogDashboardController
 
         // Presets compute a rolling window; "custom" keeps the explicit from/to
         // already pulled off the query string by filters() (may be empty = all time).
-        $filters = $this->filters($request);
+        $filters             = $this->filters($request);
         $filters['interval'] = $interval;
         $filters['timezone'] = (string) (config('app.timezone') ?: 'UTC');
 
         if (! $isCustom) {
-            $now = Carbon::now();
+            $now             = Carbon::now();
             $filters['from'] = $now->copy()->modify(self::RANGES[$range]['since'])->toIso8601String();
             $filters['to']   = $now->toIso8601String();
         }

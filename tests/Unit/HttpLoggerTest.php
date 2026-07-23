@@ -6,14 +6,16 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Event;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
+use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Services\HttpLogger;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
-use Tsitsishvili\ElasticAudit\Services\HttpLogger;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -29,7 +31,7 @@ class HttpLoggerTest extends TestCase
     {
         parent::setUp();
 
-        $this->logger  = new HttpLogger(new SensitiveDataRedactor());
+        $this->logger  = new HttpLogger(new SensitiveDataRedactor);
         $this->context = HttpLogContext::forEntity(
             entityType: TestEntityType::Order,
             entityId: '7',
@@ -196,14 +198,20 @@ class HttpLoggerTest extends TestCase
         $badRedactor->method('buildPayload')->willThrowException(new \RuntimeException('internal failure'));
 
         $logger = new HttpLogger($badRedactor);
-
-        $this->expectNotToPerformAssertions();
+        Event::fake([AuditOperationFailed::class]);
 
         $logger->logIncoming(
             request: Request::create('https://example.com/callback', 'POST'),
             provider: TestProvider::Delivery,
             eventType: TestEventType::DeliveryStatusCallback,
             context: $this->context,
+        );
+
+        Event::assertDispatched(
+            AuditOperationFailed::class,
+            fn (AuditOperationFailed $event): bool => $event->subsystem === AuditOperationFailed::SUBSYSTEM_HTTP
+                && $event->stage === AuditOperationFailed::STAGE_CAPTURE
+                && $event->context['request_id'] === $this->context->requestId,
         );
     }
 

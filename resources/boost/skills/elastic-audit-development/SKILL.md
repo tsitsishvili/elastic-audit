@@ -149,8 +149,8 @@ php artisan activity-logs:create-index   # when activity logs are enabled
 php artisan elastic-audit:health
 ```
 
-The plain health command validates enabled subsystems. Use `--all` only when aliases for disabled subsystems have also
-been provisioned and should be checked. Keep a worker running for `HTTP_LOGS_QUEUE` and
+The plain health command validates enabled subsystems. Add `--json` for deployment automation. Use `--all` only when
+aliases for disabled subsystems have also been provisioned and should be checked. Keep a worker running for `HTTP_LOGS_QUEUE` and
 `ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Default document retention comes
 from each subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays` for a finite override or
 `retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but
@@ -162,9 +162,12 @@ exposing either dashboard outside `local`.
 
 - Test disabled configurations as no-ops.
 - Use `Bus::fake()` and assert `LogHttpRequestJob` or `LogActivityJob` dispatch instead of requiring Elasticsearch.
+- Complete capture or terminal indexing failures emit a sanitized `AuditOperationFailed` event; test monitoring
+  listeners without expecting raw exceptions or payload data on that event.
 - Use Laravel HTTP fakes for provider responses while exercising the audited `PendingRequest`.
 - Test callback attribute mapping, especially invalid or absent enum values, and exercise the terminable success path.
 - Test new redaction rules with representative camelCase, kebab-case, and snake_case keys.
 - Run the focused tests first, then the full application suite.
-- Run `php artisan elastic-audit:health` in an environment that is allowed to reach the logs cluster. Add `--all` only
-  when provisioned aliases for disabled subsystems should also be checked.
+- Run `php artisan elastic-audit:health` in an environment that is allowed to reach the logs cluster. Add `--json` for
+  machine-readable deploy checks and `--all` only when provisioned aliases for disabled subsystems should also be
+  checked.
