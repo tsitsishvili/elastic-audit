@@ -5,7 +5,7 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
-## Upgrading from 4.0.0
+## Upgrading from 4.0.0 to 4.1.0
 
 ### Low impact: audit failures are now observable
 

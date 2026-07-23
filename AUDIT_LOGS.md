@@ -45,7 +45,7 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Quick Start
 
-1. Once v4.0.0 is published, install the stable v4 release from Packagist:
+1. Install the stable v4 release from Packagist:
 
     ```bash
     composer require tsitsishvili/elastic-audit:^4.0
@@ -83,7 +83,7 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Installation
 
-Once v4.0.0 is published, install the stable v4 release from Packagist:
+Install the stable v4 release from Packagist:
 
 ```bash
 composer require tsitsishvili/elastic-audit:^4.0
