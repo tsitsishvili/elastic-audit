@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\ServiceProvider;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\ElasticAuditServiceProvider;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
@@ -17,6 +25,7 @@ use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInter
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -124,6 +133,56 @@ class ElasticAuditServiceProviderTest extends TestCase
     public function test_http_logs_config_is_merged(): void
     {
         $this->assertNotNull(config('http_logs.enabled'));
+    }
+
+    public function test_queue_events_set_and_clear_execution_origin(): void
+    {
+        $job = $this->createStub(Job::class);
+        $job->method('resolveName')->willReturn('App\\Jobs\\SyncInvoice');
+
+        $this->app['events']->dispatch(new JobProcessing('redis', $job));
+
+        $resolver = $this->app->make(AuditSourceResolver::class);
+        $this->assertSame('queue', $resolver->resolve()->execution->type);
+        $this->assertSame('App\\Jobs\\SyncInvoice', $resolver->resolve()->execution->name);
+
+        $this->app['events']->dispatch(new JobProcessed('redis', $job));
+
+        $this->assertNotSame('queue', $resolver->resolve()->execution->type);
+    }
+
+    public function test_console_events_set_and_clear_execution_origin(): void
+    {
+        $input    = new ArrayInput([]);
+        $output   = new NullOutput;
+        $resolver = $this->app->make(AuditSourceResolver::class);
+
+        $this->app['events']->dispatch(new CommandStarting('migrate', $input, $output));
+
+        $this->assertSame('console', $resolver->resolve()->execution->type);
+        $this->assertSame('migrate', $resolver->resolve()->execution->name);
+
+        $this->app['events']->dispatch(new CommandFinished('migrate', $input, $output, 0));
+
+        $this->assertNotSame('console', $resolver->resolve()->execution->type);
+    }
+
+    public function test_console_origin_without_a_command_name_stays_balanced(): void
+    {
+        // Laravel dispatches an empty name for a bare `artisan` invocation.
+        $input    = new ArrayInput([]);
+        $output   = new NullOutput;
+        $resolver = $this->app->make(AuditSourceResolver::class);
+
+        $this->app['events']->dispatch(new CommandStarting('', $input, $output));
+
+        $origin = $resolver->resolve()->execution;
+        $this->assertSame('console', $origin->type);
+        $this->assertSame(ExecutionOrigin::TYPE_UNKNOWN, $origin->name);
+
+        $this->app['events']->dispatch(new CommandFinished('', $input, $output, 0));
+
+        $this->assertNotSame('console', $resolver->resolve()->execution->type);
     }
 
     public function test_log_elasticsearch_config_is_merged(): void

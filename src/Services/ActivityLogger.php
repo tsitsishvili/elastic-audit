@@ -11,15 +11,21 @@ use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 
 class ActivityLogger
 {
     private const ERROR_MESSAGE_MAX_BYTES = 2048;
 
+    private readonly AuditSourceResolver $sourceResolver;
+
     public function __construct(
         private readonly SensitiveDataRedactor $redactor = new SensitiveDataRedactor,
         private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
-    ) {}
+        ?AuditSourceResolver $sourceResolver = null,
+    ) {
+        $this->sourceResolver = $sourceResolver ?? AuditSourceResolver::fromContainer();
+    }
 
     public function record(
         string $action,
@@ -43,6 +49,7 @@ class ActivityLogger
                 success: $success,
                 errorClass: $errorClass,
                 errorMessage: $this->sanitizeErrorMessage($errorMessage),
+                source: $this->sourceResolver->resolve($context->executionOrigin),
             );
 
             LogActivityJob::dispatch($data);

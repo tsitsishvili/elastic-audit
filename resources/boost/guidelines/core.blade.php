@@ -3,8 +3,8 @@
 Elastic Audit records third-party HTTP traffic and actor/model activity in a dedicated Elasticsearch cluster. HTTP
 logs and activity logs are independent subsystems with separate configuration, queues, indexes, and dashboards.
 
-- Inspect `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before changing an
-  integration. Never edit the package files under `vendor/`.
+- Inspect `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php`
+  before changing an integration. Never edit the package files under `vendor/`.
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
   returns an `Illuminate\Http\Client\PendingRequest`, so fluent setup and single-request verbs remain available. Do not
   use Laravel `pool()` / `batch()` for audited calls because they create separate requests without this middleware.
@@ -14,6 +14,10 @@ logs and activity logs are independent subsystems with separate configuration, q
   application code. Never derive provider, event, or entity types from user-controlled request input.
 - Use `ActivityLog::record(...)` for explicit domain events and `ActivityLoggable` for automatic Eloquent lifecycle
   events. Activity entity and actor types are free string labels.
+- Give every application writing to shared aliases a stable, unique `APP_NAME`. Indexed `service.*` and `execution.*`
+  fields are snapshotted before queue dispatch.
+- Raw SQL/query-builder writes bypass `ActivityLoggable`; call `ActivityLog::record(...)` explicitly with domain
+  changes. Do not use `DB::listen()` as a substitute for an activity audit trail.
 - Logging dispatches queued jobs. Keep the configured queue worker running and use `Bus::fake()` when asserting job
   dispatch in tests; unit tests should not require a live Elasticsearch cluster.
 - Complete capture or terminal indexing failures emit a sanitized `AuditOperationFailed` Laravel event. It contains no

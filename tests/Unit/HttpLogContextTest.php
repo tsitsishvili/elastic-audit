@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 
@@ -30,5 +31,17 @@ class HttpLogContextTest extends TestCase
         );
 
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $context->userId);
+    }
+
+    public function test_for_entity_accepts_explicit_execution_origin(): void
+    {
+        $origin  = ExecutionOrigin::manual('provider.replay');
+        $context = HttpLogContext::forEntity(
+            entityType: TestEntityType::Order,
+            entityId: '1',
+            executionOrigin: $origin,
+        );
+
+        $this->assertSame($origin, $context->executionOrigin);
     }
 }

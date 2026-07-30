@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit;
 
 use Elastic\Elasticsearch\ClientBuilder;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Console\CreateActivityLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateHttpLogIndexCommand;
 use Tsitsishvili\ElasticAudit\Console\CreateLogLifecyclePolicyCommand;
@@ -34,6 +40,7 @@ use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
@@ -43,6 +50,11 @@ class ElasticAuditServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/log_elasticsearch.php', 'log_elasticsearch');
         $this->mergeConfigFrom(__DIR__.'/../config/activity_logs.php', 'activity_logs');
         $this->configureIndexNames();
+
+        $this->app->singleton(
+            AuditSourceResolver::class,
+            fn (Application $app): AuditSourceResolver => new AuditSourceResolver($app),
+        );
 
         $this->app->singleton(LogElasticsearchClientInterface::class, function (Application $app) {
             $config = $app['config']['log_elasticsearch'];
@@ -94,6 +106,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
             redactor: $app->make(SensitiveDataRedactor::class),
             redactorResolver: $app->make(HttpPayloadRedactorResolver::class),
             failureReporter: $app->make(AuditFailureReporter::class),
+            sourceResolver: $app->make(AuditSourceResolver::class),
         ));
 
         $this->app->singleton(HttpLogClientFactory::class);
@@ -124,6 +137,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
         $this->app->singleton(ActivityLogger::class, fn (Application $app): ActivityLogger => new ActivityLogger(
             redactor: new SensitiveDataRedactor(body: $this->redactionRules('activity_logs.redaction')),
             failureReporter: $app->make(AuditFailureReporter::class),
+            sourceResolver: $app->make(AuditSourceResolver::class),
         ));
 
         $this->app->singleton(ActivityDashboardQuery::class, function (Application $app) {
@@ -136,6 +150,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->registerAuditSourceListeners();
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'elastic-audit');
         View::composer(
             'elastic-audit::*',
@@ -233,6 +248,39 @@ class ElasticAuditServiceProvider extends ServiceProvider
                 $config->set($key, $value);
             }
         }
+    }
+
+    private function registerAuditSourceListeners(): void
+    {
+        $events = $this->app->make('events');
+
+        $events->listen(JobProcessing::class, function (JobProcessing $event): void {
+            try {
+                $name = (string) $event->job->resolveName();
+            } catch (Throwable) {
+                $name = $event->job::class;
+            }
+
+            $this->app->make(AuditSourceResolver::class)->enterQueueJob($name);
+        });
+
+        $leaveQueueJob = function (): void {
+            $this->app->make(AuditSourceResolver::class)
+                ->leaveQueueJob();
+        };
+
+        $events->listen(JobProcessed::class, $leaveQueueJob);
+        $events->listen(JobExceptionOccurred::class, $leaveQueueJob);
+
+        $events->listen(CommandStarting::class, function (CommandStarting $event): void {
+            $this->app->make(AuditSourceResolver::class)
+                ->enterConsoleCommand($event->command);
+        });
+
+        $events->listen(CommandFinished::class, function (): void {
+            $this->app->make(AuditSourceResolver::class)
+                ->leaveConsoleCommand();
+        });
     }
 
     private function registerDashboardAssetRoute(): void

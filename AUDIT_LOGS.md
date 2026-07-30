@@ -118,6 +118,9 @@ manifest-allowlisted route, so a missing or stale published copy does not break 
 ## Environment Variables
 
 ```dotenv
+APP_NAME=my_app
+APP_ENV=production
+
 HTTP_LOGS_ENABLED=true
 HTTP_LOGS_QUEUE=default
 HTTP_LOGS_JOB_TRIES=3
@@ -155,6 +158,8 @@ LOG_ELASTICSEARCH_REPLICAS=1
 
 | Variable                                    | Description                                                                                                                        |
 |---------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `APP_NAME`                                  | Application identity indexed on both HTTP and activity documents. Keep it stable and unique when aliases are shared.               |
+| `APP_ENV`                                   | Deployment environment indexed with the application identity.                                                                      |
 | `HTTP_LOGS_ENABLED`                         | Set to `true` to enable logging.                                                                                                   |
 | `HTTP_LOGS_QUEUE`                           | Queue name for log jobs.                                                                                                           |
 | `HTTP_LOGS_JOB_TRIES`                       | Attempts for each queued HTTP log job.                                                                                             |
@@ -191,6 +196,9 @@ my_app_http_logs_write
 ```
 
 ## Configuration Reference
+
+Application identity is read from Laravel's existing `config('app.name')` and `config('app.env')` values; the package
+does not add a separate source configuration file.
 
 ### `http_logs.php`
 
@@ -326,6 +334,11 @@ data, and failure information.
 | `event_id`          | Unique ULID for the log document.                                                         |
 | `@timestamp`        | Time the log data was created.                                                            |
 | `request_id`        | Correlation ULID shared by the log context.                                               |
+| `service.name`      | Stable emitting application identity from Laravel's `app.name` configuration.            |
+| `service.environment` | Deployment environment from Laravel's `app.env` configuration.                          |
+| `execution.type`    | `http`, `queue`, `console`, `manual`, or `unknown`.                                      |
+| `execution.name`    | Route name/template, queue job class, Artisan command, or explicit manual name.          |
+| `execution.action`  | Controller action or explicit manual action when available.                              |
 | `trace.id`          | Optional W3C trace id parsed from `traceparent` or provided by the context.               |
 | `trace.span_id`     | Optional W3C span id parsed from `traceparent` or provided by the context.                |
 | `provider`          | Provider enum value, for example `delivery` or `payment`.                                 |
@@ -358,6 +371,16 @@ response is captured automatically by `IncomingHttpLogMiddleware`, or when you p
 The document's Elasticsearch `_id` is the raw `event_id` ULID. Queue retries overwrite the same event instead of
 creating duplicates, while separate calls sharing a correlation `request_id` remain distinct.
 
+Source fields are captured before queue dispatch. This matters when several applications share both Elasticsearch
+aliases and queue infrastructure: a worker from another application indexes the source stored by the emitter instead
+of resolving its own identity. The package does not store stack traces, source file paths, raw request URLs, or query
+strings as execution origin.
+
+For outgoing requests the origin is resolved when each request is sent, not when `HttpLog::make()` builds the client.
+A configured client may be built once and reused across requests, jobs, and commands; every call records the context
+that actually issued it. This differs from the capture-sampling decision, which is deliberately fixed for the lifetime
+of one audited `PendingRequest` so retries sample together.
+
 ## Create Elasticsearch Index
 
 Create the physical index and attach read/write aliases:
@@ -379,6 +402,9 @@ the HTTP log mapping, lifecycle settings, replica settings, and read alias.
 > command creates the next physical index with the new mapping and moves the write alias to it. Existing indices stay
 > on the read alias. Reindex old documents only if external queries require one uniform field type across all index
 > generations.
+
+Adding `service.*` and `execution.*` changes the strict mapping. Existing installations must run the create-index
+command once after upgrading; old documents remain on the read alias without these fields.
 
 ### Lifecycle, Rollover, and Health
 
@@ -715,10 +741,10 @@ It provides three views:
 
 - **Overview** — totals, success rate, 4xx/5xx counts, average/p95 latency, a throughput chart, and breakdowns by
   status class and provider.
-- **Logs** — a paginated, filterable table (provider, event type, direction, status class, success, entity id, and a
-  date range). Each row links to its detail view.
-- **Log detail** — full operational metadata plus sanitized request/response headers, body previews, body hashes, and
-  error information for a single log document.
+- **Logs** — a paginated, filterable table (application, execution type/name, provider, event type, direction, status
+  class, success, entity id, and a date range). Each row links to its detail view.
+- **Log detail** — application/execution source, full operational metadata, sanitized request/response headers, body
+  previews, body hashes, and error information for a single log document.
 
 ### Access control
 

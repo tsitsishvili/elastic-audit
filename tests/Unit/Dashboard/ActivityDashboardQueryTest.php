@@ -52,6 +52,21 @@ class ActivityDashboardQueryTest extends TestCase
         );
     }
 
+    public function test_search_applies_service_and_execution_filters(): void
+    {
+        $this->query->search([
+            'service'        => 'billing-api',
+            'execution_type' => 'queue',
+            'execution_name' => 'App\\Jobs\\SyncInvoice',
+        ]);
+
+        $filter = $this->client->lastSearch()['body']['query']['bool']['filter'];
+
+        $this->assertContains(['term' => ['service.name' => 'billing-api']], $filter);
+        $this->assertContains(['term' => ['execution.type' => 'queue']], $filter);
+        $this->assertContains(['term' => ['execution.name' => 'App\\Jobs\\SyncInvoice']], $filter);
+    }
+
     public function test_find_returns_null_when_no_hit(): void
     {
         $this->client->searchResponse = ['hits' => ['total' => ['value' => 0], 'hits' => []]];
@@ -86,6 +101,8 @@ class ActivityDashboardQueryTest extends TestCase
                 'actions'      => ['buckets' => [['key' => 'order.updated'], ['key' => 'order.created']]],
                 'actor_types'  => ['buckets' => [['key' => 'user']]],
                 'entity_types' => ['buckets' => [['key' => 'order']]],
+                'services'     => ['buckets' => [['key' => 'billing-api']]],
+                'executions'   => ['buckets' => [['key' => 'http'], ['key' => 'queue']]],
             ],
         ];
 
@@ -94,5 +111,7 @@ class ActivityDashboardQueryTest extends TestCase
         $this->assertSame(['order.updated', 'order.created'], $options['actions']);
         $this->assertSame(['user'], $options['actor_types']);
         $this->assertSame(['order'], $options['entity_types']);
+        $this->assertSame(['billing-api'], $options['services']);
+        $this->assertSame(['http', 'queue'], $options['executions']);
     }
 }

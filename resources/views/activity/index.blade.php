@@ -40,6 +40,24 @@
             @endforeach
         </select>
 
+        <select name="service" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+            <option value="">All applications</option>
+            @foreach($options['services'] as $service)
+                <option value="{{ $service }}" @selected(($filters['service'] ?? '') === $service)>{{ $service }}</option>
+            @endforeach
+        </select>
+
+        <select name="execution_type" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+            <option value="">All origins</option>
+            @foreach($options['executions'] as $execution)
+                <option value="{{ $execution }}" @selected(($filters['execution_type'] ?? '') === $execution)>{{ $execution }}</option>
+            @endforeach
+        </select>
+
+        <input type="text" name="execution_name" value="{{ $filters['execution_name'] ?? '' }}" placeholder="Route, job, or command"
+               class="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
+               onchange="this.form.submit()">
+
         <select name="success" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All results</option>
             <option value="1" @selected(($filters['success'] ?? '') === '1')>Success</option>
@@ -93,6 +111,7 @@
         <thead class="bg-slate-50 dark:bg-slate-900/50">
             <tr>
                 <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Time</th>
+                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Source</th>
                 <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Actor</th>
                 <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Action</th>
                 <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Entity</th>
@@ -106,6 +125,25 @@
                 onclick="window.location='{{ route('activity-logs.logs.show', $log['event_id'] ?? $log['_id']) }}'">
                 <td class="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-500" title="{{ $ts }}">
                     {{ $fmtTs($ts) }}
+                </td>
+                @php
+                    $service       = data_get($log, 'service.name');
+                    $executionName = data_get($log, 'execution.name');
+                @endphp
+                <td class="px-4 py-2.5 text-xs">
+                    <div class="font-medium">
+                        @if($service)
+                            <a href="{{ $withParams(['service' => $service]) }}" onclick="event.stopPropagation()" class="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ $service }}</a>
+                        @else
+                            <span class="text-slate-400">—</span>
+                        @endif
+                    </div>
+                    <div class="font-mono text-slate-400">
+                        {{ data_get($log, 'execution.type') ?: '—' }}
+                        @if($executionName)
+                            · <a href="{{ $withParams(['execution_name' => $executionName]) }}" onclick="event.stopPropagation()" class="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ $executionName }}</a>
+                        @endif
+                    </div>
                 </td>
                 <td class="px-4 py-2.5">
                     <span class="text-xs font-medium">{{ $log['actor']['type'] ?? '—' }}</span>
@@ -128,7 +166,7 @@
             </tr>
             @empty
             <tr>
-                <td colspan="5" class="px-4 py-8 text-center text-sm text-slate-400">No activity logs found.</td>
+                <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-400">No activity logs found.</td>
             </tr>
             @endforelse
         </tbody>

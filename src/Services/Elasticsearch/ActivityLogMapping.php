@@ -23,7 +23,20 @@ class ActivityLogMapping
                 'event_id'       => ['type' => 'keyword'],
                 'schema_version' => ['type' => 'short'],
                 'request_id'     => ['type' => 'keyword'],
-                'trace'          => [
+                'service'        => [
+                    'properties' => [
+                        'name'        => ['type' => 'keyword'],
+                        'environment' => ['type' => 'keyword'],
+                    ],
+                ],
+                'execution' => [
+                    'properties' => [
+                        'type'   => ['type' => 'keyword'],
+                        'name'   => ['type' => 'keyword'],
+                        'action' => ['type' => 'keyword'],
+                    ],
+                ],
+                'trace' => [
                     'properties' => [
                         'id'          => ['type' => 'keyword'],
                         'span_id'     => ['type' => 'keyword'],

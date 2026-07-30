@@ -23,6 +23,19 @@ class HttpLogMapping
                 'event_id'       => ['type' => 'keyword'],
                 'schema_version' => ['type' => 'short'],
                 'request_id'     => ['type' => 'keyword'],
+                'service'        => [
+                    'properties' => [
+                        'name'        => ['type' => 'keyword'],
+                        'environment' => ['type' => 'keyword'],
+                    ],
+                ],
+                'execution' => [
+                    'properties' => [
+                        'type'   => ['type' => 'keyword'],
+                        'name'   => ['type' => 'keyword'],
+                        'action' => ['type' => 'keyword'],
+                    ],
+                ],
                 'provider'       => ['type' => 'keyword'],
                 'event_type'     => ['type' => 'keyword'],
                 'direction'      => ['type' => 'keyword'],

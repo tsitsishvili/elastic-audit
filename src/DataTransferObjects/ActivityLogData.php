@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\DataTransferObjects;
 
 use Illuminate\Support\Str;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class ActivityLogData
 {
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     public function __construct(
         public string $eventId,
@@ -29,6 +30,7 @@ final readonly class ActivityLogData
         public ?string $traceId = null,
         public ?string $spanId = null,
         public ?string $traceParent = null,
+        public ?AuditSource $source = null,
     ) {}
 
     public static function make(
@@ -39,6 +41,7 @@ final readonly class ActivityLogData
         bool $success = true,
         ?string $errorClass = null,
         ?string $errorMessage = null,
+        ?AuditSource $source = null,
     ): self {
         $trace = TraceContext::merge(
             traceId: $context->traceId,
@@ -64,6 +67,7 @@ final readonly class ActivityLogData
             traceId: $trace->traceId,
             spanId: $trace->spanId,
             traceParent: $trace->traceParent,
+            source: $source ?? AuditSourceResolver::fromContainer()->resolve($context->executionOrigin),
         );
     }
 }

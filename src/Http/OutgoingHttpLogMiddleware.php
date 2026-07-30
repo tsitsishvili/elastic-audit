@@ -12,6 +12,7 @@ use RuntimeException;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\AuditSource;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
@@ -19,6 +20,7 @@ use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 
 /**
@@ -43,6 +45,7 @@ final class OutgoingHttpLogMiddleware
         private readonly SensitiveDataRedactor $redactor,
         ?bool $capture = null,
         private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
+        private readonly ?AuditSourceResolver $sourceResolver = null,
     ) {
         // Keep one decision for the lifetime of this audited PendingRequest so
         // Laravel retries cannot be sampled independently from each other.
@@ -248,6 +251,7 @@ final class OutgoingHttpLogMiddleware
                 errorMessage: $errorMessage,
                 timedOut: $timedOut,
                 traceParent: $this->firstHeader($requestHeaders, 'traceparent'),
+                source: $this->resolveSource(),
             );
 
             LogHttpRequestJob::dispatch($data);
@@ -263,6 +267,18 @@ final class OutgoingHttpLogMiddleware
                 ],
             );
         }
+    }
+
+    /**
+     * Resolved per outgoing request rather than once per PendingRequest. An audited
+     * client is often built once and reused across requests, jobs, and commands, so
+     * each call must record the context that actually issued it — unlike the capture
+     * decision, which is deliberately fixed for the client's lifetime.
+     */
+    private function resolveSource(): AuditSource
+    {
+        return ($this->sourceResolver ?? AuditSourceResolver::fromContainer())
+            ->resolve($this->context->executionOrigin);
     }
 
     private function firstHeader(array $headers, string $name): ?string

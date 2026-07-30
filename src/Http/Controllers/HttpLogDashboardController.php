@@ -100,7 +100,12 @@ class HttpLogDashboardController
         $error   = null;
         $logs    = [];
         $total   = 0;
-        $options = ['providers' => [], 'event_types' => []];
+        $options = [
+            'providers'   => [],
+            'event_types' => [],
+            'services'    => [],
+            'executions'  => [],
+        ];
 
         try {
             // Pass the timezone to the query only (so zone-less from/to are read in app
@@ -174,7 +179,8 @@ class HttpLogDashboardController
     {
         $keys = [
             'provider', 'event_type', 'direction', 'status_class',
-            'success', 'timeout', 'entity_id', 'request_id', 'external_id', 'trace_id', 'from', 'to',
+            'success', 'timeout', 'entity_id', 'request_id', 'external_id',
+            'trace_id', 'service', 'execution_type', 'execution_name', 'from', 'to',
         ];
 
         $filters = [];

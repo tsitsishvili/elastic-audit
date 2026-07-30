@@ -62,6 +62,26 @@
                 </div>
             </div>
             <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Application</div>
+                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'service.name') ?: '—' }}</div>
+            </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Environment</div>
+                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'service.environment') ?: '—' }}</div>
+            </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution type</div>
+                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'execution.type') ?: '—' }}</div>
+            </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution name</div>
+                <div class="mt-1 break-all font-mono text-xs">{{ data_get($log, 'execution.name') ?: '—' }}</div>
+            </div>
+            <div>
+                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution action</div>
+                <div class="mt-1 break-all font-mono text-xs">{{ data_get($log, 'execution.action') ?: '—' }}</div>
+            </div>
+            <div>
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Entity</div>
                 <div class="mt-1 text-sm">
                     {{ $log['entity']['type'] ?? '—' }} <span class="text-slate-400">#{{ $log['entity']['id'] ?? '—' }}</span>
@@ -73,11 +93,11 @@
             </div>
             <div>
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Trace ID</div>
-                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.id', '—') }}</div>
+                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.id') ?: '—' }}</div>
             </div>
             <div>
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Span ID</div>
-                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.span_id', '—') }}</div>
+                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.span_id') ?: '—' }}</div>
             </div>
         </div>
     </div>

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added indexed application identity and execution origin to both HTTP and activity documents. Sources are snapshotted
+  before queue dispatch, support route/controller, queue job, Artisan command, and explicit manual origins, and are
+  visible/filterable in both dashboards. Application identity comes from Laravel's existing `app.name` and `app.env`
+  configuration. Outgoing-request origins are resolved per request, so a reused audited client attributes each call to
+  the context that issued it. `elastic-audit:health` reports the resolved identity and flags an unchanged default
+  `app.name`.
+
+### Changed
+
+- HTTP and activity document schema versions are now 5 and 4. Existing installations must roll over enabled write
+  aliases to install the new strict mappings.
+- Documented explicit `ActivityLog::record()` usage for raw SQL/query-builder writes; the package intentionally does not
+  install `DB::listen()`.
+
 ## [4.1.0] - 2026-07-23
 
 ### Added

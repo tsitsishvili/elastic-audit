@@ -20,11 +20,13 @@ use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 class ElasticAuditHealthCommand extends Command
 {
+    private const DEFAULT_APP_NAME = 'Laravel';
+
     protected $signature = 'elastic-audit:health
         {--all : Check aliases even for disabled subsystems}
         {--json : Emit one machine-readable JSON result}';
 
-    protected $description = 'Check Elasticsearch connectivity, mappings, templates, aliases, lifecycle, enums, and queue configuration.';
+    protected $description = 'Check source identity, Elasticsearch connectivity, mappings, templates, aliases, lifecycle, enums, and queue configuration.';
 
     private bool $jsonOutput = false;
 
@@ -47,6 +49,8 @@ class ElasticAuditHealthCommand extends Command
 
         $this->recordSuccess('Elasticsearch cluster reachable.');
 
+        $failed = $this->checkServiceIdentity();
+
         $failed = $this->checkSubsystem(
             $client,
             'HTTP logs',
@@ -56,7 +60,7 @@ class ElasticAuditHealthCommand extends Command
             (string) config('http_logs.index_alias_write'),
             (string) config('http_logs.queue', 'default'),
             HttpLogMapping::get(),
-        );
+        ) || $failed;
 
         $failed = $this->checkHttpEnums((bool) config('http_logs.enabled', false)) || $failed;
         $failed = $this->checkHttpCaptureOptions((bool) config('http_logs.enabled', false)) || $failed;
@@ -75,6 +79,41 @@ class ElasticAuditHealthCommand extends Command
         $failed = $this->checkLifecycle() || $failed;
 
         return $this->finish($failed);
+    }
+
+    private function checkServiceIdentity(): bool
+    {
+        $name = config('app.name');
+
+        if (! is_string($name) || trim($name) === '') {
+            $this->recordError('Service identity: app.name must be a non-empty string.');
+
+            return true;
+        }
+
+        $environment = config('app.env');
+
+        if ($environment !== null
+            && (! is_string($environment) || trim($environment) === '')) {
+            $this->recordError('Service identity: app.env must be null or a non-empty string.');
+
+            return true;
+        }
+
+        $suffix = is_string($environment) ? ", environment={$environment}" : '';
+        $this->recordSuccess("Service identity: name={$name}{$suffix}.");
+
+        // Not an error: a single-application install is free to keep the framework
+        // default. It only breaks source attribution once aliases are shared, which
+        // this command cannot detect from the local configuration.
+        if (trim($name) === self::DEFAULT_APP_NAME) {
+            $this->recordInfo(
+                'Service identity: app.name is still the framework default "'.self::DEFAULT_APP_NAME.'". '
+                .'Set a stable, unique APP_NAME in every application writing to shared aliases.'
+            );
+        }
+
+        return false;
     }
 
     private function checkSubsystem(

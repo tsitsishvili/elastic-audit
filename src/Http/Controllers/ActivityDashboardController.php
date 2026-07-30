@@ -86,7 +86,13 @@ class ActivityDashboardController
         $error   = null;
         $logs    = [];
         $total   = 0;
-        $options = ['actions' => [], 'actor_types' => [], 'entity_types' => []];
+        $options = [
+            'actions'      => [],
+            'actor_types'  => [],
+            'entity_types' => [],
+            'services'     => [],
+            'executions'   => [],
+        ];
 
         try {
             $result  = $this->query->search([...$filters, 'timezone' => $timezone], $page, $perPage, '@timestamp', $dir);
@@ -152,7 +158,11 @@ class ActivityDashboardController
      */
     private function filters(Request $request): array
     {
-        $keys = ['action', 'actor_type', 'actor_id', 'entity_type', 'entity_id', 'request_id', 'trace_id', 'success', 'from', 'to'];
+        $keys = [
+            'action', 'actor_type', 'actor_id', 'entity_type', 'entity_id',
+            'request_id', 'trace_id', 'service', 'execution_type',
+            'execution_name', 'success', 'from', 'to',
+        ];
 
         $filters = [];
 

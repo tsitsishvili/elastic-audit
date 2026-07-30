@@ -12,7 +12,8 @@ independent subsystems that share one Elasticsearch connection:
   `ActivityLoggable` trait.
 
 Each subsystem has its own config, Elasticsearch index/aliases, queue, console commands, and optional dashboard, so an
-application can enable only what it needs.
+application can enable only what it needs. Both document types include the configured application identity and a
+snapshotted execution origin (HTTP route/controller, queue job, Artisan command, or an explicit manual origin).
 
 ## Guides
 
@@ -50,7 +51,8 @@ application can enable only what it needs.
     php artisan vendor:publish --tag=elastic-audit
     ```
 
-3. Configure Elasticsearch and enable the subsystem you need in `.env`
+3. Give every application a stable, unique `APP_NAME`, configure Elasticsearch, and enable the subsystem you need in
+   `.env`
    (see [Environment Variables](AUDIT_LOGS.md#environment-variables) and
    [Register Application Enums](AUDIT_LOGS.md#register-application-enums)).
 4. Install the lifecycle policy, then create the Elasticsearch indices and aliases
@@ -71,6 +73,10 @@ application can enable only what it needs.
 For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-requests),
 [logging incoming callbacks](AUDIT_LOGS.md#logging-incoming-callbacks), and
 [recording activity](ACTIVITY_LOGS.md#manual-logging).
+
+`ActivityLoggable` observes Eloquent lifecycle events only. Raw SQL and query-builder writes must call
+`ActivityLog::record()` explicitly with their meaningful before/after values; the package does not install a database
+query listener.
 
 Permanent retention is supported independently for documents and indexes. Use a subsystem's `retain_forever` setting
 or a context's `retainForever: true` for documents, and disable `log_elasticsearch.lifecycle.delete_enabled` to keep

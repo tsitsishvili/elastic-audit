@@ -13,6 +13,7 @@ use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\PaymentRedactor;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 
 class HttpLogClientFactory
@@ -21,16 +22,20 @@ class HttpLogClientFactory
 
     private readonly AuditFailureReporter $failureReporter;
 
+    private readonly AuditSourceResolver $sourceResolver;
+
     public function __construct(
         private readonly HttpFactory $httpFactory,
         PaymentRedactor $paymentRedactor,
         SensitiveDataRedactor $sensitiveDataRedactor,
         ?HttpPayloadRedactorResolver $redactorResolver = null,
         ?AuditFailureReporter $failureReporter = null,
+        ?AuditSourceResolver $sourceResolver = null,
     ) {
         $this->redactorResolver = $redactorResolver
             ?? new HttpPayloadRedactorResolver($sensitiveDataRedactor, $paymentRedactor);
         $this->failureReporter = $failureReporter ?? new AuditFailureReporter($sensitiveDataRedactor);
+        $this->sourceResolver  = $sourceResolver ?? AuditSourceResolver::fromContainer();
     }
 
     /**
@@ -53,6 +58,7 @@ class HttpLogClientFactory
                 $this->redactorResolver->forProvider($provider),
                 CaptureSampling::shouldCapture(),
                 $this->failureReporter,
+                $this->sourceResolver,
             ));
     }
 }

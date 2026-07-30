@@ -146,9 +146,14 @@ class HttpLogDashboardQuery
     }
 
     /**
-     * Distinct provider and event-type values present in the index, for filter dropdowns.
+     * Distinct provider, event, service, and execution values for filter dropdowns.
      *
-     * @return array{providers: list<string>, event_types: list<string>}
+     * @return array{
+     *     providers: list<string>,
+     *     event_types: list<string>,
+     *     services: list<string>,
+     *     executions: list<string>
+     * }
      */
     public function filterOptions(): array
     {
@@ -159,6 +164,8 @@ class HttpLogDashboardQuery
                 'aggs' => [
                     'providers'   => ['terms' => ['field' => 'provider', 'size' => 50]],
                     'event_types' => ['terms' => ['field' => 'event_type', 'size' => 100]],
+                    'services'    => ['terms' => ['field' => 'service.name', 'size' => 100]],
+                    'executions'  => ['terms' => ['field' => 'execution.type', 'size' => 10]],
                 ],
             ],
         ]);
@@ -168,6 +175,8 @@ class HttpLogDashboardQuery
         return [
             'providers'   => array_column($aggs['providers']['buckets'] ?? [], 'key'),
             'event_types' => array_column($aggs['event_types']['buckets'] ?? [], 'key'),
+            'services'    => array_column($aggs['services']['buckets'] ?? [], 'key'),
+            'executions'  => array_column($aggs['executions']['buckets'] ?? [], 'key'),
         ];
     }
 
@@ -182,14 +191,17 @@ class HttpLogDashboardQuery
         $clauses = [];
 
         $termFields = [
-            'provider'     => 'provider',
-            'event_type'   => 'event_type',
-            'direction'    => 'direction',
-            'status_class' => 'http.status_class',
-            'entity_id'    => 'entity.id',
-            'request_id'   => 'request_id',
-            'external_id'  => 'external.id',
-            'trace_id'     => 'trace.id',
+            'provider'       => 'provider',
+            'event_type'     => 'event_type',
+            'direction'      => 'direction',
+            'status_class'   => 'http.status_class',
+            'entity_id'      => 'entity.id',
+            'request_id'     => 'request_id',
+            'external_id'    => 'external.id',
+            'trace_id'       => 'trace.id',
+            'service'        => 'service.name',
+            'execution_type' => 'execution.type',
+            'execution_name' => 'execution.name',
         ];
 
         foreach ($termFields as $key => $field) {

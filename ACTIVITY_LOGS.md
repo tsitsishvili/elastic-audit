@@ -52,7 +52,9 @@ ActivityLogger::record()
 
 Capture never throws and is gated by `activity_logs.enabled`. Indexing happens asynchronously on the configured queue.
 Activity jobs wait for the active database transaction to commit; a rollback discards the queued audit event so the log
-cannot claim that an uncommitted model change occurred. The Elasticsearch document ID is the raw `eventId` ULID.
+cannot claim that an uncommitted model change occurred. Application identity and execution origin are snapshotted into
+the DTO before it is queued, so a worker in another application cannot relabel the event. The Elasticsearch document ID
+is the raw `eventId` ULID.
 
 ### Activity Configuration
 
@@ -100,6 +102,9 @@ return [
 It reuses the existing `log_elasticsearch.php` connection — activity logs are never written to the
 product-search cluster.
 
+Source identity uses Laravel's existing `config('app.name')` and `config('app.env')` values. Give every application
+that writes to shared aliases a stable, unique `APP_NAME`.
+
 The `changes` and `metadata` maps are redacted by key name before queueing, using the same rules as the HTTP logger
 (so a model's `password` / `email` attribute diffs never reach Elasticsearch in clear text). Tune it with
 `activity_logs.redaction.block` / `.allow` — same semantics as the
@@ -122,6 +127,8 @@ Relevant environment variables:
 | `ACTIVITY_LOGS_DASHBOARD_ENABLED` | `true`      | Register the dashboard routes                                                                     |
 | `ELASTIC_AUDIT_DASHBOARD_PREFIX`  | `logger`    | Shared URL prefix for both dashboards. Composes as `{prefix}/{path}`. Set to `''` for root paths. |
 | `ACTIVITY_LOGS_DASHBOARD_PATH`    | `activity`  | This dashboard's subpath under the group prefix. Served at `/logger/activity`.                    |
+| `APP_NAME`                        | `Laravel`   | Application identity indexed on HTTP and activity documents. Keep it stable and unique when aliases are shared. |
+| `APP_ENV`                         | `local`     | Deployment environment indexed with the application identity.                                     |
 
 ### Create the Activity Index
 
@@ -199,6 +206,40 @@ non-null actor id as a keyword string. `retentionDays` defaults to `360` and can
 `ActivityLogContext::forActor(..., retainForever: true)` for a permanent individual event, or set
 `ACTIVITY_LOGS_RETAIN_FOREVER=true` to make that the default. An explicit `retentionDays` overrides the permanent
 default; passing both options on one context is invalid.
+
+Raw SQL and query-builder writes do not emit Eloquent events. Record them explicitly after the write, preferably inside
+the same database transaction so the queued audit event is released only after commit:
+
+```php
+use Illuminate\Support\Facades\DB;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
+use Tsitsishvili\ElasticAudit\Facades\ActivityLog;
+
+DB::transaction(function () use ($invoice, $oldStatus): void {
+    DB::table('invoices')
+        ->where('id', $invoice->id)
+        ->update(['status' => 'cancelled']);
+
+    ActivityLog::record(
+        action: 'invoice.status_updated',
+        context: ActivityLogContext::forActor(
+            actorType: 'system',
+            actorId: null,
+            entityType: 'invoice',
+            entityId: (string) $invoice->id,
+            executionOrigin: ExecutionOrigin::manual('invoice.expiry'),
+        ),
+        changes: [
+            'status' => ['old' => $oldStatus, 'new' => 'cancelled'],
+        ],
+    );
+});
+```
+
+The explicit `ExecutionOrigin` is optional. Without it, the package automatically records the active HTTP route and
+controller, queue job class, or Artisan command. It never captures a stack trace, filesystem path, raw URL, or query
+string as execution metadata.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 
@@ -283,8 +324,17 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
 {
   "@timestamp": "2026-06-04T10:00:00Z",
   "event_id": "01JX...",
-  "schema_version": 3,
+  "schema_version": 4,
   "request_id": "01JX...",
+  "service": {
+    "name": "billing-api",
+    "environment": "production"
+  },
+  "execution": {
+    "type": "http",
+    "name": "orders.update",
+    "action": "App\\Http\\Controllers\\OrderController@update"
+  },
   "trace": {
     "id": "4bf92f3577b34da6a3ce929d0e0e4736",
     "span_id": "00f067aa0ba902b7",
@@ -317,8 +367,8 @@ If an activity is recorded while an HTTP request with a W3C `traceparent` header
 }
 ```
 
-`changes` and `metadata` are stored but **not indexed** (`enabled: false`) — their keys are caller-defined, so
-they are searchable by `event_id`/`action`/`actor`/`entity` but not by their inner keys.
+`service.*`, `execution.*`, `event_id`, `action`, `actor`, and `entity` are indexed. `changes` and `metadata` are stored
+but **not indexed** (`enabled: false`) because their keys are caller-defined.
 
 The document's Elasticsearch `_id` is the `event_id` ULID itself, so retried queue jobs overwrite the same document
 instead of creating duplicates.
@@ -329,8 +379,10 @@ When `activity_logs.dashboard.enabled` is true, the dashboard is served under th
 `/logger/activity`):
 
 - **Overview** — total / success / failure counts, top actions, top actor types.
-- **List** — paginated, newest first, filterable by action, actor type, success, entity id, and date range.
-- **Detail** — full event, a before/after change table, and a metadata dump. Legacy malformed diff entries render
+- **List** — paginated, newest first, filterable by application, execution type/name, action, actor type, success,
+  entity id, and date range.
+- **Detail** — application/execution source, full event, a before/after change table, and a metadata dump. Legacy
+  malformed diff entries render
   defensively instead of breaking the page.
 
 Access is gated by the same authorization callback as the HTTP dashboard:
@@ -393,6 +445,8 @@ Elasticsearch returns HTTP 200.
   that exhaust their retries emit a sanitized application error and `AuditOperationFailed`, but are not propagated.
 - **Transactional events reflect committed state.** Single and batch activity jobs dispatch after commit and are not
   indexed when the surrounding database transaction rolls back.
+- **Raw writes are explicit.** Eloquent model events are automatic; raw SQL/query-builder writes require
+  `ActivityLog::record()` with caller-supplied domain changes.
 - **Disabled is a true no-op.** With `activity_logs.enabled = false`, `record()` returns immediately and no job
   is dispatched.
 - **Backward compatibility.** The indexed document shape is versioned via `ActivityLogData::SCHEMA_VERSION`; the

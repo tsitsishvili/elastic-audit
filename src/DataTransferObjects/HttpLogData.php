@@ -8,11 +8,12 @@ use Illuminate\Support\Str;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final readonly class HttpLogData
 {
-    public const SCHEMA_VERSION = 4;
+    public const SCHEMA_VERSION = 5;
 
     public function __construct(
         public string $eventId,
@@ -43,6 +44,7 @@ final readonly class HttpLogData
         public ?string $traceId = null,
         public ?string $spanId = null,
         public ?string $traceParent = null,
+        public ?AuditSource $source = null,
     ) {}
 
     public static function make(
@@ -62,6 +64,7 @@ final readonly class HttpLogData
         ?string $errorMessage = null,
         bool $timedOut = false,
         ?string $traceParent = null,
+        ?AuditSource $source = null,
     ): self {
         $parsed = parse_url($httpUrl);
         $host   = $parsed['host'] ?? $httpUrl;
@@ -105,6 +108,7 @@ final readonly class HttpLogData
             traceId: $trace->traceId,
             spanId: $trace->spanId,
             traceParent: $trace->traceParent,
+            source: $source ?? AuditSourceResolver::fromContainer()->resolve($context->executionOrigin),
         );
     }
 }
