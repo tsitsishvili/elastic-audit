@@ -118,6 +118,8 @@ class ActivityDashboardQuery
                     'actions'      => ['terms' => ['field' => 'action', 'size' => 100]],
                     'actor_types'  => ['terms' => ['field' => 'actor.type', 'size' => 10]],
                     'entity_types' => ['terms' => ['field' => 'entity.type', 'size' => 50]],
+                    'services'     => ['terms' => ['field' => 'service.name', 'size' => 100]],
+                    'executions'   => ['terms' => ['field' => 'execution.type', 'size' => 10]],
                 ],
             ],
         ]);
@@ -128,6 +130,8 @@ class ActivityDashboardQuery
             'actions'      => array_column($aggs['actions']['buckets'] ?? [], 'key'),
             'actor_types'  => array_column($aggs['actor_types']['buckets'] ?? [], 'key'),
             'entity_types' => array_column($aggs['entity_types']['buckets'] ?? [], 'key'),
+            'services'     => array_column($aggs['services']['buckets'] ?? [], 'key'),
+            'executions'   => array_column($aggs['executions']['buckets'] ?? [], 'key'),
         ];
     }
 
@@ -136,13 +140,16 @@ class ActivityDashboardQuery
         $clauses = [];
 
         $termFields = [
-            'action'      => 'action',
-            'actor_type'  => 'actor.type',
-            'actor_id'    => 'actor.id',
-            'entity_type' => 'entity.type',
-            'entity_id'   => 'entity.id',
-            'request_id'  => 'request_id',
-            'trace_id'    => 'trace.id',
+            'action'         => 'action',
+            'actor_type'     => 'actor.type',
+            'actor_id'       => 'actor.id',
+            'entity_type'    => 'entity.type',
+            'entity_id'      => 'entity.id',
+            'request_id'     => 'request_id',
+            'trace_id'       => 'trace.id',
+            'service'        => 'service.name',
+            'execution_type' => 'execution.type',
+            'execution_name' => 'execution.name',
         ];
 
         foreach ($termFields as $key => $field) {

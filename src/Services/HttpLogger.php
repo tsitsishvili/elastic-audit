@@ -18,15 +18,21 @@ use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\CaptureSampling;
 
 class HttpLogger
 {
+    private readonly AuditSourceResolver $sourceResolver;
+
     public function __construct(
         private readonly SensitiveDataRedactor $redactor,
         private readonly ?HttpPayloadRedactorResolver $redactorResolver = null,
         private readonly AuditFailureReporter $failureReporter = new AuditFailureReporter,
-    ) {}
+        ?AuditSourceResolver $sourceResolver = null,
+    ) {
+        $this->sourceResolver = $sourceResolver ?? AuditSourceResolver::fromContainer();
+    }
 
     public function logIncoming(
         Request $request,
@@ -92,6 +98,7 @@ class HttpLogger
                 errorClass: $exception !== null ? $exception::class : null,
                 errorMessage: $exception !== null ? $redactor->sanitizeErrorMessage($exception->getMessage()) : null,
                 traceParent: $request->headers->get('traceparent'),
+                source: $this->sourceResolver->resolve($context->executionOrigin, $request),
             );
 
             LogHttpRequestJob::dispatch($data);

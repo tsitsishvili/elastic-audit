@@ -19,7 +19,7 @@ class ActivityLogMappingTest extends TestCase
     {
         $props = ActivityLogMapping::get()['properties'];
 
-        foreach (['@timestamp', 'event_id', 'schema_version', 'request_id', 'action', 'success', 'retention_days'] as $field) {
+        foreach (['@timestamp', 'event_id', 'schema_version', 'request_id', 'service', 'execution', 'action', 'success', 'retention_days'] as $field) {
             $this->assertArrayHasKey($field, $props, "Missing field: {$field}");
         }
     }
@@ -34,9 +34,20 @@ class ActivityLogMappingTest extends TestCase
     public function test_mapping_contains_schema_metadata(): void
     {
         $this->assertSame(
-            ['subsystem' => 'activity_logs', 'schema_version' => 3],
+            ['subsystem' => 'activity_logs', 'schema_version' => 4],
             ActivityLogMapping::get()['_meta']['elastic_audit'],
         );
+    }
+
+    public function test_mapping_indexes_service_and_execution_origin(): void
+    {
+        $properties = ActivityLogMapping::get()['properties'];
+
+        $this->assertSame('keyword', $properties['service']['properties']['name']['type']);
+        $this->assertSame('keyword', $properties['service']['properties']['environment']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['type']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['name']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['action']['type']);
     }
 
     public function test_mapping_has_entity_with_type_and_id(): void

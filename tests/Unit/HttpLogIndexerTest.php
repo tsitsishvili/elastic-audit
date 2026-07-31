@@ -8,6 +8,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionProperty;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\AuditSource;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
@@ -86,6 +88,41 @@ class HttpLogIndexerTest extends TestCase
                 'span_id'     => null,
                 'traceparent' => null,
             ]));
+
+        $this->indexer->index($legacyData);
+    }
+
+    public function test_document_includes_service_and_execution_origin(): void
+    {
+        $captured = null;
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(function (array $p) use (&$captured): bool {
+                $captured = $p['body'];
+
+                return true;
+            }));
+
+        $this->indexer->index($this->makeLogData());
+
+        $this->assertSame('orders-api', $captured['service']['name']);
+        $this->assertSame('testing', $captured['service']['environment']);
+        $this->assertSame('http', $captured['execution']['type']);
+        $this->assertSame('orders.store', $captured['execution']['name']);
+        $this->assertSame('App\\Http\\Controllers\\OrderController@store', $captured['execution']['action']);
+    }
+
+    public function test_indexes_legacy_queued_data_without_source_property(): void
+    {
+        $legacyData = $this->withoutProperties($this->makeLogData(), ['source']);
+
+        $this->logClient
+            ->expects($this->once())
+            ->method('index')
+            ->with($this->callback(fn (array $p): bool => $p['body']['service']['name'] === null
+                && $p['body']['execution']['type'] === null));
 
         $this->indexer->index($legacyData);
     }
@@ -190,16 +227,33 @@ class HttpLogIndexerTest extends TestCase
             httpStatusCode: 201,
             success: true,
             timedOut: $timedOut,
+            source: new AuditSource(
+                serviceName: 'orders-api',
+                serviceEnvironment: 'testing',
+                execution: new ExecutionOrigin(
+                    type: 'http',
+                    name: 'orders.store',
+                    action: 'App\\Http\\Controllers\\OrderController@store',
+                ),
+            ),
         );
     }
 
     private function withoutTraceProperties(HttpLogData $data): HttpLogData
     {
+        return $this->withoutProperties($data, ['traceId', 'spanId', 'traceParent']);
+    }
+
+    /**
+     * @param  list<string>  $properties
+     */
+    private function withoutProperties(HttpLogData $data, array $properties): HttpLogData
+    {
         $reflection = new ReflectionClass($data);
         $legacyData = $reflection->newInstanceWithoutConstructor();
 
         foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-            if (in_array($property->getName(), ['traceId', 'spanId', 'traceParent'], true)) {
+            if (in_array($property->getName(), $properties, true)) {
                 continue;
             }
 

@@ -11,8 +11,8 @@ surrounding request behavior or exposing sensitive data.
 ## Inspect before editing
 
 1. Confirm `tsitsishvili/elastic-audit` is installed and inspect its version.
-2. Read the consuming application's `config/http_logs.php`, `config/activity_logs.php`, and
-   `config/log_elasticsearch.php`. If config has not been published and the user wants a full setup, run:
+2. Read the consuming application's `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and
+   `config/log_elasticsearch.php`. If package config has not been published and the user wants a full setup, run:
 
    ```bash
    php artisan vendor:publish --tag=elastic-audit
@@ -22,7 +22,9 @@ surrounding request behavior or exposing sensitive data.
    contracts; never guess provider, event-type, or entity-type cases.
 4. Decide whether the task concerns third-party HTTP traffic, actor/model activity, or both. Do not enable or configure
    an unrelated subsystem.
-5. Read `vendor/tsitsishvili/elastic-audit/AUDIT_LOGS.md` or `ACTIVITY_LOGS.md` when the task needs details beyond this
+5. When applications share aliases, confirm each one has a stable, unique `APP_NAME`. Source identity and execution
+   origin are indexed and snapshotted before queue dispatch.
+6. Read `vendor/tsitsishvili/elastic-audit/AUDIT_LOGS.md` or `ACTIVITY_LOGS.md` when the task needs details beyond this
    workflow. Do not edit files under `vendor/`.
 
 ## Log outgoing provider requests
@@ -124,6 +126,12 @@ represent the application's domain.
 Activity `actorType` and `entityType` values are strings. If the application uses an enum for them, pass `->value`.
 `actorId` accepts `int|string|null`, including UUIDs, and is indexed as a keyword string. Activity jobs dispatch only
 after the surrounding database transaction commits; a rollback intentionally discards the queued audit event.
+
+`ActivityLoggable` does not observe raw SQL or query-builder updates. For those writes, call `ActivityLog::record()`
+explicitly with meaningful old/new values, preferably inside the same transaction. Do not add `DB::listen()` as an
+audit substitute: SQL text lacks trustworthy actor, intent, and before/after state. The package automatically records
+the active route/controller, queue job, or Artisan command; pass `ExecutionOrigin::manual(...)` on the context only
+when the domain needs a more specific origin.
 
 ## Protect sensitive data
 

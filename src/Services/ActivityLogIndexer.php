@@ -44,12 +44,23 @@ class ActivityLogIndexer
 
     private function toDocument(ActivityLogData $d): array
     {
+        $source = isset($d->source) ? $d->source : null;
+
         return [
             '@timestamp'     => $d->timestamp,
             'event_id'       => $d->eventId,
             'schema_version' => ActivityLogData::SCHEMA_VERSION,
             'request_id'     => $d->requestId,
-            'trace'          => [
+            'service'        => [
+                'name'        => $source?->serviceName,
+                'environment' => $source?->serviceEnvironment,
+            ],
+            'execution' => [
+                'type'   => $source?->execution->type,
+                'name'   => $source?->execution->name,
+                'action' => $source?->execution->action,
+            ],
+            'trace' => [
                 // isset() guards serialized jobs queued before trace fields existed.
                 'id'          => isset($d->traceId) ? $d->traceId : null,
                 'span_id'     => isset($d->spanId) ? $d->spanId : null,

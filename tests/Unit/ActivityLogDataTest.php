@@ -6,6 +6,8 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\AuditSource;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class ActivityLogDataTest extends TestCase
@@ -32,6 +34,7 @@ class ActivityLogDataTest extends TestCase
             changes: ['status' => ['old' => 'pending', 'new' => 'paid']],
             metadata: ['ip' => '1.2.3.4'],
             success: true,
+            source: new AuditSource('app', 'testing', ExecutionOrigin::unknown()),
         );
 
         $this->assertSame('order.updated', $data->action);
@@ -50,7 +53,9 @@ class ActivityLogDataTest extends TestCase
         $this->assertNull($data->traceParent);
         $this->assertNotEmpty($data->eventId);
         $this->assertNotEmpty($data->timestamp);
-        $this->assertSame(3, ActivityLogData::SCHEMA_VERSION);
+        $this->assertSame('app', $data->source->serviceName);
+        $this->assertSame('unknown', $data->source->execution->type);
+        $this->assertSame(4, ActivityLogData::SCHEMA_VERSION);
     }
 
     public function test_make_parses_traceparent_from_context(): void

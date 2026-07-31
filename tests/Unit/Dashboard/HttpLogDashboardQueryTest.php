@@ -31,11 +31,14 @@ class HttpLogDashboardQueryTest extends TestCase
         $client = new FakeLogElasticsearchClient;
 
         $this->dashboardQuery($client)->search([
-            'provider'     => 'delivery',
-            'direction'    => 'outgoing',
-            'status_class' => '5xx',
-            'success'      => 'false',
-            'entity_id'    => '42',
+            'provider'       => 'delivery',
+            'direction'      => 'outgoing',
+            'status_class'   => '5xx',
+            'success'        => 'false',
+            'entity_id'      => '42',
+            'service'        => 'billing-api',
+            'execution_type' => 'http',
+            'execution_name' => 'orders.store',
         ]);
 
         $filter = $client->lastSearch()['body']['query']['bool']['filter'];
@@ -45,6 +48,9 @@ class HttpLogDashboardQueryTest extends TestCase
         $this->assertContains(['term' => ['http.status_class' => '5xx']], $filter);
         $this->assertContains(['term' => ['success' => false]], $filter);
         $this->assertContains(['term' => ['entity.id' => '42']], $filter);
+        $this->assertContains(['term' => ['service.name' => 'billing-api']], $filter);
+        $this->assertContains(['term' => ['execution.type' => 'http']], $filter);
+        $this->assertContains(['term' => ['execution.name' => 'orders.store']], $filter);
     }
 
     public function test_search_translates_timeout_filter_into_term_clause(): void
@@ -146,6 +152,8 @@ class HttpLogDashboardQueryTest extends TestCase
             'aggregations' => [
                 'providers'   => ['buckets' => [['key' => 'delivery'], ['key' => 'payment']]],
                 'event_types' => ['buckets' => [['key' => 'order_create']]],
+                'services'    => ['buckets' => [['key' => 'billing-api']]],
+                'executions'  => ['buckets' => [['key' => 'http']]],
             ],
         ];
 
@@ -153,6 +161,8 @@ class HttpLogDashboardQueryTest extends TestCase
 
         $this->assertSame(['delivery', 'payment'], $options['providers']);
         $this->assertSame(['order_create'], $options['event_types']);
+        $this->assertSame(['billing-api'], $options['services']);
+        $this->assertSame(['http'], $options['executions']);
     }
 
     private function dashboardQuery(FakeLogElasticsearchClient $client): HttpLogDashboardQuery

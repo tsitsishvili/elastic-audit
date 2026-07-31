@@ -22,8 +22,8 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
 
 ## Rules
 
-- Read `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before changing an
-  integration. **Never edit files under `vendor/`.**
+- Read `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before
+  changing an integration. **Never edit files under `vendor/`.**
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
   returns an `Illuminate\Http\Client\PendingRequest`, so fluent configuration and single-request verbs stay available.
   Do not use Laravel `pool()` / `batch()` for audited calls: they create separate pending requests without the package
@@ -36,6 +36,11 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   a caller spoof audit metadata.
 - Use `ActivityLog::record(...)` for explicit domain events and `ActivityLoggable` for automatic Eloquent lifecycle
   events. Activity actor and entity types are free-form strings; if the app models them as enums, pass `->value`.
+- Set a stable, unique `APP_NAME` in every application writing to shared aliases. Both subsystems snapshot indexed
+  `service.*` and `execution.*` fields before queue dispatch. Do not replace them with activity metadata, which is not
+  indexed.
+- Raw SQL and query-builder writes bypass `ActivityLoggable`. Call `ActivityLog::record(...)` explicitly with meaningful
+  changes after those writes; do not infer an audit trail from `DB::listen()` SQL text.
 - HTTP `userId` and activity `actorId` accept integers, strings, UUIDs, or null. The package indexes non-null ids as
   keyword strings; preserve the application's real identifier instead of coercing UUIDs or string ids to integers.
 - Logging dispatches queued jobs. Keep a worker running for the configured queues, and use `Bus::fake()` when asserting

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\Events\AuditOperationFailed;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
@@ -48,6 +49,33 @@ class ActivityLoggerTest extends TestCase
             return $job->data->action === 'order.updated'
                 && $job->data->actorId === 5
                 && $job->data->changes === ['status' => ['old' => 'pending', 'new' => 'paid']];
+        });
+    }
+
+    public function test_record_snapshots_service_and_explicit_execution_origin(): void
+    {
+        config([
+            'activity_logs.enabled' => true,
+            'app.name'              => 'billing-api',
+            'app.env'               => 'testing',
+        ]);
+        Bus::fake();
+
+        $context = ActivityLogContext::forActor(
+            actorType: 'system',
+            actorId: null,
+            entityType: 'invoice',
+            entityId: '10',
+            executionOrigin: ExecutionOrigin::manual('invoice.raw_update'),
+        );
+
+        $this->logger->record(action: 'invoice.updated', context: $context);
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job): bool {
+            return $job->data->source?->serviceName === 'billing-api'
+                && $job->data->source->serviceEnvironment === 'testing'
+                && $job->data->source->execution->type === ExecutionOrigin::TYPE_MANUAL
+                && $job->data->source->execution->name === 'invoice.raw_update';
         });
     }
 

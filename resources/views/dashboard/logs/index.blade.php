@@ -72,6 +72,9 @@
         'request_id'   => 'Request ID',
         'external_id'  => 'External ID',
         'trace_id'     => 'Trace ID',
+        'service'      => 'Application',
+        'execution_type' => 'Execution type',
+        'execution_name' => 'Execution name',
         'from'         => 'From',
         'to'           => 'To',
     ];
@@ -147,6 +150,33 @@
                             <option value="{{ $opt }}" @selected(($filters['event_type'] ?? '') === $opt)>{{ $opt }}</option>
                         @endforeach
                     </select>
+                </label>
+
+                <label class="block">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Application</span>
+                    <select name="service" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="">All</option>
+                        @foreach ($options['services'] as $opt)
+                            <option value="{{ $opt }}" @selected(($filters['service'] ?? '') === $opt)>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </label>
+
+                <label class="block">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Execution type</span>
+                    <select name="execution_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                        <option value="">All</option>
+                        @foreach ($options['executions'] as $opt)
+                            <option value="{{ $opt }}" @selected(($filters['execution_type'] ?? '') === $opt)>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </label>
+
+                <label class="block">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Execution name</span>
+                    <input type="text" name="execution_name" value="{{ $filters['execution_name'] ?? '' }}"
+                           placeholder="Route, job, or command"
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
@@ -246,12 +276,13 @@
 
     <div class="ea-panel overflow-hidden rounded-lg border">
         <div class="overflow-x-auto">
-            <table class="min-w-[1120px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
+            <table class="min-w-[1280px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
                 <thead class="bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
                     <tr>
                         <th class="px-4 py-3 font-medium">
                             <a href="{{ $sortLink('time') }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === 'time' ? 'text-indigo-600 dark:text-indigo-400' : '' }}">Time <span>{{ $sortIcon('time') }}</span></a>
                         </th>
+                        <th class="px-4 py-3 font-medium">Source</th>
                         <th class="px-4 py-3 font-medium">Provider</th>
                         <th class="px-4 py-3 font-medium">Event</th>
                         <th class="px-4 py-3 font-medium">Dir</th>
@@ -280,6 +311,19 @@
                             <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, '@timestamp') }}" data-ts="{{ data_get($log, '@timestamp') }}">
                                 {{ $fmtTs(data_get($log, '@timestamp')) }}<span class="ml-1 text-slate-400 dark:text-slate-500" data-rel></span>
                             </td>
+                            <td class="px-4 py-3 text-xs">
+                                @if (data_get($log, 'service.name'))
+                                    <a href="{{ $withParams(['service' => data_get($log, 'service.name')]) }}" onclick="event.stopPropagation()" class="font-medium hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ data_get($log, 'service.name') }}</a>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
+                                <div class="font-mono text-slate-400">
+                                    {{ data_get($log, 'execution.type') ?: '—' }}
+                                    @if (data_get($log, 'execution.name'))
+                                        · <a href="{{ $withParams(['execution_name' => data_get($log, 'execution.name')]) }}" onclick="event.stopPropagation()" class="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ data_get($log, 'execution.name') }}</a>
+                                    @endif
+                                </div>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
                                 @if ($provider)
                                     <a href="{{ $withParams(['provider' => $provider]) }}" onclick="event.stopPropagation()" class="hover:text-indigo-600 hover:underline dark:hover:text-indigo-400">{{ $provider }}</a>
@@ -298,7 +342,7 @@
                                 <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ data_get($log, 'http.method', '—') }}</span>
                             </td>
                             <td class="max-w-sm px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, 'http.path') }}">
-                                <span class="block truncate">{{ data_get($log, 'http.path', '—') }}</span>
+                                <span class="block truncate">{{ data_get($log, 'http.path') ?: '—' }}</span>
                             </td>
                             <td class="whitespace-nowrap px-4 py-3">
                                 @if ($statusCls)
@@ -313,7 +357,7 @@
                                 {{ data_get($log, 'http.latency_ms') !== null ? number_format((int) data_get($log, 'http.latency_ms')) . ' ms' : '—' }}
                             </td>
                             <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                                {{ data_get($log, 'entity.type', '—') }}@if (data_get($log, 'entity.id')) <span class="text-slate-400 dark:text-slate-500">#{{ data_get($log, 'entity.id') }}</span>@endif
+                                {{ data_get($log, 'entity.type') ?: '—' }}@if (data_get($log, 'entity.id')) <span class="text-slate-400 dark:text-slate-500">#{{ data_get($log, 'entity.id') }}</span>@endif
                             </td>
                             <td class="px-4 py-3">
                                 @if ($success)
@@ -329,7 +373,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="px-4 py-12 text-center text-sm text-slate-400 dark:text-slate-500">No logs match the current filters.</td>
+                            <td colspan="11" class="px-4 py-12 text-center text-sm text-slate-400 dark:text-slate-500">No logs match the current filters.</td>
                         </tr>
                     @endforelse
                 </tbody>

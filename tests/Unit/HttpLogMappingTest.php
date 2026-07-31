@@ -20,7 +20,7 @@ class HttpLogMappingTest extends TestCase
     {
         $props = HttpLogMapping::get()['properties'];
 
-        foreach (['@timestamp', 'event_id', 'provider', 'event_type', 'direction', 'success', 'retention_days'] as $field) {
+        foreach (['@timestamp', 'event_id', 'service', 'execution', 'provider', 'event_type', 'direction', 'success', 'retention_days'] as $field) {
             $this->assertArrayHasKey($field, $props, "Missing field: {$field}");
         }
     }
@@ -42,9 +42,20 @@ class HttpLogMappingTest extends TestCase
     public function test_mapping_contains_schema_metadata(): void
     {
         $this->assertSame(
-            ['subsystem' => 'http_logs', 'schema_version' => 4],
+            ['subsystem' => 'http_logs', 'schema_version' => 5],
             HttpLogMapping::get()['_meta']['elastic_audit'],
         );
+    }
+
+    public function test_mapping_indexes_service_and_execution_origin(): void
+    {
+        $properties = HttpLogMapping::get()['properties'];
+
+        $this->assertSame('keyword', $properties['service']['properties']['name']['type']);
+        $this->assertSame('keyword', $properties['service']['properties']['environment']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['type']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['name']['type']);
+        $this->assertSame('keyword', $properties['execution']['properties']['action']['type']);
     }
 
     public function test_get_contains_request_and_response_fields(): void

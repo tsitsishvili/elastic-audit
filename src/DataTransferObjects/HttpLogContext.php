@@ -21,6 +21,7 @@ final readonly class HttpLogContext
         public ?string $traceId = null,
         public ?string $spanId = null,
         public ?string $traceParent = null,
+        public ?ExecutionOrigin $executionOrigin = null,
     ) {
         if ($this->retentionDays !== null) {
             RetentionDays::validate($this->retentionDays);
@@ -38,6 +39,7 @@ final readonly class HttpLogContext
         ?string $spanId = null,
         ?string $traceParent = null,
         bool $retainForever = false,
+        ?ExecutionOrigin $executionOrigin = null,
     ): self {
         return new self(
             entityType: $entityType,
@@ -54,6 +56,7 @@ final readonly class HttpLogContext
             traceId: $traceId,
             spanId: $spanId,
             traceParent: $traceParent,
+            executionOrigin: $executionOrigin,
         );
     }
 }

@@ -5,6 +5,39 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 4.1.0
+
+### High impact: roll over strict mappings for application and execution source
+
+HTTP and activity documents now snapshot indexed `service.*` and `execution.*` fields before queue dispatch. Configure
+a stable, unique name in every application that writes to shared aliases:
+
+```dotenv
+APP_NAME=billing-api
+APP_ENV=production
+```
+
+The package uses Laravel's existing `app.name` and `app.env` configuration, so no additional package configuration is
+required. HTTP and activity schema versions are now 5 and 4. Because both mappings use `dynamic: strict`, update the
+templates and roll over each enabled write alias before new code starts dispatching:
+
+```bash
+php artisan http-logs:create-index       # when HTTP logs are enabled
+php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:health
+```
+
+Existing documents remain on the read aliases without source fields. Queued DTOs created before the upgrade remain
+indexable with null source values. Pause queue workers while installing the package and rolling over the mappings; then
+resume them after health succeeds. Do not use `vendor:publish --force` unless overwriting the application's existing
+published configuration is intentional.
+
+### Low impact: raw database writes remain explicit
+
+The package does not install `DB::listen()` or attempt to infer model diffs from SQL. `ActivityLoggable` continues to
+capture Eloquent lifecycle events only. Call `ActivityLog::record()` after raw SQL/query-builder writes and provide
+meaningful before/after values, preferably within the surrounding transaction.
+
 ## Upgrading from 4.0.0 to 4.1.0
 
 ### Low impact: audit failures are now observable

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -73,6 +74,40 @@ class HttpLoggerTest extends TestCase
                 && $job->data->httpStatusCode === 200
                 && $job->data->success === true
                 && ! str_contains($job->data->httpUrl, '?');
+        });
+    }
+
+    public function test_log_incoming_snapshots_service_and_route_origin(): void
+    {
+        config([
+            'http_logs.enabled' => true,
+            'app.name'          => 'callbacks-api',
+            'app.env'           => 'testing',
+        ]);
+        Bus::fake();
+
+        $request = Request::create('https://example.com/callback', 'POST');
+        $route   = new Route(
+            ['POST'],
+            'callbacks/delivery',
+            'App\\Http\\Controllers\\DeliveryCallbackController',
+        );
+        $route->name('callbacks.delivery');
+        $request->setRouteResolver(fn (): Route => $route);
+
+        $this->logger->logIncoming(
+            request: $request,
+            provider: TestProvider::Delivery,
+            eventType: TestEventType::DeliveryStatusCallback,
+            context: $this->context,
+        );
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job): bool {
+            return $job->data->source?->serviceName === 'callbacks-api'
+                && $job->data->source->serviceEnvironment === 'testing'
+                && $job->data->source->execution->type === 'http'
+                && $job->data->source->execution->name === 'callbacks.delivery'
+                && $job->data->source->execution->action === 'App\\Http\\Controllers\\DeliveryCallbackController';
         });
     }
 

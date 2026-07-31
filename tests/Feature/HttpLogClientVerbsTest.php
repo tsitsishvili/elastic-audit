@@ -11,11 +11,13 @@ use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
 use Tsitsishvili\ElasticAudit\Facades\HttpLog;
 use Tsitsishvili\ElasticAudit\Http\OutgoingHttpLogMiddleware;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
+use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEventType;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestProvider;
@@ -47,6 +49,55 @@ class HttpLogClientVerbsTest extends TestCase
 
         Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job) {
             return $job->data->httpMethod === 'GET';
+        });
+    }
+
+    public function test_outgoing_source_is_captured_before_the_log_job_is_dispatched(): void
+    {
+        config([
+            'app.name' => 'orders-api',
+            'app.env'  => 'production',
+        ]);
+        Bus::fake();
+        Http::fake(['https://api.example/*' => Http::response([], 200)]);
+
+        $context = HttpLogContext::forEntity(
+            entityType: TestEntityType::Order,
+            entityId: '1',
+            executionOrigin: ExecutionOrigin::manual('order.provider_sync'),
+        );
+
+        HttpLog::make(TestProvider::Delivery, TestEventType::DeliveryOrderCreate, $context)
+            ->get('https://api.example/orders');
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job): bool {
+            return $job->data->source?->serviceName === 'orders-api'
+                && $job->data->source->serviceEnvironment === 'production'
+                && $job->data->source->execution->type === ExecutionOrigin::TYPE_MANUAL
+                && $job->data->source->execution->name === 'order.provider_sync';
+        });
+    }
+
+    public function test_outgoing_source_reflects_the_context_that_sent_the_request(): void
+    {
+        Bus::fake();
+        Http::fake(['https://api.example/*' => Http::response([], 200)]);
+
+        // An audited client is often built once and reused. Each call must record the
+        // context that issued it, not the one that happened to build the client.
+        $client = HttpLog::make(
+            TestProvider::Delivery,
+            TestEventType::DeliveryOrderCreate,
+            $this->context,
+        );
+
+        $this->app->make(AuditSourceResolver::class)->enterQueueJob('App\\Jobs\\SyncOrder');
+
+        $client->get('https://api.example/orders');
+
+        Bus::assertDispatched(LogHttpRequestJob::class, function (LogHttpRequestJob $job): bool {
+            return $job->data->source?->execution->type === ExecutionOrigin::TYPE_QUEUE
+                && $job->data->source->execution->name === 'App\\Jobs\\SyncOrder';
         });
     }
 

@@ -46,11 +46,22 @@ class HttpLogIndexer
 
     private function toDocument(HttpLogData $d): array
     {
+        $source = isset($d->source) ? $d->source : null;
+
         return [
             '@timestamp'     => $d->timestamp,
             'event_id'       => $d->eventId,
             'schema_version' => HttpLogData::SCHEMA_VERSION,
             'request_id'     => $d->requestId,
+            'service'        => [
+                'name'        => $source?->serviceName,
+                'environment' => $source?->serviceEnvironment,
+            ],
+            'execution' => [
+                'type'   => $source?->execution->type,
+                'name'   => $source?->execution->name,
+                'action' => $source?->execution->action,
+            ],
             'provider'       => (string) $d->provider->value,
             'event_type'     => (string) $d->eventType->value,
             'direction'      => $d->direction->value,

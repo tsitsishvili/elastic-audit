@@ -52,6 +52,11 @@
     @else
         @php
             $meta = [
+                'Application'    => data_get($log, 'service.name'),
+                'Environment'    => data_get($log, 'service.environment'),
+                'Execution type' => data_get($log, 'execution.type'),
+                'Execution name' => data_get($log, 'execution.name'),
+                'Execution action' => data_get($log, 'execution.action'),
                 'Provider'       => data_get($log, 'provider'),
                 'Event type'     => data_get($log, 'event_type'),
                 'Direction'      => data_get($log, 'direction'),

@@ -21,6 +21,36 @@ class ElasticAuditOperationsCommandTest extends TestCase
         $this->artisan('elastic-audit:health')->assertSuccessful();
     }
 
+    public function test_health_fails_when_service_name_is_empty(): void
+    {
+        config(['app.name' => '']);
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('app.name must be a non-empty string')
+            ->assertFailed();
+    }
+
+    public function test_health_warns_but_passes_on_the_default_service_name(): void
+    {
+        config(['app.name' => 'Laravel']);
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('still the framework default')
+            ->assertSuccessful();
+    }
+
+    public function test_health_does_not_warn_on_a_configured_service_name(): void
+    {
+        config(['app.name' => 'billing-api']);
+        $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
+
+        $this->artisan('elastic-audit:health')
+            ->doesntExpectOutputToContain('still the framework default')
+            ->assertSuccessful();
+    }
+
     public function test_health_json_emits_one_machine_readable_success_result(): void
     {
         config(['http_logs.enabled' => true, 'activity_logs.enabled' => true]);

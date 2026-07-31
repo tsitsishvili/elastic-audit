@@ -6,6 +6,7 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 
 class ActivityLogContextTest extends TestCase
 {
@@ -70,5 +71,19 @@ class ActivityLogContextTest extends TestCase
         $ctx2 = ActivityLogContext::forActor('user', 1, 'order', '1');
 
         $this->assertNotSame($ctx1->requestId, $ctx2->requestId);
+    }
+
+    public function test_for_actor_accepts_explicit_execution_origin(): void
+    {
+        $origin  = ExecutionOrigin::manual('inventory.raw_update');
+        $context = ActivityLogContext::forActor(
+            actorType: 'system',
+            actorId: null,
+            entityType: 'inventory',
+            entityId: '1',
+            executionOrigin: $origin,
+        );
+
+        $this->assertSame($origin, $context->executionOrigin);
     }
 }
