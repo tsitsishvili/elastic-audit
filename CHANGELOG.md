@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-08-12
+
 ### Added
 
 - Added indexed application identity and execution origin to both HTTP and activity documents. Sources are snapshotted
@@ -22,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aliases to install the new strict mappings.
 - Documented explicit `ActivityLog::record()` usage for raw SQL/query-builder writes; the package intentionally does not
   install `DB::listen()`.
+- Raised the `guzzlehttp/guzzle` runtime floor to `^7.15.2` to exclude releases affected by the noncanonical-host and
+  cookie-domain security advisories disclosed in August 2026.
+
+### Fixed
+
+- Composer distribution archives no longer include local agent and static-analysis output directories.
 
 ## [4.1.0] - 2026-07-23
 
@@ -299,7 +307,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0
 [3.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v.3.1.1...v3.2.0
