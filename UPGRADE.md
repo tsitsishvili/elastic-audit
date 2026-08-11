@@ -38,6 +38,12 @@ The package does not install `DB::listen()` or attempt to infer model diffs from
 capture Eloquent lifecycle events only. Call `ActivityLog::record()` after raw SQL/query-builder writes and provide
 meaningful before/after values, preferably within the surrounding transaction.
 
+### Low impact: update the Guzzle runtime dependency
+
+The minimum `guzzlehttp/guzzle` version is now `7.15.2`, excluding earlier releases affected by the noncanonical-host
+and cookie-domain security advisories disclosed in August 2026. Update Composer dependencies when installing this
+release; applications pinned to `7.15.1` must allow the patch upgrade.
+
 ## Upgrading from 4.0.0 to 4.1.0
 
 ### Low impact: audit failures are now observable
