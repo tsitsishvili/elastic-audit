@@ -3,8 +3,8 @@
 Elastic Audit records third-party HTTP traffic and actor/model activity in a dedicated Elasticsearch cluster. HTTP
 logs and activity logs are independent subsystems with separate configuration, queues, indexes, and dashboards.
 
-- Inspect `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php`
-  before changing an integration. Never edit the package files under `vendor/`.
+- Inspect `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, `config/elastic_audit_metrics.php`, and
+  `config/log_elasticsearch.php` before changing an integration. Never edit the package files under `vendor/`.
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
   returns an `Illuminate\Http\Client\PendingRequest`, so fluent setup and single-request verbs remain available. Do not
   use Laravel `pool()` / `batch()` for audited calls because they create separate requests without this middleware.
@@ -20,6 +20,12 @@ logs and activity logs are independent subsystems with separate configuration, q
   changes. Do not use `DB::listen()` as a substitute for an activity audit trail.
 - Logging dispatches queued jobs. Keep the configured queue worker running and use `Bus::fake()` when asserting job
   dispatch in tests; unit tests should not require a live Elasticsearch cluster.
+- Optional performance monitoring is disabled by default. When enabled it records transaction/span documents for HTTP,
+  SQL, queue publish/run, commands, scheduled tasks, outbound HTTP, Redis, cache, mail, and notifications. Sampled PHP
+  profiles require Excimer (recommended) or modern XHProf and use a separate profiles index. Preserve W3C HTTP/queue
+  propagation and execution-local trace state; keep both queues running and tune sampling/thresholds.
+- Never add SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, or errors to metrics.
+  Normalize inline SQL literals and dynamic paths, and do not instrument Elastic Audit's own internals.
 - Complete capture or terminal indexing failures emit a sanitized `AuditOperationFailed` Laravel event. It contains no
   raw exception, headers, payloads, changes, or arbitrary metadata.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
@@ -30,7 +36,7 @@ logs and activity logs are independent subsystems with separate configuration, q
   after database commit, so rolled-back changes intentionally produce no activity document.
 - After infrastructure or configuration changes, run `php artisan elastic-audit:health`; add `--json` for deployment
   automation. Use `--all` only when aliases for disabled subsystems have also been provisioned and should be checked.
-  Install the lifecycle policy before creating HTTP or activity indexes on a fresh environment.
+  Install the lifecycle policy before creating HTTP, activity, or enabled metrics indexes on a fresh environment.
 - Finite `retentionDays` values must be `1`–`32767`; use `retainForever: true` for a permanent event and never pass both.
   Permanent documents are ignored by prune commands, but permanent storage also requires
   `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes independently.

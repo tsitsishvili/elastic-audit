@@ -33,6 +33,14 @@ to alter application behavior. It:
 - Keeps dashboard routes behind application middleware and an explicit authorization callback.
 - Bounds HTTP body capture and treats undecodable bodies as hash-only metadata by default.
 - Emits sanitized failure diagnostics when an audit event cannot be captured or indexed.
+- Keeps optional performance documents limited to normalized operation names, timings, counts, attempts,
+  status/exit codes, application/execution identity, and validated trace identifiers. SQL bindings, HTTP bodies,
+  headers (except validated W3C context), query strings, URL credentials, mail/notification content, cache keys, Redis
+  arguments, audit identifiers, and error details are never copied into metrics. Inline SQL literals are replaced,
+  scheduled command text is hashed by default, and unmatched requests never store their user-controlled path.
+- Stores sampled PHP profiles in a separate index with bounded payload size and unindexed raw payloads. Source paths
+  are omitted by default; enabling profile path capture or scheduled-task descriptions is an explicit security review
+  decision. Profile access is protected by the shared dashboard authorization callback.
 
 The consuming application remains responsible for:
 

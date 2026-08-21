@@ -11,8 +11,9 @@ surrounding request behavior or exposing sensitive data.
 ## Inspect before editing
 
 1. Confirm `tsitsishvili/elastic-audit` is installed and inspect its version.
-2. Read the consuming application's `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and
-   `config/log_elasticsearch.php`. If package config has not been published and the user wants a full setup, run:
+2. Read the consuming application's `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`,
+   `config/elastic_audit_metrics.php`, and `config/log_elasticsearch.php`. If package config has not been published and
+   the user wants a full setup, run:
 
    ```bash
    php artisan vendor:publish --tag=elastic-audit
@@ -154,13 +155,22 @@ For a fresh environment, apply infrastructure in this order:
 php artisan elastic-audit:lifecycle-policy
 php artisan http-logs:create-index       # when HTTP logs are enabled
 php artisan activity-logs:create-index   # when activity logs are enabled
+php artisan elastic-audit:metrics:create-index  # when metrics are enabled
+php artisan elastic-audit:profiles:create-index # when profiles are enabled
 php artisan elastic-audit:health
 ```
 
 The plain health command validates enabled subsystems. Add `--json` for deployment automation. Use `--all` only when
-aliases for disabled subsystems have also been provisioned and should be checked. Keep a worker running for `HTTP_LOGS_QUEUE` and
-`ACTIVITY_LOGS_QUEUE`; capture dispatches jobs rather than indexing synchronously. Default document retention comes
-from each subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays` for a finite override or
+aliases for disabled subsystems have also been provisioned and should be checked. Keep a worker running for
+`HTTP_LOGS_QUEUE`, `ACTIVITY_LOGS_QUEUE`, `ELASTIC_AUDIT_METRICS_QUEUE`, and `ELASTIC_AUDIT_PROFILES_QUEUE` when the
+respective subsystems are enabled; capture dispatches jobs rather than indexing synchronously. Performance monitoring
+uses explicit transaction/span documents for HTTP, queries, queue publish/run, commands, scheduled tasks, outbound
+HTTP, Redis, cache, mail, and notifications. Profiles prefer Excimer, optionally use modern XHProf, and live in a
+separate index. Preserve W3C HTTP/queue propagation and execution-local trace state.
+Keep SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, and errors out of metrics;
+never instrument Elastic Audit's own capture/indexing internals. Default audit document retention comes from each audit
+subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays`
+for a finite override or
 `retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but
 permanent storage also requires `log_elasticsearch.lifecycle.delete_enabled=false` because ILM deletes whole indexes
 independently. Finite values must be `1`–`32767`. Configure dashboard authorization with `Dashboard::auth(...)` before

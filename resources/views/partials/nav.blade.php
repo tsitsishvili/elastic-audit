@@ -1,4 +1,4 @@
-{{-- Shared dashboard header. Expects $current: 'http' | 'activity'. --}}
+{{-- Shared dashboard header. Expects $current: 'http' | 'activity' | 'metrics'. --}}
 @php
     $dashboards = [
         'http' => [
@@ -17,6 +17,15 @@
             'tabs'    => [
                 ['label' => 'Overview',      'route' => 'activity-logs.overview',   'match' => 'activity-logs.overview'],
                 ['label' => 'Activity Logs', 'route' => 'activity-logs.logs.index', 'match' => 'activity-logs.logs.*'],
+            ],
+        ],
+        'metrics' => [
+            'label'   => 'Performance',
+            'enabled' => (bool) config('elastic_audit_metrics.dashboard.enabled', false),
+            'route'   => 'elastic-audit-metrics.overview',
+            'tabs'    => [
+                ['label' => 'Overview',     'route' => 'elastic-audit-metrics.overview',     'match' => 'elastic-audit-metrics.overview'],
+                ['label' => 'Transactions', 'route' => 'elastic-audit-metrics.transactions', 'match' => 'elastic-audit-metrics.transactions'],
             ],
         ],
     ];

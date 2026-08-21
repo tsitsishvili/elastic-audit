@@ -10,20 +10,21 @@ Boost.
 
 ## What this package does
 
-Elastic Audit records third-party HTTP traffic and actor/model activity in a dedicated Elasticsearch cluster. It has two
-**independent** subsystems that share one Elasticsearch connection:
+Elastic Audit records third-party HTTP traffic and actor/model activity in a dedicated Elasticsearch cluster. It has
+two independent audit subsystems plus optional application performance metrics that share one Elasticsearch connection:
 
-| Subsystem        | Entry points                                    | Config                     |
-| ---------------- | ----------------------------------------------- | -------------------------- |
-| Audit/HTTP logs  | `HttpLog` facade, HTTP middleware               | `config/http_logs.php`     |
-| Activity logs    | `ActivityLog` facade, `ActivityLoggable` trait  | `config/activity_logs.php` |
+| Subsystem       | Entry points                                   | Config                             |
+| --------------- | ---------------------------------------------- | ---------------------------------- |
+| Audit/HTTP logs | `HttpLog` facade, HTTP middleware              | `config/http_logs.php`             |
+| Activity logs   | `ActivityLog` facade, `ActivityLoggable` trait | `config/activity_logs.php`         |
+| Metrics         | Automatic transactions, spans, and profiles   | `config/elastic_audit_metrics.php` |
 
-Both read the shared connection from `config/log_elasticsearch.php`. Enable only the subsystem the task needs.
+All use the shared connection from `config/log_elasticsearch.php`. Enable only the subsystem the task needs.
 
 ## Rules
 
-- Read `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, and `config/log_elasticsearch.php` before
-  changing an integration. **Never edit files under `vendor/`.**
+- Read `config/app.php`, `config/http_logs.php`, `config/activity_logs.php`, `config/elastic_audit_metrics.php`, and
+  `config/log_elasticsearch.php` before changing an integration. **Never edit files under `vendor/`.**
 - Use `HttpLog::make(...)` instead of Laravel's `Http` facade when an outgoing provider request must be audited. It
   returns an `Illuminate\Http\Client\PendingRequest`, so fluent configuration and single-request verbs stay available.
   Do not use Laravel `pool()` / `batch()` for audited calls: they create separate pending requests without the package
@@ -45,6 +46,16 @@ Both read the shared connection from `config/log_elasticsearch.php`. Enable only
   keyword strings; preserve the application's real identifier instead of coercing UUIDs or string ids to integers.
 - Logging dispatches queued jobs. Keep a worker running for the configured queues, and use `Bus::fake()` when asserting
   dispatch in tests — unit tests must not require a live Elasticsearch cluster.
+- Metrics are disabled by default. When enabled they automatically observe HTTP, completed queries, queue publish/run,
+  commands, scheduled tasks, Redis, cache, mail, and notifications as transactions/spans. Sampled PHP profiles require
+  `ext-excimer` (recommended) or modern `ext-xhprof` and use a separate profiles index. Keep both configured queues
+  running and tune transaction, span, and profile sampling for production load.
+- Preserve W3C `traceparent`/`tracestate` propagation for inbound HTTP, Laravel HTTP client calls, and queue payloads.
+  Trace state must remain Fiber/coroutine-local in long-running runtimes. Do not turn sampled call frames into timing
+  spans; profiles are separate artifacts linked through `transaction.profile_id`.
+- Metric documents must never contain SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit IDs, or
+  error messages. Normalize inline SQL literals and dynamic endpoint identifiers before indexing. Do not instrument
+  Elastic Audit's own capture/indexing code; metrics describe the consuming application.
 - Complete capture or terminal indexing failures emit the sanitized `AuditOperationFailed` Laravel event. Listen to it
   for metrics or alerting; it intentionally contains no raw exception, headers, payloads, changes, or metadata.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security
@@ -140,17 +151,21 @@ php artisan vendor:publish --tag=elastic-audit   # config + enum stubs
 php artisan elastic-audit:lifecycle-policy       # install first
 php artisan http-logs:create-index               # only if HTTP logs are enabled
 php artisan activity-logs:create-index           # only if activity logs are enabled
+php artisan elastic-audit:metrics:create-index   # only if metrics are enabled
+php artisan elastic-audit:profiles:create-index  # only if profiles are enabled
 php artisan elastic-audit:health
 ```
 
-Capture dispatches jobs rather than indexing synchronously, so keep a worker running for the `HTTP_LOGS_QUEUE` and
-`ACTIVITY_LOGS_QUEUE` queues. Configure dashboard authorization with `Dashboard::auth(...)` before exposing either
-dashboard outside `local`.
+Capture dispatches jobs rather than indexing synchronously, so keep a worker running for `HTTP_LOGS_QUEUE`,
+`ACTIVITY_LOGS_QUEUE`, `ELASTIC_AUDIT_METRICS_QUEUE`, and `ELASTIC_AUDIT_PROFILES_QUEUE` when the respective subsystems
+are enabled. Configure dashboard authorization with `Dashboard::auth(...)` before exposing any dashboard outside
+`local`.
 
 ## Verify changes
 
 - Assert that disabled configurations are no-ops.
-- Use `Bus::fake()` and assert `LogHttpRequestJob` / `LogActivityJob` dispatch instead of requiring Elasticsearch.
+- Use `Bus::fake()` and assert `LogHttpRequestJob`, `LogActivityJob`, `LogMetricBatchJob`, or `LogProfileJob` dispatch
+  instead of requiring Elasticsearch.
 - Use Laravel HTTP fakes for provider responses while exercising the audited `PendingRequest`.
 - Test callback attribute mapping, especially invalid or absent enum values. Direct middleware unit tests must invoke
   `terminate()` for successful callbacks; full Laravel HTTP tests do this through the kernel.

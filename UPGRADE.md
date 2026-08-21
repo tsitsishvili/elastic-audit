@@ -5,6 +5,28 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Unreleased
+
+### Low impact: optional application performance metrics
+
+Application metrics are disabled by default. To adopt automatic endpoint, completed-query, queue-job, Artisan-command,
+and outbound Laravel HTTP timing, add or publish `config/elastic_audit_metrics.php`, enable the master switch, and
+provision the dedicated index:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan elastic-audit:metrics:create-index
+php artisan elastic-audit:profiles:create-index
+php artisan elastic-audit:health
+```
+
+Metrics schema v3 introduces explicit transaction/span fields, so rerunning the metrics create-index command is
+required when upgrading from the earlier metrics preview. Sampled PHP profiles now live in a separate strict index.
+Install `ext-excimer` (recommended for continuous production sampling) or modern `ext-xhprof`, then create the profiles
+index before enabling profiles. The old call-edge-as-span model and archived `ext-tideways_xhprof` driver are removed.
+Review sampling, minimum-duration thresholds, SQL statements, outbound paths, schedule descriptions, and source-path
+capture before enabling all operations in production. See [Application Performance Monitoring](METRICS.md).
+
 ## Upgrading from 4.1.0
 
 ### High impact: roll over strict mappings for application and execution source
@@ -34,9 +56,10 @@ published configuration is intentional.
 
 ### Low impact: raw database writes remain explicit
 
-The package does not install `DB::listen()` or attempt to infer model diffs from SQL. `ActivityLoggable` continues to
+Activity auditing does not use `DB::listen()` or attempt to infer model diffs from SQL. `ActivityLoggable` continues to
 capture Eloquent lifecycle events only. Call `ActivityLog::record()` after raw SQL/query-builder writes and provide
-meaningful before/after values, preferably within the surrounding transaction.
+meaningful before/after values, preferably within the surrounding transaction. Optional performance metrics may time
+completed queries, but those measurements are not an activity audit trail.
 
 ### Low impact: update the Guzzle runtime dependency
 

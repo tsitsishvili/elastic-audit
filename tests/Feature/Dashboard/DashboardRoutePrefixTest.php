@@ -12,5 +12,6 @@ class DashboardRoutePrefixTest extends TestCase
     {
         $this->assertSame('/logger/http-logs', route('http-logs.overview', [], false));
         $this->assertSame('/logger/activity', route('activity-logs.overview', [], false));
+        $this->assertSame('/logger/metrics', route('elastic-audit-metrics.overview', [], false));
     }
 }

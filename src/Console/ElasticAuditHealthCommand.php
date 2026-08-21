@@ -8,11 +8,14 @@ use Illuminate\Console\Command;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\EntityTypeContract;
 use Tsitsishvili\ElasticAudit\Contracts\EventTypeContract;
+use Tsitsishvili\ElasticAudit\Contracts\FunctionProfiler;
 use Tsitsishvili\ElasticAudit\Contracts\ProviderContract;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchSchemaInspectorInterface;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\MetricMapping;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ProfileMapping;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
@@ -35,7 +38,7 @@ class ElasticAuditHealthCommand extends Command
      */
     private array $checks = [];
 
-    public function handle(LogElasticsearchClientInterface $client): int
+    public function handle(LogElasticsearchClientInterface $client, FunctionProfiler $profiler): int
     {
         $this->jsonOutput = (bool) $this->option('json');
         $this->checks     = [];
@@ -74,6 +77,32 @@ class ElasticAuditHealthCommand extends Command
             (string) config('activity_logs.index_alias_write'),
             (string) config('activity_logs.queue', 'default'),
             ActivityLogMapping::get(),
+        ) || $failed;
+
+        $metricsEnabled = (bool) config('elastic_audit_metrics.enabled', false);
+        $failed         = $this->checkSubsystem(
+            $client,
+            'Metrics',
+            'elastic_audit_metrics',
+            $metricsEnabled,
+            (string) config('elastic_audit_metrics.index_alias'),
+            (string) config('elastic_audit_metrics.index_alias_write'),
+            (string) config('elastic_audit_metrics.queue', 'default'),
+            MetricMapping::get(),
+        ) || $failed;
+        $failed = $this->checkMetricsCapture($metricsEnabled, $profiler) || $failed;
+
+        $profilesEnabled = $metricsEnabled && (bool) config('elastic_audit_metrics.profiles.enabled', true);
+        $failed          = $this->checkSubsystem(
+            $client,
+            'Profiles',
+            'elastic_audit_metrics.profiles',
+            $profilesEnabled,
+            (string) config('elastic_audit_metrics.profiles.index_alias'),
+            (string) config('elastic_audit_metrics.profiles.index_alias_write'),
+            (string) config('elastic_audit_metrics.profiles.queue', 'default'),
+            ProfileMapping::get(),
+            hasBatchJob: false,
         ) || $failed;
 
         $failed = $this->checkLifecycle() || $failed;
@@ -116,6 +145,163 @@ class ElasticAuditHealthCommand extends Command
         return false;
     }
 
+    private function checkMetricsCapture(bool $enabled, FunctionProfiler $profiler): bool
+    {
+        if (! $enabled) {
+            return false;
+        }
+
+        $failed    = false;
+        $batchSize = filter_var(config('elastic_audit_metrics.batch_size', 100), FILTER_VALIDATE_INT);
+
+        if ($batchSize === false || $batchSize < 1 || $batchSize > 10000) {
+            $this->recordError('Metrics: batch_size must be an integer between 1 and 10000.');
+            $failed = true;
+        }
+
+        foreach ([
+            'http', 'queries', 'jobs', 'queue_publish', 'commands', 'scheduled_tasks',
+            'outgoing_http', 'redis', 'cache', 'mail', 'notifications',
+        ] as $category) {
+            $categoryEnabled = config("elastic_audit_metrics.capture.{$category}.enabled", true);
+
+            if (! is_bool($categoryEnabled)) {
+                $this->recordError("Metrics capture: {$category}.enabled must be a boolean.");
+                $failed = true;
+
+                continue;
+            }
+
+            if (! $categoryEnabled) {
+                $this->recordInfo("Metrics capture: {$category} disabled.");
+
+                continue;
+            }
+
+            $rate = filter_var(
+                config("elastic_audit_metrics.capture.{$category}.sample_rate", 1.0),
+                FILTER_VALIDATE_FLOAT,
+            );
+            $minimum = filter_var(
+                config("elastic_audit_metrics.capture.{$category}.min_duration_ms", 0),
+                FILTER_VALIDATE_FLOAT,
+            );
+
+            if ($rate === false || $rate < 0 || $rate > 1) {
+                $this->recordError("Metrics capture: {$category}.sample_rate must be between 0 and 1.");
+                $failed = true;
+            }
+
+            if ($minimum === false || $minimum < 0) {
+                $this->recordError("Metrics capture: {$category}.min_duration_ms must be zero or greater.");
+                $failed = true;
+            }
+        }
+
+        $statementBytes = $this->validateInteger(
+            config('elastic_audit_metrics.capture.queries.max_statement_bytes', 4096),
+        );
+
+        if ($statementBytes === false || $statementBytes < 1 || $statementBytes > 1_048_576) {
+            $this->recordError('Metrics capture: queries.max_statement_bytes must be between 1 and 1048576.');
+            $failed = true;
+        }
+
+        foreach ([
+            'queries.include_statement',
+            'outgoing_http.include_path',
+            'scheduled_tasks.include_description',
+        ] as $option) {
+            if (! is_bool(config("elastic_audit_metrics.capture.{$option}"))) {
+                $this->recordError("Metrics capture: {$option} must be a boolean.");
+                $failed = true;
+            }
+        }
+
+        $excludeHosts = config('elastic_audit_metrics.capture.outgoing_http.exclude_hosts', []);
+
+        if (! $this->isStringList($excludeHosts)) {
+            $this->recordError('Metrics capture: outgoing_http.exclude_hosts must contain only strings.');
+            $failed = true;
+        }
+
+        foreach (['honor_incoming_sampled', 'propagate_http', 'propagate_queue'] as $option) {
+            if (! is_bool(config("elastic_audit_metrics.trace.{$option}"))) {
+                $this->recordError("Metrics trace: {$option} must be a boolean.");
+                $failed = true;
+            }
+        }
+
+        if ((bool) config('elastic_audit_metrics.profiles.enabled', true)) {
+            $driver = config('elastic_audit_metrics.profiles.driver', 'auto');
+
+            if (! is_string($driver) || ! in_array($driver, ['auto', 'excimer', 'xhprof'], true)) {
+                $this->recordError('Profiles: driver must be auto, excimer, or xhprof.');
+                $failed = true;
+            }
+
+            $sampleRate = filter_var(config('elastic_audit_metrics.profiles.sample_rate', 0.01), FILTER_VALIDATE_FLOAT);
+
+            if ($sampleRate === false || $sampleRate < 0 || $sampleRate > 1) {
+                $this->recordError('Profiles: sample_rate must be between 0 and 1.');
+                $failed = true;
+            }
+
+            $period = filter_var(config('elastic_audit_metrics.profiles.period_ms', 10.1), FILTER_VALIDATE_FLOAT);
+
+            if ($period === false || $period <= 0 || $period > 1000) {
+                $this->recordError('Profiles: period_ms must be greater than zero and at most 1000.');
+                $failed = true;
+            }
+
+            foreach ([
+                'max_depth'         => [1, 1000],
+                'max_samples'       => [1, 1000000],
+                'max_payload_bytes' => [1024, 16777216],
+            ] as $option => [$minimum, $maximum]) {
+                $value = $this->validateInteger(config("elastic_audit_metrics.profiles.{$option}"));
+
+                if ($value === false || $value < $minimum || $value > $maximum) {
+                    $this->recordError("Profiles: {$option} must be between {$minimum} and {$maximum}.");
+                    $failed = true;
+                }
+            }
+
+            foreach (['include_paths', 'cpu', 'memory'] as $option) {
+                if (! is_bool(config("elastic_audit_metrics.profiles.{$option}"))) {
+                    $this->recordError("Profiles: {$option} must be a boolean.");
+                    $failed = true;
+                }
+            }
+
+            if (! $profiler->available()) {
+                $this->recordError(
+                    'Profiles: ext-excimer (recommended) or ext-xhprof is required for PHP profiling.',
+                );
+                $failed = true;
+            } else {
+                $this->recordSuccess('Profiles: profiler='.$profiler->driver().'.');
+            }
+        }
+
+        return $failed;
+    }
+
+    private function isStringList(mixed $value): bool
+    {
+        if (! is_array($value)) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function checkSubsystem(
         LogElasticsearchClientInterface $client,
         string $label,
@@ -125,6 +311,7 @@ class ElasticAuditHealthCommand extends Command
         string $writeAlias,
         string $queue,
         array $expectedMapping,
+        bool $hasBatchJob = true,
     ): bool {
         if (! $enabled && ! $this->option('all')) {
             $this->recordInfo("{$label}: disabled; alias checks skipped.");
@@ -161,7 +348,7 @@ class ElasticAuditHealthCommand extends Command
                 $this->recordSuccess("{$label}: queue={$queue}.");
             }
 
-            $failed = $this->checkJobOptions($label, $configKey) || $failed;
+            $failed = $this->checkJobOptions($label, $configKey, $hasBatchJob) || $failed;
             $failed = $this->checkRetentionDays($label, $configKey) || $failed;
         }
 
@@ -490,7 +677,7 @@ class ElasticAuditHealthCommand extends Command
         return false;
     }
 
-    private function checkJobOptions(string $label, string $configKey): bool
+    private function checkJobOptions(string $label, string $configKey, bool $hasBatchJob): bool
     {
         $failed = false;
 
@@ -504,12 +691,14 @@ class ElasticAuditHealthCommand extends Command
             }
         }
 
-        $batchTimeout          = config("{$configKey}.job.batch_timeout");
-        $validatedBatchTimeout = $this->validateInteger($batchTimeout);
+        if ($hasBatchJob) {
+            $batchTimeout          = config("{$configKey}.job.batch_timeout");
+            $validatedBatchTimeout = $this->validateInteger($batchTimeout);
 
-        if ($validatedBatchTimeout === false || $validatedBatchTimeout < 1) {
-            $this->recordError("{$label}: job.batch_timeout must be a positive integer.");
-            $failed = true;
+            if ($validatedBatchTimeout === false || $validatedBatchTimeout < 1) {
+                $this->recordError("{$label}: job.batch_timeout must be a positive integer.");
+                $failed = true;
+            }
         }
 
         $backoff = config("{$configKey}.job.backoff");

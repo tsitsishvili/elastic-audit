@@ -103,6 +103,7 @@ This publishes:
 config/http_logs.php
 config/log_elasticsearch.php
 config/activity_logs.php
+config/elastic_audit_metrics.php
 app/Enums/ElasticAudit/Provider.php
 app/Enums/ElasticAudit/EventType.php
 app/Enums/ElasticAudit/EntityType.php

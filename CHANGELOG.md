@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added opt-in application performance monitoring with explicit transaction/span documents for inbound HTTP, completed
+  SQL, queue publication/execution, Artisan commands, scheduled tasks, outbound Laravel HTTP, Redis, cache, mail, and
+  notifications. W3C trace context propagates across inbound/outbound HTTP and Laravel queues, while trace state is
+  isolated per Fiber/Swoole coroutine.
+- Added Excimer-first sampled PHP profiles with optional modern XHProf, a separate profiles index/queue/retention and
+  create/prune/rollover operations. Profiles link back to their transaction and expose bounded Speedscope or call-edge
+  payloads plus indexed hot-frame summaries.
+- Added an authorized performance dashboard with latency/failure summaries, transaction browsing, trace waterfalls,
+  and linked profile views.
+
+### Fixed
+
+- Queue jobs now use independent trace and flush boundaries, while common daemon commands are excluded from command
+  timing by default so workers cannot retain job metrics or native profiles for their entire lifetime.
+- Failed outbound Laravel HTTP requests use the underlying PSR request identity, preserving connection-failure metrics
+  without leaking stale timers in long-running processes.
+- SQL normalization is driver-aware for double-quoted data and hash comments, and unmatched inbound requests use a
+  constant route label instead of indexing user-controlled paths.
+- SQL fingerprints are computed from the normalized statement before storage truncation, avoiding collisions caused
+  solely by the configured preview length.
+
 ## [4.2.0] - 2026-08-12
 
 ### Added

@@ -23,6 +23,7 @@ use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Services\ActivityLogger;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\HttpLogIndexer;
+use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
 use Tsitsishvili\ElasticAudit\Services\Redactors\HttpPayloadRedactorResolver;
 use Tsitsishvili\ElasticAudit\Services\Redactors\SensitiveDataRedactor;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
@@ -42,6 +43,8 @@ class ElasticAuditServiceProviderTest extends TestCase
             'http_logs.index_alias_write'             => null,
             'activity_logs.index_alias'               => null,
             'activity_logs.index_alias_write'         => null,
+            'elastic_audit_metrics.index_alias'       => null,
+            'elastic_audit_metrics.index_alias_write' => null,
         ]);
 
         (new ElasticAuditServiceProvider($this->app))->register();
@@ -50,6 +53,8 @@ class ElasticAuditServiceProviderTest extends TestCase
         $this->assertSame('central_logs_http_logs_write', config('http_logs.index_alias_write'));
         $this->assertSame('central_logs_activity_logs', config('activity_logs.index_alias'));
         $this->assertSame('central_logs_activity_logs_write', config('activity_logs.index_alias_write'));
+        $this->assertSame('central_logs_metrics', config('elastic_audit_metrics.index_alias'));
+        $this->assertSame('central_logs_metrics_write', config('elastic_audit_metrics.index_alias_write'));
         $this->assertSame('central_logs_elastic_audit_policy', config('log_elasticsearch.lifecycle.policy_name'));
     }
 
@@ -62,6 +67,8 @@ class ElasticAuditServiceProviderTest extends TestCase
             'http_logs.index_alias_write'             => 'custom_http_write',
             'activity_logs.index_alias'               => 'custom_activity',
             'activity_logs.index_alias_write'         => 'custom_activity_write',
+            'elastic_audit_metrics.index_alias'       => 'custom_metrics',
+            'elastic_audit_metrics.index_alias_write' => 'custom_metrics_write',
         ]);
 
         (new ElasticAuditServiceProvider($this->app))->register();
@@ -70,6 +77,8 @@ class ElasticAuditServiceProviderTest extends TestCase
         $this->assertSame('custom_http_write', config('http_logs.index_alias_write'));
         $this->assertSame('custom_activity', config('activity_logs.index_alias'));
         $this->assertSame('custom_activity_write', config('activity_logs.index_alias_write'));
+        $this->assertSame('custom_metrics', config('elastic_audit_metrics.index_alias'));
+        $this->assertSame('custom_metrics_write', config('elastic_audit_metrics.index_alias_write'));
         $this->assertSame('custom_policy', config('log_elasticsearch.lifecycle.policy_name'));
     }
 
@@ -80,14 +89,21 @@ class ElasticAuditServiceProviderTest extends TestCase
             'elastic-audit',
         );
 
-        $stubSource = realpath(__DIR__.'/../../stubs/Enums/ElasticAudit');
-        $sources    = array_map('realpath', array_keys($paths));
+        $stubSource    = realpath(__DIR__.'/../../stubs/Enums/ElasticAudit');
+        $metricsSource = realpath(__DIR__.'/../../config/elastic_audit_metrics.php');
+        $sources       = array_map('realpath', array_keys($paths));
 
         $this->assertNotFalse($stubSource);
+        $this->assertNotFalse($metricsSource);
         $this->assertContains($stubSource, $sources);
+        $this->assertContains($metricsSource, $sources);
         $this->assertSame(
             app_path('Enums/ElasticAudit'),
             array_values($paths)[array_search($stubSource, $sources, true)],
+        );
+        $this->assertSame(
+            config_path('elastic_audit_metrics.php'),
+            array_values($paths)[array_search($metricsSource, $sources, true)],
         );
     }
 
@@ -133,6 +149,15 @@ class ElasticAuditServiceProviderTest extends TestCase
     public function test_http_logs_config_is_merged(): void
     {
         $this->assertNotNull(config('http_logs.enabled'));
+    }
+
+    public function test_metrics_config_is_merged_and_recorder_is_a_singleton(): void
+    {
+        $this->assertFalse(config('elastic_audit_metrics.enabled'));
+        $this->assertSame(
+            $this->app->make(MetricsRecorder::class),
+            $this->app->make(MetricsRecorder::class),
+        );
     }
 
     public function test_queue_events_set_and_clear_execution_origin(): void

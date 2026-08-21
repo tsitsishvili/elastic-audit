@@ -10,6 +10,8 @@ final readonly class AuditOperationFailed
 
     public const SUBSYSTEM_ACTIVITY = 'activity';
 
+    public const SUBSYSTEM_METRICS = 'metrics';
+
     public const STAGE_CAPTURE = 'capture';
 
     public const STAGE_INDEXING = 'indexing';
