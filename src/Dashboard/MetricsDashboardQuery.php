@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Dashboard;
 
+use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 
 final class MetricsDashboardQuery
 {
     private const MAX_PER_PAGE = 200;
+
+    /**
+     * Elasticsearch refuses a search where `from + size` exceeds
+     * `index.max_result_window` (10000 by default). Deep pages are clamped to
+     * the last reachable one so browsing far into a large result set stops
+     * paging instead of raising a query error.
+     */
+    private const MAX_RESULT_WINDOW = 10000;
 
     public function __construct(
         private readonly LogElasticsearchClientInterface $client,
@@ -80,6 +89,48 @@ final class MetricsDashboardQuery
     }
 
     /**
+     * Slowest explicitly measured application code in the window.
+     *
+     * These are spans rather than transactions, so they need their own search;
+     * the overview aggregation only looks at roots.
+     *
+     * @param  array<string, string>  $filters
+     * @return list<array{key: string, count: int, avg_ms: float, max_ms: float, total_ms: float}>
+     */
+    public function functions(array $filters, int $size = 10): array
+    {
+        $result = $this->client->search([
+            'index' => $this->metricsAlias,
+            'body'  => [
+                'size'  => 0,
+                'query' => ['bool' => ['filter' => [
+                    ['term' => ['kind' => 'span']],
+                    ['term' => ['type' => MetricData::TYPE_APP_FUNCTION]],
+                    ...$this->filters($filters),
+                ]]],
+                'aggs' => [
+                    'functions' => [
+                        'terms' => ['field' => 'name', 'size' => $size, 'order' => ['total_duration' => 'desc']],
+                        'aggs'  => [
+                            'avg_duration'   => ['avg' => ['field' => 'duration_ms']],
+                            'max_duration'   => ['max' => ['field' => 'duration_ms']],
+                            'total_duration' => ['sum' => ['field' => 'duration_ms']],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        return array_map(static fn (array $bucket): array => [
+            'key'      => (string) ($bucket['key'] ?? ''),
+            'count'    => (int) ($bucket['doc_count'] ?? 0),
+            'avg_ms'   => (float) ($bucket['avg_duration']['value'] ?? 0),
+            'max_ms'   => (float) ($bucket['max_duration']['value'] ?? 0),
+            'total_ms' => (float) ($bucket['total_duration']['value'] ?? 0),
+        ], data_get($result, 'aggregations.functions.buckets', []));
+    }
+
+    /**
      * @param  array<string, string>  $filters
      * @return array{hits: list<array<string, mixed>>, total: int}
      */
@@ -90,7 +141,7 @@ final class MetricsDashboardQuery
             'index' => $this->metricsAlias,
             'body'  => [
                 'track_total_hits' => true,
-                'from'             => (max(1, $page) - 1) * $perPage,
+                'from'             => ($this->offsetPage($page, $perPage) - 1) * $perPage,
                 'size'             => $perPage,
                 'sort'             => [['@timestamp' => ['order' => 'desc']]],
                 'query'            => ['bool' => ['filter' => [
@@ -176,5 +227,13 @@ final class MetricsDashboardQuery
             ),
             'total' => (int) data_get($result, 'hits.total.value', 0),
         ];
+    }
+
+    /**
+     * The highest page whose window Elasticsearch will still serve.
+     */
+    private function offsetPage(int $page, int $perPage): int
+    {
+        return max(1, min(max(1, $page), intdiv(self::MAX_RESULT_WINDOW, max(1, $perPage))));
     }
 }

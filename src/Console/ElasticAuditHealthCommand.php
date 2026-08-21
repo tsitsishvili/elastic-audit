@@ -161,7 +161,7 @@ class ElasticAuditHealthCommand extends Command
 
         foreach ([
             'http', 'queries', 'jobs', 'queue_publish', 'commands', 'scheduled_tasks',
-            'outgoing_http', 'redis', 'cache', 'mail', 'notifications',
+            'outgoing_http', 'functions', 'redis', 'cache', 'mail', 'notifications',
         ] as $category) {
             $categoryEnabled = config("elastic_audit_metrics.capture.{$category}.enabled", true);
 
@@ -218,11 +218,16 @@ class ElasticAuditHealthCommand extends Command
             }
         }
 
-        $excludeHosts = config('elastic_audit_metrics.capture.outgoing_http.exclude_hosts', []);
-
-        if (! $this->isStringList($excludeHosts)) {
-            $this->recordError('Metrics capture: outgoing_http.exclude_hosts must contain only strings.');
-            $failed = true;
+        foreach ([
+            'outgoing_http.exclude_hosts',
+            'http.exclude_paths',
+            'jobs.exclude',
+            'commands.exclude',
+        ] as $list) {
+            if (! $this->isStringList(config("elastic_audit_metrics.capture.{$list}", []))) {
+                $this->recordError("Metrics capture: {$list} must contain only strings.");
+                $failed = true;
+            }
         }
 
         foreach (['honor_incoming_sampled', 'propagate_http', 'propagate_queue'] as $option) {

@@ -67,6 +67,7 @@ use Tsitsishvili\ElasticAudit\Services\SqlStatementNormalizer;
 use Tsitsishvili\ElasticAudit\Services\XhprofFunctionProfiler;
 use Tsitsishvili\ElasticAudit\Support\AuditFailureReporter;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
+use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
@@ -142,6 +143,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
                     captureMemory: (bool) ($config['memory'] ?? true),
                     maxEdges: (int) ($config['max_samples'] ?? 10000),
                     maxPayloadBytes: (int) ($config['max_payload_bytes'] ?? 2097152),
+                    includePaths: (bool) ($config['include_paths'] ?? false),
                 ),
                 preferredDriver: (string) ($config['driver'] ?? 'auto'),
             );
@@ -501,13 +503,11 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
     /**
      * Build the route group prefix from an optional shared group segment and the
-     * dashboard's own subpath, tolerating empty/slash-padded values.
+     * dashboard's own subpath. Shared with the metrics exclusion rules so the
+     * dashboards keep excluding themselves whatever prefix they are mounted on.
      */
     private function composeDashboardPrefix(array $dashboard, string $defaultPath): string
     {
-        $prefix = trim((string) ($dashboard['prefix'] ?? ''), '/');
-        $path   = trim((string) ($dashboard['path'] ?? $defaultPath), '/');
-
-        return trim($prefix.'/'.$path, '/');
+        return MetricsExclusions::dashboardPrefix($dashboard, $defaultPath);
     }
 }

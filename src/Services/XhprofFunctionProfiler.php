@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Services;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\FunctionProfiler;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\CapturedProfile;
+use Tsitsishvili\ElasticAudit\Support\ProfileSourcePath;
 
 final class XhprofFunctionProfiler implements FunctionProfiler
 {
@@ -17,6 +18,7 @@ final class XhprofFunctionProfiler implements FunctionProfiler
         private readonly bool $captureMemory = true,
         private readonly int $maxEdges = 10000,
         private readonly int $maxPayloadBytes = 2097152,
+        private readonly bool $includePaths = false,
     ) {}
 
     public function available(): bool
@@ -77,9 +79,12 @@ final class XhprofFunctionProfiler implements FunctionProfiler
             }
 
             [$caller, $function] = array_pad(explode('==>', $edge, 2), 2, $edge);
-            $calls               = max(1, (int) ($values['ct'] ?? 1));
-            $wallMs              = max(0.0, (float) ($values['wt'] ?? 0) / 1000);
-            $edges[]             = array_filter([
+            // Closure names carry their declaring file on PHP 8.4 and later.
+            $caller   = ProfileSourcePath::sanitizeName($caller, $this->includePaths);
+            $function = ProfileSourcePath::sanitizeName($function, $this->includePaths);
+            $calls    = max(1, (int) ($values['ct'] ?? 1));
+            $wallMs   = max(0.0, (float) ($values['wt'] ?? 0) / 1000);
+            $edges[]  = array_filter([
                 'caller'       => mb_substr($caller, 0, 512),
                 'function'     => mb_substr($function, 0, 512),
                 'calls'        => $calls,

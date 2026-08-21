@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Services;
 
+use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Throwable;
@@ -29,6 +30,18 @@ final class MetricsRecorder
 
     /** @var array<string, int> */
     private array $suppressions = [];
+
+    /**
+     * Set while a long-running daemon command (queue:work, schedule:work,
+     * octane:start, ...) owns the process. Such a daemon performs its own
+     * bookkeeping between units of work — queue polling, cache reads, restart
+     * checks — and on the database queue/cache drivers that bookkeeping is
+     * itself caused by delivering metrics. Recording it would make the
+     * telemetry self-feeding, so context-less spans are dropped for the
+     * daemon's lifetime. Work inside a job or scheduled task still runs under
+     * its own root transaction and is captured normally.
+     */
+    private bool $daemonProcess = false;
 
     /** @param array<string, mixed>|null $config */
     public function __construct(
@@ -63,6 +76,16 @@ final class MetricsRecorder
         }
     }
 
+    public function enterDaemonProcess(): void
+    {
+        $this->daemonProcess = true;
+    }
+
+    public function leaveDaemonProcess(): void
+    {
+        $this->daemonProcess = false;
+    }
+
     public function categoryEnabled(string $category): bool
     {
         return $this->enabled() && (bool) $this->setting("capture.{$category}.enabled", true);
@@ -75,6 +98,7 @@ final class MetricsRecorder
         ?AuditSource $source = null,
         bool $independentRoot = false,
         ?TraceContext $upstream = null,
+        string $kind = MetricData::KIND_TRANSACTION,
     ): ?string {
         if ($this->isSuppressed() || ! $this->categoryEnabled($category)) {
             return null;
@@ -107,9 +131,14 @@ final class MetricsRecorder
                 traceId: $traceId,
                 spanId: $spanId,
                 parentSpanId: $parent !== null ? $parent->spanId : $upstream?->spanId,
-                transactionId: $spanId,
+                // A root is its own transaction; a measured block belongs to the
+                // transaction it runs inside, and to none when there is none.
+                transactionId: $kind === MetricData::KIND_TRANSACTION
+                    ? $spanId
+                    : $parent?->transactionId,
+                kind: $kind,
                 startedAt: hrtime(true),
-                startedTimestamp: Carbon::now()->toIso8601ZuluString(),
+                startedTimestamp: Carbon::now()->toIso8601ZuluString('millisecond'),
                 sampled: $sampled,
                 traceState: $parent !== null ? $parent->traceState : $upstream?->traceState,
                 source: $source ?? $this->resolver()->resolve(),
@@ -163,25 +192,33 @@ final class MetricsRecorder
             $context->name   = $name;
             $context->source = $source ?? $context->source;
             $durationMs      = max(0.0, (hrtime(true) - $context->startedAt) / 1_000_000);
+            $keepRoot        = $context->sampled && $durationMs >= $this->minimumDuration($context->category);
 
             if ($context->ownsProfiler) {
                 $capture         = $this->profiler?->stop();
                 $profilerStopped = true;
 
-                if ($capture !== null
-                    && $context->sampled
-                    && $durationMs >= $this->minimumDuration($context->category)) {
+                if ($capture !== null && $keepRoot) {
                     $profile            = ProfileData::fromCapture($context, $capture, $durationMs);
                     $context->profileId = $profile->profileId;
                     $this->flushProfile($profile);
                 }
             }
 
-            if ($context->sampled && $durationMs >= $this->minimumDuration($context->category)) {
-                $spanCount = count(array_filter(
+            // A root below its own threshold is never indexed. Its spans carry
+            // that root's transaction id, so keeping them would leave documents
+            // pointing at a transaction that does not exist — invisible to the
+            // dashboards, which only list transactions, but still stored.
+            if (! $keepRoot) {
+                $context->spans = [];
+            }
+
+            if ($keepRoot) {
+                $isTransaction = $context->kind === MetricData::KIND_TRANSACTION;
+                $spanCount     = $isTransaction ? count(array_filter(
                     $context->spans,
                     static fn (MetricData $metric): bool => $metric->kind === MetricData::KIND_SPAN,
-                ));
+                )) : 0;
                 $context->spans[] = MetricData::make(
                     type: $context->type,
                     name: $name,
@@ -194,7 +231,7 @@ final class MetricsRecorder
                     http: $http,
                     queue: $queue,
                     console: $console,
-                    kind: MetricData::KIND_TRANSACTION,
+                    kind: $context->kind,
                     transactionId: $context->transactionId,
                     sampled: true,
                     spanCount: $spanCount,
@@ -245,6 +282,59 @@ final class MetricsRecorder
     }
 
     /**
+     * Time a callable and record it as a span inside the current trace.
+     *
+     * The callback's return value is passed through and its exceptions are
+     * rethrown unchanged, so wrapping a call can never alter behaviour. Nested
+     * calls nest as spans, and spans opened outside any transaction are still
+     * recorded with their own trace.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public function measure(string $name, Closure $callback, string $type = MetricData::TYPE_APP_FUNCTION): mixed
+    {
+        $token = $this->beginMeasure($name, $type);
+
+        if ($token === null) {
+            return $callback();
+        }
+
+        try {
+            $result = $callback();
+        } catch (Throwable $exception) {
+            $this->endMeasure($token, $name, MetricData::OUTCOME_FAILURE);
+
+            throw $exception;
+        }
+
+        $this->endMeasure($token, $name, MetricData::OUTCOME_SUCCESS);
+
+        return $result;
+    }
+
+    /**
+     * Open a measured span by hand. Pair with endMeasure(); prefer measure()
+     * unless the start and end genuinely cannot share a scope.
+     */
+    public function beginMeasure(string $name, string $type = MetricData::TYPE_APP_FUNCTION): ?string
+    {
+        return $this->begin(
+            category: 'functions',
+            type: $type,
+            name: $name,
+            kind: MetricData::KIND_SPAN,
+        );
+    }
+
+    public function endMeasure(?string $token, string $name, string $outcome = MetricData::OUTCOME_SUCCESS): void
+    {
+        $this->finish(token: $token, name: $name, outcome: $outcome);
+    }
+
+    /**
      * @param  array<string, bool|float|int|string|null>|null  $http
      * @param  array<string, bool|float|int|string|null>|null  $db
      * @param  array<string, bool|float|int|string|null>|null  $queue
@@ -278,6 +368,11 @@ final class MetricsRecorder
         try {
             $context = $this->current();
 
+            // A span with no root inside a daemon is the daemon's own loop.
+            if ($context === null && $this->daemonProcess) {
+                return;
+            }
+
             if (($context !== null && ! $context->sampled)
                 || ($context === null && ! $this->sampled($category))
                 || ($context !== null && ! $this->sampled($category))) {
@@ -297,7 +392,7 @@ final class MetricsRecorder
                 db: $db,
                 queue: $queue,
                 transactionId: $context?->transactionId,
-                timestamp: Carbon::now()->subMicroseconds((int) round(max(0.0, $durationMs) * 1000))->toIso8601ZuluString(),
+                timestamp: Carbon::now()->subMicroseconds((int) round(max(0.0, $durationMs) * 1000))->toIso8601ZuluString('millisecond'),
                 redis: $redis,
                 cache: $cache,
                 mail: $mail,

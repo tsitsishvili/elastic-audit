@@ -16,11 +16,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Excimer-first sampled PHP profiles with optional modern XHProf, a separate profiles index/queue/retention and
   create/prune/rollover operations. Profiles link back to their transaction and expose bounded Speedscope or call-edge
   payloads plus indexed hot-frame summaries.
-- Added an authorized performance dashboard with latency/failure summaries, transaction browsing, trace waterfalls,
-  and linked profile views.
+- Trace waterfalls give each kind of work its own colour and row shape, with a legend of the types present. A query
+  leads with its statement and carries operation/connection underneath; a measured function reads as a label; outbound
+  calls, cache, Redis, queue, mail, and notification spans each show their own metadata.
+- Added an authorized performance dashboard with average/p50/p95/p99 latency and failure summaries, a throughput
+  chart with PNG export, transaction browsing with type/outcome/service/window filters, trace waterfalls, and linked
+  profile views showing per-frame sample share. It shares the range, interval, custom-window, and live-refresh
+  controls with the HTTP and activity dashboards, and every summary drills through to the same window.
+- Added `Performance::measure()` for timing application code. Each call becomes an `app.function` span nested in the
+  surrounding transaction, so unlike sampled profiles it aggregates by name across every request. Calls nest, the
+  callback's return value and exceptions pass through untouched, and the new `capture.functions` category makes the
+  timing sampleable and disableable. The performance dashboard ranks measured code by total time spent.
+- Added `capture.http.exclude_paths` and `capture.jobs.exclude` so applications can name request paths and job classes
+  that must never be observed. Both suppress the whole unit of work, so an excluded request or job also stops
+  contributing query, cache, and outgoing-call spans.
 
 ### Fixed
 
+- `capture.commands.exclude` now also covers `serve`, `pail`, `tinker`, `test`, and `dusk` by default. A test-suite
+  run was recorded as a single multi-second transaction and a REPL session as however long someone stayed in it, so
+  both dominated the slowest-transaction groups and the latency percentiles.
+- Application performance monitoring no longer observes its own delivery path. The package's audit and telemetry jobs,
+  every enabled dashboard, and the dashboard asset route are excluded unconditionally. Previously a dashboard page or
+  an audit job was recorded like application work, so the performance UI ranked itself among the slowest endpoints.
+- A daemon command matched by `capture.commands.exclude` now drops work that belongs to no transaction for as long as
+  it owns the process. On the `database` queue and cache drivers the worker's own polling was recorded as spans, each
+  dispatching a delivery job whose own polling produced more spans; a single idle worker generated documents and queue
+  entries without bound. Jobs and scheduled tasks inside the daemon still produce their own root transactions.
+- A transaction below its `min_duration_ms` threshold now discards the spans collected under it. They were still
+  indexed carrying the dropped transaction's id, so tuning the threshold produced documents that no dashboard lists
+  and that nothing can navigate to, while still consuming retention.
+- Sampled profiles no longer leak absolute filesystem paths. Since PHP 8.4 a closure is named after its declaring
+  file, so `profiles.include_paths=false` still stored paths inside frame names; names now follow the same policy as
+  the separate `file` field for both the Excimer and XHProf drivers.
+- Resolving the application root while sanitizing profile paths no longer throws when the bound container cannot
+  answer `base_path()`. Profiling runs inside a catch-all guard, so that exception silently discarded whole profiles.
+- Dashboard pagination is clamped to `index.max_result_window`. Paging beyond roughly ten thousand documents raised an
+  Elasticsearch result-window error that surfaced as a generic query failure on all three dashboards.
+- Metric timestamps are stored with millisecond precision. At second precision every span in a sub-second request
+  shared one instant, which left the trace waterfall unable to show where a span actually started.
 - Queue jobs now use independent trace and flush boundaries, while common daemon commands are excluded from command
   timing by default so workers cannot retain job metrics or native profiles for their entire lifetime.
 - Failed outbound Laravel HTTP requests use the underlying PSR request identity, preserving connection-failure metrics

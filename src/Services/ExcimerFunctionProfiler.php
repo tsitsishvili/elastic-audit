@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Services;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\FunctionProfiler;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\CapturedProfile;
+use Tsitsishvili\ElasticAudit\Support\ProfileSourcePath;
 
 final class ExcimerFunctionProfiler implements FunctionProfiler
 {
@@ -103,7 +104,11 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
                 continue;
             }
 
-            $normalized = ['name' => mb_substr((string) ($frame['name'] ?? 'unknown'), 0, 512)];
+            $normalized = ['name' => mb_substr(
+                ProfileSourcePath::sanitizeName((string) ($frame['name'] ?? 'unknown'), $this->includePaths),
+                0,
+                512,
+            )];
 
             if ($this->includePaths && isset($frame['file']) && is_string($frame['file'])) {
                 $normalized['file'] = $this->relativePath($frame['file']);
@@ -225,10 +230,6 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
 
     private function relativePath(string $path): string
     {
-        $base = function_exists('base_path') ? rtrim(base_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR : '';
-
-        return $base !== '' && str_starts_with($path, $base)
-            ? mb_substr($path, strlen($base), 1024)
-            : mb_substr(basename($path), 0, 1024);
+        return ProfileSourcePath::relative($path);
     }
 }

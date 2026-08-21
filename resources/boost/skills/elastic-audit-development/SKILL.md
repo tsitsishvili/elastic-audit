@@ -167,8 +167,15 @@ respective subsystems are enabled; capture dispatches jobs rather than indexing 
 uses explicit transaction/span documents for HTTP, queries, queue publish/run, commands, scheduled tasks, outbound
 HTTP, Redis, cache, mail, and notifications. Profiles prefer Excimer, optionally use modern XHProf, and live in a
 separate index. Preserve W3C HTTP/queue propagation and execution-local trace state.
+Time application code with `Performance::measure('bounded.label', fn () => ...)`, which records a nested
+`app.function` span and passes the callback's return value and exceptions through unchanged; span names are indexed as
+`keyword`, so never derive one from user input or a record id.
 Keep SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, and errors out of metrics;
-never instrument Elastic Audit's own capture/indexing internals. Default audit document retention comes from each audit
+never instrument Elastic Audit's own capture/indexing internals. Its delivery jobs, dashboards, and asset route are
+excluded automatically. Exclude application noise with `capture.http.exclude_paths`, `capture.jobs.exclude`,
+`capture.commands.exclude`, and `capture.outgoing_http.exclude_hosts`; each suppresses the whole unit of work, so an
+excluded request or job produces no child spans either. Patterns use `fnmatch()` with `FNM_NOESCAPE`, and paths carry
+no leading slash. Default audit document retention comes from each audit
 subsystem's `retention_days` / `retain_forever` config. Pass `retentionDays`
 for a finite override or
 `retainForever: true` for a permanent event; never pass both. Permanent documents are ignored by prune commands, but

@@ -40,6 +40,9 @@ final readonly class MetricData
 
     public const TYPE_NOTIFICATION_SEND = 'notification.send';
 
+    /** Application code timed explicitly through MetricsRecorder::measure(). */
+    public const TYPE_APP_FUNCTION = 'app.function';
+
     public const OUTCOME_SUCCESS = 'success';
 
     public const OUTCOME_FAILURE = 'failure';
@@ -130,7 +133,7 @@ final readonly class MetricData
 
         return new self(
             eventId: (string) Str::ulid(),
-            timestamp: $timestamp ?? Carbon::now()->toIso8601ZuluString(),
+            timestamp: $timestamp ?? Carbon::now()->toIso8601ZuluString('millisecond'),
             traceId: $traceId ?? self::randomId(16),
             spanId: $spanId,
             parentSpanId: $parentSpanId,

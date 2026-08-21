@@ -18,10 +18,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
+use Tsitsishvili\ElasticAudit\Facades\Performance;
+use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
+use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
+use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class MetricsInstrumentationTest extends TestCase
@@ -282,6 +287,40 @@ class MetricsInstrumentationTest extends TestCase
         Event::dispatch(new CommandFinished('queue:work', $input, $output, 0));
     }
 
+    public function test_daemon_command_loop_work_outside_a_job_is_not_recorded(): void
+    {
+        Bus::fake();
+
+        $input  = new ArrayInput([]);
+        $output = new BufferedOutput;
+
+        Event::dispatch(new CommandStarting('queue:work', $input, $output));
+
+        // The worker's own bookkeeping between jobs: on the database queue and
+        // cache drivers these queries are caused by delivering metrics, so
+        // recording them would make the metrics queue feed itself.
+        DB::select('select 1 as polled');
+        Event::dispatch(new RetrievingKey('database', 'illuminate:queue:restart', []));
+        Event::dispatch(new CacheHit('database', 'illuminate:queue:restart', 'value', []));
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
+
+        Event::dispatch(new CommandFinished('queue:work', $input, $output, 0));
+
+        // Once the daemon exits, context-less spans are recorded again.
+        DB::select('select 1 as after_daemon');
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
+            foreach ($batch->items as $metric) {
+                if ($metric->type === MetricData::TYPE_DB_QUERY) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
     public function test_outgoing_connection_failure_uses_stable_request_identity(): void
     {
         Bus::fake();
@@ -349,6 +388,226 @@ class MetricsInstrumentationTest extends TestCase
 
             return $types === [MetricData::TYPE_HTTP_SERVER];
         });
+    }
+
+    public function test_the_packages_own_dashboards_and_delivery_jobs_are_never_recorded(): void
+    {
+        config([
+            'http_logs.dashboard.enabled'             => true,
+            'http_logs.dashboard.prefix'              => 'logger',
+            'http_logs.dashboard.path'                => 'third-party',
+            'elastic_audit_metrics.dashboard.enabled' => true,
+        ]);
+        Bus::fake();
+
+        $exclusions = $this->app->make(MetricsExclusions::class);
+
+        $this->assertTrue($exclusions->path('logger/third-party'));
+        $this->assertTrue($exclusions->path('logger/third-party/logs/abc'));
+        $this->assertTrue($exclusions->path('vendor/elastic-audit/styles.css'));
+        $this->assertTrue($exclusions->job(LogActivityJob::class));
+        $this->assertTrue($exclusions->job(LogHttpRequestJob::class));
+        $this->assertFalse($exclusions->path('api/products'));
+        $this->assertFalse($exclusions->job('App\\Jobs\\SyncOrders'));
+
+        // A request to an excluded path records nothing at all, not even the
+        // queries it runs.
+        Route::get('/logger/third-party', function () {
+            DB::select('select 1 as dashboard_query');
+
+            return response()->noContent();
+        });
+
+        $this->get('/logger/third-party')->assertNoContent();
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
+    }
+
+    public function test_application_configured_paths_and_jobs_are_excluded(): void
+    {
+        config([
+            'elastic_audit_metrics.capture.http.exclude_paths' => ['up', 'internal/*'],
+            'elastic_audit_metrics.capture.jobs.exclude'       => ['App\\Jobs\\Noisy*'],
+        ]);
+        Bus::fake();
+
+        $exclusions = $this->app->make(MetricsExclusions::class);
+
+        $this->assertTrue($exclusions->path('up'));
+        $this->assertTrue($exclusions->path('internal/debug/state'));
+        $this->assertTrue($exclusions->job('App\\Jobs\\NoisyBroadcast'));
+        $this->assertFalse($exclusions->path('internal'));
+        $this->assertFalse($exclusions->job('App\\Jobs\\SyncOrders'));
+
+        Route::get('/internal/debug/state', function () {
+            DB::select('select 1 as internal_query');
+
+            return response()->noContent();
+        });
+
+        $this->get('/internal/debug/state')->assertNoContent();
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
+    }
+
+    public function test_a_root_below_its_minimum_duration_takes_its_spans_with_it(): void
+    {
+        config(['elastic_audit_metrics.capture.http.min_duration_ms' => 5000]);
+        Bus::fake();
+        Route::get('/metrics/fast', function () {
+            DB::select('select 1 as fast');
+
+            return response()->noContent();
+        });
+
+        $this->get('/metrics/fast')->assertNoContent();
+
+        // The transaction is below the threshold and is never indexed. Keeping
+        // its spans would leave documents whose transaction.id resolves to
+        // nothing, which no dashboard lists but retention still pays for.
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
+    }
+
+    public function test_a_root_above_its_minimum_duration_keeps_its_spans(): void
+    {
+        config(['elastic_audit_metrics.capture.http.min_duration_ms' => 0]);
+        Bus::fake();
+        Route::get('/metrics/kept', function () {
+            DB::select('select 1 as kept');
+
+            return response()->noContent();
+        });
+
+        $this->get('/metrics/kept')->assertNoContent();
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
+            $kinds = [];
+
+            foreach ($batch->items as $metric) {
+                $kinds[$metric->kind] = ($kinds[$metric->kind] ?? 0) + 1;
+            }
+
+            return ($kinds[MetricData::KIND_TRANSACTION] ?? 0) === 1
+                && ($kinds[MetricData::KIND_SPAN] ?? 0) >= 1;
+        });
+    }
+
+    public function test_repl_and_test_suite_entrypoints_are_not_timed_by_default(): void
+    {
+        Bus::fake();
+
+        $output = new BufferedOutput;
+
+        // `php artisan test` times the whole suite as a single transaction and
+        // tinker times a human sitting at a REPL. Both dominate latency
+        // percentiles and describe nothing about the application.
+        foreach (['tinker', 'test', 'dusk', 'serve', 'pail'] as $command) {
+            $input = new ArrayInput([]);
+            Event::dispatch(new CommandStarting($command, $input, $output));
+            DB::select('select 1 as during_excluded_command');
+            Event::dispatch(new CommandFinished($command, $input, $output, 0));
+        }
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
+    }
+
+    public function test_ordinary_console_commands_are_still_timed(): void
+    {
+        Bus::fake();
+
+        $input  = new ArrayInput([]);
+        $output = new BufferedOutput;
+
+        Event::dispatch(new CommandStarting('orders:reconcile', $input, $output));
+        Event::dispatch(new CommandFinished('orders:reconcile', $input, $output, 0));
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
+            foreach ($batch->items as $metric) {
+                if ($metric->type === MetricData::TYPE_CONSOLE_COMMAND
+                    && $metric->console['command'] === 'orders:reconcile') {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    public function test_measured_code_is_recorded_as_a_span_inside_the_surrounding_transaction(): void
+    {
+        Bus::fake();
+        Route::get('/metrics/checkout', function () {
+            return Performance::measure('checkout.totals', function () {
+                DB::select('select 1 as inside_measured_block');
+
+                return Performance::measure('checkout.tax', fn (): string => 'ok');
+            });
+        })->name('metrics.checkout');
+
+        $this->get('/metrics/checkout')->assertOk()->assertSee('ok');
+
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $batch): bool {
+            $byName = [];
+
+            foreach ($batch->items as $metric) {
+                $byName[$metric->name] = $metric;
+            }
+
+            if (! isset($byName['checkout.totals'], $byName['checkout.tax'], $byName['GET metrics.checkout'])) {
+                return false;
+            }
+
+            $root  = $byName['GET metrics.checkout'];
+            $outer = $byName['checkout.totals'];
+            $inner = $byName['checkout.tax'];
+
+            return $outer->kind === MetricData::KIND_SPAN
+                && $outer->type === MetricData::TYPE_APP_FUNCTION
+                && $inner->kind === MetricData::KIND_SPAN
+                // Both belong to the request's transaction...
+                && $outer->transactionId === $root->transactionId
+                && $inner->transactionId === $root->transactionId
+                // ...and nest: outer under the request, inner under outer.
+                && $outer->parentSpanId === $root->spanId
+                && $inner->parentSpanId === $outer->spanId
+                && $outer->durationMs >= $inner->durationMs;
+        });
+    }
+
+    public function test_measure_passes_the_return_value_through_and_rethrows(): void
+    {
+        Bus::fake();
+
+        $this->assertSame(42, Performance::measure('answer', fn (): int => 42));
+
+        try {
+            Performance::measure('boom', function (): void {
+                throw new RuntimeException('original');
+            });
+            $this->fail('measure() must not swallow the exception.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('original', $exception->getMessage());
+        }
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
+            foreach ($batch->items as $metric) {
+                if ($metric->name === 'boom') {
+                    return $metric->outcome === MetricData::OUTCOME_FAILURE;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    public function test_measured_spans_can_be_disabled_like_any_other_category(): void
+    {
+        config(['elastic_audit_metrics.capture.functions.enabled' => false]);
+        Bus::fake();
+
+        $this->assertSame('still runs', Performance::measure('disabled', fn (): string => 'still runs'));
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
     }
 
     protected function getEnvironmentSetUp($app): void

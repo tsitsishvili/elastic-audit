@@ -101,7 +101,7 @@
             </button>
         @endif
     </div>
-    <div class="mt-3 h-72 rounded-md bg-white p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700">
+    <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $hasData ? 'bg-white' : '' }}">
         @if($hasData)
             <canvas id="activityChart"></canvas>
         @else

@@ -26,6 +26,13 @@ logs and activity logs are independent subsystems with separate configuration, q
   propagation and execution-local trace state; keep both queues running and tune sampling/thresholds.
 - Never add SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, or errors to metrics.
   Normalize inline SQL literals and dynamic paths, and do not instrument Elastic Audit's own internals.
+- Time application code with `Performance::measure('bounded.label', fn () => ...)`. It records an `app.function` span
+  in the current transaction, nests, and passes the return value and exceptions through. Names are indexed as
+  `keyword`, so never build one from user input or a record id. Profiles are sampled and answer a different question.
+- Elastic Audit's delivery jobs, dashboards, and asset route are excluded automatically; never re-add them. Exclude
+  application noise with `capture.http.exclude_paths`, `capture.jobs.exclude`, `capture.commands.exclude`, and
+  `capture.outgoing_http.exclude_hosts`. Each suppresses the whole unit of work, so an excluded request or job stops
+  producing child spans too. Patterns are `fnmatch()` with `FNM_NOESCAPE`; paths carry no leading slash.
 - Complete capture or terminal indexing failures emit a sanitized `AuditOperationFailed` Laravel event. It contains no
   raw exception, headers, payloads, changes, or arbitrary metadata.
 - Review redaction before capturing new headers, fields, or metadata. Treat every `redaction.allow` entry as a security

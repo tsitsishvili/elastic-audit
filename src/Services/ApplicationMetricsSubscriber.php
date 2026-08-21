@@ -41,10 +41,9 @@ use Illuminate\Redis\Events\CommandFailed;
 use Symfony\Component\Mime\Email;
 use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
-use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
-use Tsitsishvili\ElasticAudit\Jobs\LogProfileJob;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\ExecutionContextId;
+use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
 use WeakMap;
 
@@ -53,6 +52,13 @@ final class ApplicationMetricsSubscriber
     private const TIMER_TTL_NS = 300_000_000_000;
 
     /** @var list<string> */
+    /**
+     * Commands whose timing describes something other than application work:
+     * processes that run for their whole lifetime, and the REPL/test
+     * entrypoints whose duration is a human or an entire suite.
+     *
+     * @var list<string>
+     */
     private const DEFAULT_EXCLUDED_COMMANDS = [
         'queue:work',
         'queue:listen',
@@ -61,6 +67,11 @@ final class ApplicationMetricsSubscriber
         'octane:start',
         'reverb:start',
         'pulse:work',
+        'serve',
+        'pail',
+        'tinker',
+        'test',
+        'dusk',
     ];
 
     /** @var array<int, array{started_at: int, span_id: ?string}> */
@@ -77,6 +88,9 @@ final class ApplicationMetricsSubscriber
 
     /** @var array<int, ?string> */
     private array $commands = [];
+
+    /** @var array<int, true> */
+    private array $daemonCommands = [];
 
     /** @var array<int, array{token: ?string, name: string, fingerprint: string}> */
     private array $scheduledTasks = [];
@@ -96,6 +110,7 @@ final class ApplicationMetricsSubscriber
         private readonly SqlStatementNormalizer $sql,
         private readonly EndpointNormalizer $endpoints,
         private readonly OutgoingTracePropagation $propagation,
+        private readonly MetricsExclusions $exclusions,
     ) {
         $this->mailTimers = new WeakMap;
     }
@@ -230,10 +245,16 @@ final class ApplicationMetricsSubscriber
             data_get($payload, 'elastic_audit_trace.tracestate'),
         );
 
+        $job = $this->queuedJobName($event->job, $payload);
+
+        if ($this->exclusions->job($job)) {
+            return;
+        }
+
         $this->queuePublishes[$uuid] = [
             'started_at' => hrtime(true),
             'span_id'    => $trace->spanId,
-            'job'        => $this->queuedJobName($event->job, $payload),
+            'job'        => $job,
             'connection' => (string) $event->connectionName,
             'queue'      => (string) ($event->queue ?? 'default'),
         ];
@@ -273,7 +294,9 @@ final class ApplicationMetricsSubscriber
         $key = spl_object_id($event->job);
         $job = $this->jobName($event->job);
 
-        if ($job === LogMetricBatchJob::class || $job === LogProfileJob::class) {
+        // Excluded jobs are suppressed for their whole run, so neither the job
+        // itself nor the queries and calls it makes are recorded.
+        if ($this->exclusions->job($job)) {
             $this->metricJobs[$key] = true;
             $this->metrics->suppress();
 
@@ -330,7 +353,18 @@ final class ApplicationMetricsSubscriber
 
     public function commandStarting(CommandStarting $event): void
     {
-        if (! $this->metrics->categoryEnabled('commands') || $this->excludedCommand($event->command)) {
+        // Excluded commands are long-running daemons. Suppress their own
+        // between-unit bookkeeping regardless of whether command timing is
+        // enabled, so the metrics queue cannot feed itself on the database
+        // queue and cache drivers.
+        if ($this->excludedCommand($event->command)) {
+            $this->daemonCommands[spl_object_id($event->input)] = true;
+            $this->metrics->enterDaemonProcess();
+
+            return;
+        }
+
+        if (! $this->metrics->categoryEnabled('commands')) {
             return;
         }
 
@@ -344,7 +378,15 @@ final class ApplicationMetricsSubscriber
 
     public function commandFinished(CommandFinished $event): void
     {
-        $key   = spl_object_id($event->input);
+        $key = spl_object_id($event->input);
+
+        if (isset($this->daemonCommands[$key])) {
+            unset($this->daemonCommands[$key]);
+            $this->metrics->leaveDaemonProcess();
+
+            return;
+        }
+
         $token = $this->commands[$key] ?? null;
         unset($this->commands[$key]);
 
@@ -513,7 +555,7 @@ final class ApplicationMetricsSubscriber
             'elastic_audit_metrics.capture.commands.exclude',
             self::DEFAULT_EXCLUDED_COMMANDS,
         ) as $pattern) {
-            if (is_string($pattern) && fnmatch($pattern, $command)) {
+            if (is_string($pattern) && fnmatch($pattern, $command, FNM_NOESCAPE)) {
                 return true;
             }
         }

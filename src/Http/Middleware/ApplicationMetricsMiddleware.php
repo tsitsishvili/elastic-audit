@@ -12,6 +12,7 @@ use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
+use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
 
 final class ApplicationMetricsMiddleware
@@ -20,13 +21,27 @@ final class ApplicationMetricsMiddleware
 
     private const UNMATCHED_ROUTE = 'unmatched';
 
+    private const SUPPRESSED_ATTRIBUTE = '_elastic_audit_metrics_suppressed';
+
     public function __construct(
         private readonly MetricsRecorder $metrics,
         private readonly AuditSourceResolver $sourceResolver,
+        private readonly MetricsExclusions $exclusions,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
+        // Excluded paths are suppressed rather than merely left un-begun, so the
+        // queries and outgoing calls they make do not survive as root-less spans.
+        // Suppression is lifted in terminate(), after every terminable
+        // middleware the request still has to run.
+        if ($this->exclusions->path($request->path())) {
+            $request->attributes->set(self::SUPPRESSED_ATTRIBUTE, true);
+            $this->metrics->suppress();
+
+            return $next($request);
+        }
+
         $token = $this->metrics->begin(
             category: 'http',
             type: MetricData::TYPE_HTTP_SERVER,
@@ -64,6 +79,13 @@ final class ApplicationMetricsMiddleware
 
     private function finish(Request $request, ?Response $response, string $outcome): void
     {
+        if ($request->attributes->get(self::SUPPRESSED_ATTRIBUTE) === true) {
+            $request->attributes->remove(self::SUPPRESSED_ATTRIBUTE);
+            $this->metrics->resume();
+
+            return;
+        }
+
         $token = $request->attributes->get(self::TOKEN_ATTRIBUTE);
         $request->attributes->remove(self::TOKEN_ATTRIBUTE);
 
