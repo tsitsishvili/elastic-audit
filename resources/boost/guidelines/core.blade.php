@@ -26,6 +26,10 @@ logs and activity logs are independent subsystems with separate configuration, q
   propagation and execution-local trace state; keep both queues running and tune sampling/thresholds.
 - Never add SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, or errors to metrics.
   Normalize inline SQL literals and dynamic paths, and do not instrument Elastic Audit's own internals.
+- Prefer automatic function timing: `capture.functions.automatic` reads the application's own frames out of each
+  captured profile as `app.function.profiled` spans, so nothing is wrapped. Coverage is `profiles.sample_rate` and
+  sampling drivers report estimates. Reach for `Performance::measure()` only when a specific block needs exact
+  per-call numbers on every request.
 - Time application code with `Performance::measure('bounded.label', fn () => ...)`. It records an `app.function` span
   in the current transaction, nests, and passes the return value and exceptions through. Names are indexed as
   `keyword`, so never build one from user input or a record id. Profiles are sampled and answer a different question.

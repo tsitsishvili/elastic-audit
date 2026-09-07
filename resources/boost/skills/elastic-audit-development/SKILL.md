@@ -167,7 +167,10 @@ respective subsystems are enabled; capture dispatches jobs rather than indexing 
 uses explicit transaction/span documents for HTTP, queries, queue publish/run, commands, scheduled tasks, outbound
 HTTP, Redis, cache, mail, and notifications. Profiles prefer Excimer, optionally use modern XHProf, and live in a
 separate index. Preserve W3C HTTP/queue propagation and execution-local trace state.
-Time application code with `Performance::measure('bounded.label', fn () => ...)`, which records a nested
+Prefer automatic function timing: `capture.functions.automatic` turns the application's own profiler frames into
+`app.function.profiled` spans with real `Class::method` names, so no wrapping is needed; its coverage is
+`profiles.sample_rate` and sampling drivers report estimates.
+Time a specific block exactly with `Performance::measure('bounded.label', fn () => ...)`, which records a nested
 `app.function` span and passes the callback's return value and exceptions through unchanged; span names are indexed as
 `keyword`, so never derive one from user input or a record id.
 Keep SQL bindings, HTTP bodies/headers/query strings, URL credentials, audit identifiers, and errors out of metrics;

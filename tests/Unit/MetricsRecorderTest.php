@@ -138,6 +138,83 @@ class MetricsRecorderTest extends TestCase
         $recorder->finish($command, 'queue:work', MetricData::OUTCOME_SUCCESS);
     }
 
+    public function test_automatic_timing_turns_application_frames_into_spans_without_any_wrapping(): void
+    {
+        Bus::fake();
+        $profiler = $this->profilerReturning([
+            ['function' => 'App\\Services\\OrderService::checkout', 'self_ms' => 4.0, 'total_ms' => 120.0, 'calls' => null],
+            ['function' => 'App\\Repositories\\OrderRepository::save', 'self_ms' => 90.0, 'total_ms' => 90.0, 'calls' => null],
+            // Framework and vendor frames dominate a real profile and must not
+            // be reported as the application's own work.
+            ['function' => 'Illuminate\\Database\\Connection::select', 'self_ms' => 80.0, 'total_ms' => 80.0, 'calls' => null],
+            ['function' => 'Tsitsishvili\\ElasticAudit\\Services\\MetricsRecorder::finish', 'self_ms' => 5.0, 'total_ms' => 5.0, 'calls' => null],
+            // Below the configured floor.
+            ['function' => 'App\\Support\\Trivial::noop', 'self_ms' => 0.2, 'total_ms' => 0.2, 'calls' => null],
+        ]);
+
+        $config                         = $this->enabledConfig();
+        $config['profiles']             = ['enabled' => true, 'sample_rate' => 1];
+        $config['capture']['functions'] = [
+            'enabled'                   => true,
+            'automatic'                 => true,
+            'automatic_limit'           => 20,
+            'automatic_min_duration_ms' => 1.0,
+            'namespaces'                => ['App\\'],
+        ];
+        $recorder = new MetricsRecorder(config: $config, profiler: $profiler);
+
+        $token = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET orders');
+        $recorder->finish($token, 'GET checkout', MetricData::OUTCOME_SUCCESS);
+
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $job): bool {
+            $functions = [];
+            $root      = null;
+
+            foreach ($job->items as $metric) {
+                if ($metric->type === MetricData::TYPE_APP_FUNCTION_PROFILED) {
+                    $functions[$metric->name] = $metric;
+                }
+
+                if ($metric->kind === MetricData::KIND_TRANSACTION) {
+                    $root = $metric;
+                }
+            }
+
+            return $root !== null
+                && array_keys($functions) === [
+                    'App\\Services\\OrderService::checkout',
+                    'App\\Repositories\\OrderRepository::save',
+                ]
+                && $functions['App\\Services\\OrderService::checkout']->parentSpanId === $root->spanId
+                && $functions['App\\Services\\OrderService::checkout']->transactionId === $root->transactionId;
+        });
+    }
+
+    public function test_automatic_timing_is_off_until_enabled(): void
+    {
+        Bus::fake();
+        $profiler = $this->profilerReturning([
+            ['function' => 'App\\Services\\OrderService::checkout', 'self_ms' => 4.0, 'total_ms' => 120.0, 'calls' => null],
+        ]);
+
+        $config             = $this->enabledConfig();
+        $config['profiles'] = ['enabled' => true, 'sample_rate' => 1];
+        $recorder           = new MetricsRecorder(config: $config, profiler: $profiler);
+
+        $token = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET orders');
+        $recorder->finish($token, 'GET orders', MetricData::OUTCOME_SUCCESS);
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $job): bool {
+            foreach ($job->items as $metric) {
+                if ($metric->type === MetricData::TYPE_APP_FUNCTION_PROFILED) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }
+
     public function test_available_native_profiler_dispatches_a_separate_profile_linked_to_transaction(): void
     {
         Bus::fake();
@@ -226,6 +303,45 @@ class MetricsRecorderTest extends TestCase
 
         $this->assertCount(2, $traceIds);
         $this->assertNotSame($traceIds[0], $traceIds[1]);
+    }
+
+    /** @param list<array{function: string, self_ms: float, total_ms: float, calls: ?int}> $timings */
+    private function profilerReturning(array $timings): FunctionProfiler
+    {
+        return new class($timings) implements FunctionProfiler
+        {
+            /** @param list<array{function: string, self_ms: float, total_ms: float, calls: ?int}> $timings */
+            public function __construct(private readonly array $timings) {}
+
+            public function available(): bool
+            {
+                return true;
+            }
+
+            public function driver(): ?string
+            {
+                return 'fake-excimer';
+            }
+
+            public function start(): bool
+            {
+                return true;
+            }
+
+            public function stop(): ?CapturedProfile
+            {
+                return new CapturedProfile(
+                    driver: 'fake-excimer',
+                    mode: 'sampling',
+                    format: 'speedscope',
+                    sampleRateHz: 99.0,
+                    sampleCount: 10,
+                    payload: [],
+                    hotFrames: [],
+                    functionTimings: $this->timings,
+                );
+            }
+        };
     }
 
     /** @return array<string, mixed> */

@@ -26,6 +26,7 @@
             'tabs'    => [
                 ['label' => 'Overview',     'route' => 'elastic-audit-metrics.overview',     'match' => 'elastic-audit-metrics.overview'],
                 ['label' => 'Transactions', 'route' => 'elastic-audit-metrics.transactions', 'match' => 'elastic-audit-metrics.transactions'],
+                ['label' => 'Functions',    'route' => 'elastic-audit-metrics.functions',    'match' => 'elastic-audit-metrics.functions'],
             ],
         ],
     ];

@@ -21,9 +21,10 @@
         // Lay the spans out on a shared timeline: everything is positioned
         // against the earliest start in the trace, so a span's bar shows both
         // when it ran and how long it took rather than duration alone.
-        $starts   = collect($items)->map($startedAt)->filter(fn ($v) => $v !== null);
+        $timelineItems = collect($items)->reject(fn ($item) => data_get($item, 'type') === 'app.function.profiled');
+        $starts   = $timelineItems->map($startedAt)->filter(fn ($v) => $v !== null);
         $traceMin = $starts->min();
-        $traceMax = collect($items)
+        $traceMax = $timelineItems
             ->map(fn ($item) => ($startedAt($item) ?? $traceMin) + (float) data_get($item, 'duration_ms', 0))
             ->max();
         $span = max(0.001, (float) $traceMax - (float) $traceMin);
@@ -31,7 +32,15 @@
         // Elasticsearch sorts purely by start time, so a span that begins in the
         // same millisecond as its root can sort ahead of it. Pin the root first
         // and order the remaining spans by where they sit on the timeline.
-        [$roots, $spans] = collect($items)->partition(fn ($item) => data_get($item, 'kind') === 'transaction');
+        // Profiled frames are an attribution breakdown, not timeline events: a
+        // sample says how much time a function accounted for, never when it
+        // started. Keep them out of the waterfall and rank them separately.
+        [$profiled, $timeline] = collect($items)->partition(
+            fn ($item) => data_get($item, 'type') === 'app.function.profiled'
+        );
+        $profiled = $profiled->sortByDesc(fn ($item) => (float) data_get($item, 'duration_ms', 0))->values();
+
+        [$roots, $spans] = $timeline->partition(fn ($item) => data_get($item, 'kind') === 'transaction');
         $ordered = $roots->sortBy(fn ($item) => $startedAt($item) ?? $traceMin)
             ->concat($spans->sortBy(fn ($item) => $startedAt($item) ?? $traceMin))
             ->values();
@@ -67,6 +76,7 @@
 
         // Only legend the types this trace actually contains.
         $presentTypes = $ordered->pluck('type')->filter()->unique()->values();
+        $profiledMax = (float) ($profiled->map(fn ($i) => (float) data_get($i, 'duration_ms', 0))->max() ?: 1);
     @endphp
 
     <a href="{{ route('elastic-audit-metrics.transactions', [], false) }}" class="ea-focus text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">← Transactions</a>
@@ -80,7 +90,7 @@
             <div class="shrink-0 text-sm text-slate-500 dark:text-slate-400">
                 {{ $fmtTs(data_get($root, '@timestamp')) }} ·
                 <span class="font-mono">{{ number_format($rootDuration, 2) }} ms</span> ·
-                {{ number_format(count($items) - 1) }} {{ \Illuminate\Support\Str::plural('span', count($items) - 1) }}
+                {{ number_format($ordered->count() - 1) }} {{ \Illuminate\Support\Str::plural('span', $ordered->count() - 1) }}
             </div>
         @endif
     </div>
@@ -175,6 +185,33 @@
             @endforelse
         </div>
     </div>
+
+    @if ($profiled->isNotEmpty())
+        <div class="ea-panel mt-4 rounded-lg border p-4">
+            <div class="flex items-baseline justify-between gap-2">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Application functions <span class="text-xs font-normal text-slate-400">by time accounted for</span></h2>
+                <span class="text-xs text-slate-400 dark:text-slate-500">from the profiler</span>
+            </div>
+            <div class="mt-4 space-y-3">
+                @foreach ($profiled as $item)
+                    @php $ms = (float) data_get($item, 'duration_ms', 0); @endphp
+                    <div>
+                        <div class="mb-1 flex items-baseline justify-between gap-4 text-xs">
+                            <span class="min-w-0 truncate font-mono text-slate-600 dark:text-slate-300" title="{{ data_get($item, 'name') }}">{{ data_get($item, 'name') }}</span>
+                            <span class="shrink-0 text-slate-400 dark:text-slate-500">
+                                <span class="font-semibold text-slate-600 dark:text-slate-300">{{ number_format($ms, 1) }} ms</span>
+                                @if ($rootDuration > 0) · {{ number_format(($ms / $rootDuration) * 100, 1) }}% @endif
+                            </span>
+                        </div>
+                        <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                            <div class="h-full bg-fuchsia-500" style="width: {{ round($ms / $profiledMax * 100, 1) }}%"></div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+            <p class="mt-3 text-[11px] text-slate-400 dark:text-slate-500">Inclusive time, so a caller's total contains its callees. Sampled durations are estimates, which is why these are ranked rather than placed on the timeline above.</p>
+        </div>
+    @endif
 
     @if (data_get($root, 'transaction.profile_id'))
         <a href="{{ route('elastic-audit-metrics.profiles.show', data_get($root, 'transaction.profile_id'), false) }}" class="ea-focus mt-5 inline-flex rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">Open sampled profile</a>

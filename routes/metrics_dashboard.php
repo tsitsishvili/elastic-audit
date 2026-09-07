@@ -7,5 +7,6 @@ use Tsitsishvili\ElasticAudit\Http\Controllers\MetricsDashboardController;
 
 Route::get('/', [MetricsDashboardController::class, 'overview'])->name('overview');
 Route::get('/transactions', [MetricsDashboardController::class, 'transactions'])->name('transactions');
+Route::get('/functions', [MetricsDashboardController::class, 'functions'])->name('functions');
 Route::get('/traces/{traceId}', [MetricsDashboardController::class, 'trace'])->name('traces.show');
 Route::get('/profiles/{profileId}', [MetricsDashboardController::class, 'profile'])->name('profiles.show');

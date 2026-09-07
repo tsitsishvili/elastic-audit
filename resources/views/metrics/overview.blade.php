@@ -163,14 +163,19 @@
     @if ($functionRows->isNotEmpty())
         <div class="ea-panel mt-4 rounded-lg border p-4">
             <div class="flex items-baseline justify-between">
-                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Measured functions <span class="text-xs font-normal text-slate-400">by total time</span></h2>
-                <span class="text-xs text-slate-400 dark:text-slate-500">Performance::measure()</span>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Application functions <span class="text-xs font-normal text-slate-400">by total time</span></h2>
+                <a href="{{ route('elastic-audit-metrics.functions', $window, false) }}" class="ea-focus text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Statistics &amp; regressions →</a>
             </div>
             <div class="mt-4 space-y-3">
                 @foreach ($functionRows as $row)
                     <div>
                         <div class="mb-1 flex items-baseline justify-between gap-4 text-xs">
-                            <span class="min-w-0 truncate font-mono font-medium text-slate-600 dark:text-slate-300" title="{{ $row['key'] }}">{{ $row['key'] }}</span>
+                            <span class="flex min-w-0 items-baseline gap-1.5">
+                                <span class="min-w-0 truncate font-mono font-medium text-slate-600 dark:text-slate-300" title="{{ $row['key'] }}">{{ $row['key'] }}</span>
+                                @unless ($row['exact'] ?? true)
+                                    <span class="shrink-0 rounded bg-fuchsia-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300" title="Sampled from the profiler; durations are estimates">est</span>
+                                @endunless
+                            </span>
                             <span class="shrink-0 text-slate-400 dark:text-slate-500">
                                 <span class="font-semibold text-slate-600 dark:text-slate-300">{{ $ms($row['avg_ms']) }}</span> avg
                                 · {{ $ms($row['max_ms']) }} max
@@ -178,12 +183,12 @@
                             </span>
                         </div>
                         <div class="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                            <div class="h-full bg-sky-500" style="width: {{ round($row['total_ms'] / $functionMax * 100, 1) }}%"></div>
+                            <div class="h-full {{ ($row['exact'] ?? true) ? 'bg-sky-500' : 'bg-fuchsia-500' }}" style="width: {{ round($row['total_ms'] / $functionMax * 100, 1) }}%"></div>
                         </div>
                     </div>
                 @endforeach
             </div>
-            <p class="mt-3 text-[11px] text-slate-400 dark:text-slate-500">Bar length is total time spent, so a fast call made often can outrank a slow one made once.</p>
+            <p class="mt-3 text-[11px] text-slate-400 dark:text-slate-500">Bar length is total time spent, so a fast call made often can outrank a slow one made once. Rows marked <span class="font-semibold">est</span> come from the profiler and are sampled estimates covering only profiled transactions.</p>
         </div>
     @endif
 

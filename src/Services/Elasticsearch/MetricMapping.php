@@ -90,6 +90,12 @@ class MetricMapping
                     'class'   => ['type' => 'keyword'],
                     'channel' => ['type' => 'keyword'],
                 ]],
+                'code' => ['properties' => [
+                    // Exclusive time: what the function spent itself, with the
+                    // cost of everything it called removed. duration_ms holds
+                    // the inclusive figure.
+                    'self_ms' => ['type' => 'double'],
+                ]],
                 'scheduler' => ['properties' => [
                     'task'        => ['type' => 'keyword'],
                     'fingerprint' => ['type' => 'keyword'],

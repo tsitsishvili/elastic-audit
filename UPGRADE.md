@@ -7,6 +7,19 @@ Changes are tagged by **likelihood of impact** so you can quickly find what affe
 
 ## Unreleased
 
+### Low impact: metrics schema version 4 adds function self time
+
+Function spans now carry `code.self_ms` — exclusive time, with the cost of everything the function called removed.
+Nothing breaks without it, but the performance dashboard cannot rank by self time until the write alias points at the
+new strict mapping:
+
+```bash
+php artisan elastic-audit:metrics:create-index
+php artisan elastic-audit:health
+```
+
+Documents written before the roll keep working and simply have no self time.
+
 ### Low impact: optional application performance metrics
 
 Application metrics are disabled by default. To adopt automatic endpoint, completed-query, queue-job, Artisan-command,

@@ -95,13 +95,32 @@ return [
             'exclude_hosts'   => [],
         ],
         /*
-         * Application code timed explicitly with Performance::measure(). Nothing
-         * is recorded until you wrap something, so this costs nothing until used.
+         * Timing for application code, from two independent sources.
+         *
+         * Explicit: Performance::measure() records exactly what you wrap, on
+         * every call, with the duration actually observed.
+         *
+         * Automatic: when `automatic` is on, the application's own frames are
+         * read straight out of each captured profile, so no code has to be
+         * wrapped at all. This only covers profiled transactions, so its
+         * coverage is `profiles.sample_rate`, and with the Excimer sampling
+         * driver the durations are estimates rather than measurements. Those
+         * spans are typed `app.function.profiled` to keep them separable from
+         * the exact ones.
          */
         'functions' => [
             'enabled'         => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_ENABLED', true),
             'sample_rate'     => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_SAMPLE_RATE', 1.0),
             'min_duration_ms' => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_MIN_DURATION_MS', 0),
+
+            'automatic'                 => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC', false),
+            'automatic_limit'           => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC_LIMIT', 20),
+            'automatic_min_duration_ms' => env('ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC_MIN_DURATION_MS', 1.0),
+
+            // Namespace prefixes counting as application code. Empty falls back
+            // to the namespace Laravel resolves for the application itself, so
+            // vendor and framework frames stay out of the results.
+            'namespaces' => [],
         ],
         'redis' => [
             'enabled'         => env('ELASTIC_AUDIT_METRICS_REDIS_ENABLED', true),

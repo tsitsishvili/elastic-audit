@@ -11,6 +11,9 @@ use Tsitsishvili\ElasticAudit\Support\ProfileSourcePath;
 
 final class ExcimerFunctionProfiler implements FunctionProfiler
 {
+    /** Frames ranked by inclusive cost that a capture will carry. */
+    private const MAX_TIMED_FRAMES = 200;
+
     private ?object $profiler = null;
 
     public function __construct(
@@ -74,7 +77,7 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
             return null;
         }
 
-        [$payload, $sampleCount, $hotFrames, $truncated] = $this->normalize($payload);
+        [$payload, $sampleCount, $hotFrames, $truncated, $functionTimings] = $this->normalize($payload);
 
         return new CapturedProfile(
             driver: 'excimer',
@@ -85,12 +88,13 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
             payload: $payload,
             hotFrames: $hotFrames,
             truncated: $truncated,
+            functionTimings: $functionTimings,
         );
     }
 
     /**
      * @param  array<string, mixed>  $payload
-     * @return array{array<string, mixed>, int, list<array{function: string, file: ?string, line: ?int, self_samples: int, total_samples: int}>, bool}
+     * @return array{array<string, mixed>, int, list<array{function: string, file: ?string, line: ?int, self_samples: int, total_samples: int}>, bool, list<array{function: string, self_ms: float, total_ms: float, calls: ?int}>}
      */
     private function normalize(array $payload): array
     {
@@ -225,7 +229,23 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
             ];
         }
 
-        return [$payload, count($samples), $hotFrames, $truncated];
+        // Rank every frame by inclusive cost, not just the leaves. A wall-clock
+        // sample is worth one period, so a frame's sample count times the period
+        // estimates the time spent in it.
+        arsort($total);
+        $timings = [];
+
+        foreach (array_slice($total, 0, self::MAX_TIMED_FRAMES, true) as $frameId => $inclusive) {
+            $frame     = is_array($frames[$frameId] ?? null) ? $frames[$frameId] : [];
+            $timings[] = [
+                'function' => (string) ($frame['name'] ?? 'unknown'),
+                'self_ms'  => round(($self[$frameId] ?? 0) * $this->periodMs, 3),
+                'total_ms' => round($inclusive * $this->periodMs, 3),
+                'calls'    => null,
+            ];
+        }
+
+        return [$payload, count($samples), $hotFrames, $truncated, $timings];
     }
 
     private function relativePath(string $path): string

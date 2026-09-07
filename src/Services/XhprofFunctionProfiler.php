@@ -70,8 +70,9 @@ final class XhprofFunctionProfiler implements FunctionProfiler
 
         $raw = xhprof_disable();
 
-        $edges = [];
-        $hot   = [];
+        $edges   = [];
+        $hot     = [];
+        $timings = [];
 
         foreach ($raw as $edge => $values) {
             if (! is_string($edge) || ! is_array($values)) {
@@ -96,6 +97,12 @@ final class XhprofFunctionProfiler implements FunctionProfiler
             $hot[$function] ??= ['self' => 0, 'total' => 0];
             $hot[$function]['self'] += $calls;
             $hot[$function]['total'] += $calls;
+
+            // XHProf measures wall time per caller/callee edge, so summing a
+            // function's inbound edges gives its real inclusive cost.
+            $timings[$function] ??= ['self_ms' => 0.0, 'total_ms' => 0.0, 'calls' => 0];
+            $timings[$function]['total_ms'] += $wallMs;
+            $timings[$function]['calls'] += $calls;
         }
 
         usort($edges, static fn (array $a, array $b): int => $b['wall_ms'] <=> $a['wall_ms']);
@@ -122,6 +129,18 @@ final class XhprofFunctionProfiler implements FunctionProfiler
             ];
         }
 
+        uasort($timings, static fn (array $a, array $b): int => $b['total_ms'] <=> $a['total_ms']);
+        $functionTimings = [];
+
+        foreach (array_slice($timings, 0, 200, true) as $function => $counts) {
+            $functionTimings[] = [
+                'function' => mb_substr((string) $function, 0, 512),
+                'self_ms'  => round($counts['self_ms'], 3),
+                'total_ms' => round($counts['total_ms'], 3),
+                'calls'    => $counts['calls'],
+            ];
+        }
+
         return new CapturedProfile(
             driver: 'xhprof',
             mode: 'instrumentation',
@@ -131,6 +150,7 @@ final class XhprofFunctionProfiler implements FunctionProfiler
             payload: $payload,
             hotFrames: $hotFrames,
             truncated: $truncated,
+            functionTimings: $functionTimings,
         );
     }
 }

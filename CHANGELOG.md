@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart with PNG export, transaction browsing with type/outcome/service/window filters, trace waterfalls, and linked
   profile views showing per-frame sample share. It shares the range, interval, custom-window, and live-refresh
   controls with the HTTP and activity dashboards, and every summary drills through to the same window.
+- Metrics schema version 4 adds `code.self_ms`: a function's exclusive time, with the cost of everything it called
+  removed, alongside the inclusive `duration_ms`. Run `elastic-audit:metrics:create-index` to roll the write alias
+  onto the new mapping; documents written before the roll simply have no self time.
+- The function statistics page ranks by total time, self time, average, p95, or call count, and each row expands to a
+  p75 trend chart across the window with a sparkline in the collapsed row.
+- Added a function statistics page ranking application functions by cumulative and per-call cost and comparing each
+  against the preceding window of equal length, surfacing regressions, improvements, and functions that appeared or
+  stopped running. A movement is only reported past a 10% change with at least three calls in both windows.
+- Added automatic function timing. With `capture.functions.automatic`, the application's own frames are read out of
+  each captured profile and indexed as `app.function.profiled` spans carrying real `Class::method` names, so no code
+  has to be wrapped and no list of targets maintained. Coverage is `profiles.sample_rate` and sampling drivers report
+  estimates, so these stay a distinct type, are ranked rather than placed on the trace timeline, and are labelled as
+  estimates on the dashboard. Frames are matched against `capture.functions.namespaces`, defaulting to the
+  application's own namespace.
 - Added `Performance::measure()` for timing application code. Each call becomes an `app.function` span nested in the
   surrounding transaction, so unlike sampled profiles it aggregates by name across every request. Calls nest, the
   callback's return value and exceptions pass through untouched, and the new `capture.functions` category makes the

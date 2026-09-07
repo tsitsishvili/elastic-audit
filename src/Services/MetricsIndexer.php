@@ -72,6 +72,7 @@ class MetricsIndexer
             'mail'           => $data->mail,
             'notification'   => $data->notification,
             'scheduler'      => $data->scheduler,
+            'code'           => $data->code,
         ], static fn (mixed $value): bool => $value !== null);
     }
 }

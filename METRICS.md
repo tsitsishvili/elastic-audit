@@ -49,6 +49,7 @@ documents. Every document has `trace.id`, `trace.span_id`, `trace.parent_span_id
 | --- | --- | --- |
 | Inbound route | `http.server` | transaction |
 | Measured application code | `app.function` | span |
+| Profiled application code | `app.function.profiled` | span |
 | Queue job execution | `queue.job` | transaction |
 | Artisan command | `console.command` | transaction |
 | Scheduled task | `scheduled.task` | transaction |
@@ -64,13 +65,62 @@ Transactions record `transaction.span_count` and, when profiling succeeded, `tra
 has an independent `enabled`, `sample_rate`, and `min_duration_ms` configuration. Sampling a root off keeps only the
 minimal in-memory context required to propagate its W3C sampled flag; it does not enqueue its transactions or spans.
 
-## Timing your own code
+## Timing application code
 
-Profiles answer "what was hot inside this one sampled request". They cannot
-answer "how long does this operation take across every request", because they
-are sampled and their frames are summarised per profile. `Performance::measure()`
-fills that gap: it records every call as an `app.function` span, nested in the
-surrounding transaction and aggregated by name on the dashboard.
+There are two sources of function timing, and they answer different questions.
+
+### Automatic, from the profiler
+
+With `capture.functions.automatic=true`, the application's own frames are read
+out of every captured profile and indexed as `app.function.profiled` spans. No
+code is wrapped and no list is maintained: the profiler already saw every method
+that ran, so the spans carry real `Class::method` names and the inclusive time
+each accounted for.
+
+```dotenv
+ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC=true
+ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC_LIMIT=20
+ELASTIC_AUDIT_METRICS_FUNCTIONS_AUTOMATIC_MIN_DURATION_MS=1.0
+```
+
+Two properties follow from the source and are worth stating plainly. Coverage is
+`profiles.sample_rate`, because only profiled transactions have frames to read.
+And with the Excimer sampling driver the durations are estimates — a frame's
+sample count times the sampling period — not measurements; XHProf's
+instrumentation mode reports exact per-edge wall time instead. That is why these
+spans carry their own type, are ranked rather than placed on the trace timeline,
+and are marked `est` on the dashboard.
+
+Frames are matched against `capture.functions.namespaces`, which defaults to the
+namespace Laravel resolves for the application, so vendor and framework frames
+stay out. The times are inclusive, so a caller's total contains its callees.
+
+### Self time versus total time
+
+Every function span records `duration_ms` (inclusive: the function and
+everything it called) and `code.self_ms` (exclusive: what it spent itself).
+The distinction is what separates "this function is slow" from "this function
+calls something slow" — a controller action usually has a large total and almost
+no self time. The dashboard can rank by either.
+
+Self time arrives with metrics schema v4, so run
+`php artisan elastic-audit:metrics:create-index` after upgrading; documents
+written before the roll have no self time and sort as zero.
+
+### Comparing windows
+
+`/logger/metrics/functions` ranks functions by cumulative and per-call cost and
+compares each against the window of equal length immediately before the selected
+one, so a number becomes a direction. Functions are reported as regressed or
+improved only when the average moved by more than 10% and the function ran at
+least three times in *both* windows; anything thinner is left unjudged rather
+than dressed up as a trend. Functions with no comparable history show as new,
+and ones that stopped running show as gone.
+
+### Explicit, from your code
+
+`Performance::measure()` records every call exactly, whether or not the
+transaction was profiled.
 
 ```php
 use Tsitsishvili\ElasticAudit\Facades\Performance;

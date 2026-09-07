@@ -11,10 +11,12 @@ use Throwable;
 use Tsitsishvili\ElasticAudit\Contracts\FunctionProfiler;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ApplicationMetricContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\AuditSource;
+use Tsitsishvili\ElasticAudit\DataTransferObjects\CapturedProfile;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ProfileData;
 use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogProfileJob;
+use Tsitsishvili\ElasticAudit\Support\ApplicationFrames;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\ExecutionContextId;
 use Tsitsishvili\ElasticAudit\Support\PackageConfig;
@@ -202,6 +204,7 @@ final class MetricsRecorder
                     $profile            = ProfileData::fromCapture($context, $capture, $durationMs);
                     $context->profileId = $profile->profileId;
                     $this->flushProfile($profile);
+                    $this->recordProfiledFunctions($context, $capture, $durationMs);
                 }
             }
 
@@ -427,6 +430,72 @@ final class MetricsRecorder
                 sampled: $context->sampled,
                 traceState: $context->traceState,
             );
+    }
+
+    /**
+     * Turn the application frames of a captured profile into function spans.
+     *
+     * This is what makes function timing automatic: the profiler already knows
+     * every method that ran and what it cost, so the application does not have
+     * to wrap anything by hand. Durations from a sampling driver are estimates,
+     * which is why these carry their own type and never claim a position on the
+     * trace timeline — a sample says how much time a frame accounted for, not
+     * when it started.
+     */
+    private function recordProfiledFunctions(
+        ApplicationMetricContext $context,
+        CapturedProfile $capture,
+        float $durationMs,
+    ): void {
+        if (! (bool) $this->setting('capture.functions.enabled', true)
+            || ! (bool) $this->setting('capture.functions.automatic', false)
+            || $capture->functionTimings === []) {
+            return;
+        }
+
+        $prefixes = ApplicationFrames::prefixes();
+
+        if ($prefixes === []) {
+            return;
+        }
+
+        $limit   = max(1, (int) $this->setting('capture.functions.automatic_limit', 20));
+        $minimum = max(0.0, (float) $this->setting('capture.functions.automatic_min_duration_ms', 1.0));
+        $spans   = [];
+
+        foreach ($capture->functionTimings as $timing) {
+            if (count($spans) >= $limit) {
+                break;
+            }
+
+            $function = $timing['function'];
+            $totalMs  = $timing['total_ms'];
+            $selfMs   = $timing['self_ms'];
+
+            if ($function === ''
+                || $totalMs < $minimum
+                || ! ApplicationFrames::isApplicationFrame($function, $prefixes)) {
+                continue;
+            }
+
+            $spans[] = MetricData::make(
+                type: MetricData::TYPE_APP_FUNCTION_PROFILED,
+                name: $function,
+                outcome: MetricData::OUTCOME_SUCCESS,
+                // A frame cannot have cost more than the root it ran inside.
+                durationMs: min($totalMs, $durationMs),
+                traceId: $context->traceId,
+                parentSpanId: $context->spanId,
+                source: $context->source,
+                transactionId: $context->transactionId,
+                timestamp: $context->startedTimestamp,
+                code: ['self_ms' => round(min($selfMs, $durationMs), 3)],
+            );
+        }
+
+        if ($spans !== []) {
+            $context->spans = array_merge($context->spans, $spans);
+        }
     }
 
     /** @param list<MetricData> $metrics */

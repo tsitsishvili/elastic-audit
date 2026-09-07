@@ -9,6 +9,11 @@ final readonly class CapturedProfile
     /**
      * @param  array<string, mixed>  $payload
      * @param  list<array{function: string, file: ?string, line: ?int, self_samples: int, total_samples: int}>  $hotFrames
+     * @param  list<array{function: string, self_ms: float, total_ms: float, calls: ?int}>  $functionTimings
+     *                                                                                                        Per-function cost for every frame the profiler saw, ordered by
+     *                                                                                                        inclusive time. Unlike $hotFrames — which ranks leaves — this includes
+     *                                                                                                        the callers application code usually consists of, which are rarely
+     *                                                                                                        leaves themselves. Sampling drivers report estimates here.
      */
     public function __construct(
         public string $driver,
@@ -19,5 +24,6 @@ final readonly class CapturedProfile
         public array $payload,
         public array $hotFrames,
         public bool $truncated = false,
+        public array $functionTimings = [],
     ) {}
 }

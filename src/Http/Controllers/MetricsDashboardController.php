@@ -24,37 +24,22 @@ final class MetricsDashboardController
 
     private const PER_PAGE_OPTIONS = [25, 50, 100];
 
+    /** How the function list can be ranked, mirroring what each column means. */
+    private const SORTS = [
+        MetricsDashboardQuery::SORT_TOTAL   => 'total time',
+        MetricsDashboardQuery::SORT_SELF    => 'total self time',
+        MetricsDashboardQuery::SORT_AVERAGE => 'average duration',
+        MetricsDashboardQuery::SORT_P95     => 'p95 duration',
+        MetricsDashboardQuery::SORT_CALLS   => 'call count',
+    ];
+
     public function __construct(
         private readonly MetricsDashboardQuery $query,
     ) {}
 
     public function overview(Request $request): View
     {
-        $range    = (string) $request->query('range', '24h');
-        $isCustom = $range === 'custom';
-        $range    = ($isCustom || isset(self::RANGES[$range])) ? $range : '24h';
-
-        $interval = (string) $request->query('interval', '');
-        $interval = isset(self::INTERVALS[$interval]) ? $interval : ($range === '24h' ? '1h' : '1d');
-
-        $filters = [
-            'interval' => $interval,
-            'timezone' => $this->timezone(),
-        ];
-
-        if ($isCustom) {
-            foreach (['from', 'to'] as $key) {
-                $value = $request->query($key);
-
-                if (is_string($value) && $value !== '') {
-                    $filters[$key] = $value;
-                }
-            }
-        } else {
-            $now             = Carbon::now();
-            $filters['from'] = $now->copy()->modify(self::RANGES[$range]['since'])->toIso8601String();
-            $filters['to']   = $now->toIso8601String();
-        }
+        [$range, $interval, $filters] = $this->window($request);
 
         $error     = null;
         $data      = ['total' => 0, 'aggs' => []];
@@ -70,6 +55,32 @@ final class MetricsDashboardController
         return view('elastic-audit::metrics.overview', compact('data', 'filters', 'range', 'interval', 'error', 'functions') + [
             'ranges'    => self::RANGES,
             'intervals' => self::INTERVALS,
+            'timezone'  => $filters['timezone'],
+        ]);
+    }
+
+    public function functions(Request $request): View
+    {
+        [$range, $interval, $filters] = $this->window($request);
+
+        // Total time is the default rather than self time: self time arrives with
+        // metrics schema v4, so ranking by it would show a page of zeroes until
+        // an upgraded index has accumulated data.
+        $sort  = (string) $request->query('sort', MetricsDashboardQuery::SORT_TOTAL);
+        $sort  = isset(self::SORTS[$sort]) ? $sort : MetricsDashboardQuery::SORT_TOTAL;
+        $error = null;
+        $rows  = [];
+
+        try {
+            $rows = $this->query->functionStatistics($filters, sort: $sort);
+        } catch (Throwable $exception) {
+            $error = $this->queryError($exception);
+        }
+
+        return view('elastic-audit::metrics.functions', compact('rows', 'filters', 'range', 'interval', 'error', 'sort') + [
+            'ranges'    => self::RANGES,
+            'intervals' => self::INTERVALS,
+            'sorts'     => self::SORTS,
             'timezone'  => $filters['timezone'],
         ]);
     }
@@ -134,6 +145,42 @@ final class MetricsDashboardController
         return view('elastic-audit::metrics.profile', compact('profile', 'error') + [
             'timezone' => $this->timezone(),
         ]);
+    }
+
+    /**
+     * Resolve the shared range/interval/window selection.
+     *
+     * @return array{string, string, array<string, string>}
+     */
+    private function window(Request $request): array
+    {
+        $range    = (string) $request->query('range', '24h');
+        $isCustom = $range === 'custom';
+        $range    = ($isCustom || isset(self::RANGES[$range])) ? $range : '24h';
+
+        $interval = (string) $request->query('interval', '');
+        $interval = isset(self::INTERVALS[$interval]) ? $interval : ($range === '24h' ? '1h' : '1d');
+
+        $filters = [
+            'interval' => $interval,
+            'timezone' => $this->timezone(),
+        ];
+
+        if ($isCustom) {
+            foreach (['from', 'to'] as $key) {
+                $value = $request->query($key);
+
+                if (is_string($value) && $value !== '') {
+                    $filters[$key] = $value;
+                }
+            }
+        } else {
+            $now             = Carbon::now();
+            $filters['from'] = $now->copy()->modify(self::RANGES[$range]['since'])->toIso8601String();
+            $filters['to']   = $now->toIso8601String();
+        }
+
+        return [$range, $interval, $filters];
     }
 
     private function timezone(): string

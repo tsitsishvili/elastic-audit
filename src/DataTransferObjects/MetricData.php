@@ -12,7 +12,7 @@ use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 final readonly class MetricData
 {
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     public const KIND_TRANSACTION = 'transaction';
 
@@ -42,6 +42,13 @@ final readonly class MetricData
 
     /** Application code timed explicitly through MetricsRecorder::measure(). */
     public const TYPE_APP_FUNCTION = 'app.function';
+
+    /**
+     * Application code discovered by the profiler rather than wrapped by hand.
+     * Kept distinct from TYPE_APP_FUNCTION because a sampling driver reports an
+     * estimate, and mixing estimates into exact measurements would corrupt both.
+     */
+    public const TYPE_APP_FUNCTION_PROFILED = 'app.function.profiled';
 
     public const OUTCOME_SUCCESS = 'success';
 
@@ -89,6 +96,7 @@ final readonly class MetricData
         public ?array $mail = null,
         public ?array $notification = null,
         public ?array $scheduler = null,
+        public ?array $code = null,
     ) {}
 
     /**
@@ -101,6 +109,7 @@ final readonly class MetricData
      * @param  array<string, bool|float|int|string|null>|null  $mail
      * @param  array<string, bool|float|int|string|null>|null  $notification
      * @param  array<string, bool|float|int|string|null>|null  $scheduler
+     * @param  array<string, bool|float|int|string|null>|null  $code
      */
     public static function make(
         string $type,
@@ -126,6 +135,7 @@ final readonly class MetricData
         ?array $mail = null,
         ?array $notification = null,
         ?array $scheduler = null,
+        ?array $code = null,
     ): self {
         $retentionDays = RetentionDays::fromConfig(PackageConfig::get('elastic_audit_metrics.retention_days', 30));
         $spanId ??= self::randomId(8);
@@ -157,6 +167,7 @@ final readonly class MetricData
             mail: $mail,
             notification: $notification,
             scheduler: $scheduler,
+            code: $code,
         );
     }
 
