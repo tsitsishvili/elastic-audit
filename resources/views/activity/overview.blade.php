@@ -60,7 +60,7 @@
         <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Actor actions, model changes, failures, and entity history for the selected window.</p>
     </div>
     <a href="{{ route('activity-logs.logs.index', [], false) }}"
-       class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700">
+       class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-indigo-700">
         Browse activity →
     </a>
 </div>

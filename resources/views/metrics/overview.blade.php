@@ -65,7 +65,7 @@
             <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Transactions, spans, failures, and sampled PHP profiles for the selected window.</p>
         </div>
         <a href="{{ $txLink() }}"
-           class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700">
+           class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-indigo-700">
             Browse transactions →
         </a>
     </div>
@@ -173,7 +173,7 @@
                             <span class="flex min-w-0 items-baseline gap-1.5">
                                 <span class="min-w-0 truncate font-mono font-medium text-slate-600 dark:text-slate-300" title="{{ $row['key'] }}">{{ $row['key'] }}</span>
                                 @unless ($row['exact'] ?? true)
-                                    <span class="shrink-0 rounded bg-fuchsia-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300" title="Sampled from the profiler; durations are estimates">est</span>
+                                    <span class="shrink-0 rounded-sm bg-fuchsia-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300" title="Sampled from the profiler; durations are estimates">est</span>
                                 @endunless
                             </span>
                             <span class="shrink-0 text-slate-400 dark:text-slate-500">

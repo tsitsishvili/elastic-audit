@@ -66,7 +66,7 @@
                             </span>
                         </div>
                         <div class="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                            <div class="h-full rounded-full bg-gradient-to-r from-amber-400 to-red-500" style="width: {{ round($width, 2) }}%"></div>
+                            <div class="h-full rounded-full bg-linear-to-r from-amber-400 to-red-500" style="width: {{ round($width, 2) }}%"></div>
                         </div>
                         @if (data_get($frame, 'file'))
                             <p class="mt-1.5 truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{{ data_get($frame, 'file') }}@if (data_get($frame, 'line')):{{ data_get($frame, 'line') }}@endif</p>
@@ -81,7 +81,7 @@
         <details class="ea-panel mt-4 rounded-lg border p-4">
             <summary class="ea-focus cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">Raw {{ data_get($profile, 'format') }} payload</summary>
             <p class="mt-2 text-xs text-slate-400 dark:text-slate-500">Not indexed by Elasticsearch. Source paths follow the <code class="font-mono">profiles.include_paths</code> setting.</p>
-            <pre class="mt-3 max-h-[32rem] overflow-auto rounded bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode(data_get($profile, 'payload'), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+            <pre class="mt-3 max-h-128 overflow-auto rounded-sm bg-slate-950 p-4 text-xs text-slate-100">{{ json_encode(data_get($profile, 'payload'), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
         </details>
     @else
         <p class="ea-panel mt-6 rounded-lg border p-8 text-center text-sm text-slate-500 dark:text-slate-400">

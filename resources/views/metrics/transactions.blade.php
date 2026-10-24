@@ -43,7 +43,7 @@
             array_diff_key(request()->query(), [$key => '', 'page' => ''])
         );
 
-        $inputClass = 'ea-focus h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
+        $inputClass = 'ea-focus h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
         $labelClass = 'text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400';
     @endphp
 

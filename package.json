@@ -6,11 +6,11 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "alpinejs": "3.15.12",
-    "autoprefixer": "10.5.2",
-    "chart.js": "4.5.1",
-    "postcss": "8.5.26",
-    "tailwindcss": "3.4.19",
-    "vite": "7.3.6"
+    "@tailwindcss/postcss": "4.3.3",
+    "alpinejs": "3.17.5",
+    "chart.js": "4.6.1",
+    "postcss": "8.5.31",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.5"
   }
 }

@@ -134,7 +134,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Provider</span>
-                    <select name="provider" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="provider" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['providers'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['provider'] ?? '') === $opt)>{{ $opt }}</option>
@@ -144,7 +144,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Event type</span>
-                    <select name="event_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="event_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['event_types'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['event_type'] ?? '') === $opt)>{{ $opt }}</option>
@@ -154,7 +154,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Application</span>
-                    <select name="service" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="service" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['services'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['service'] ?? '') === $opt)>{{ $opt }}</option>
@@ -164,7 +164,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Execution type</span>
-                    <select name="execution_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="execution_type" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach ($options['executions'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['execution_type'] ?? '') === $opt)>{{ $opt }}</option>
@@ -176,12 +176,12 @@
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Execution name</span>
                     <input type="text" name="execution_name" value="{{ $filters['execution_name'] ?? '' }}"
                            placeholder="Route, job, or command"
-                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Direction</span>
-                    <select name="direction" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="direction" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach (['outgoing', 'incoming'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['direction'] ?? '') === $opt)>{{ $opt }}</option>
@@ -191,7 +191,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Status class</span>
-                    <select name="status_class" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="status_class" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         @foreach (['2xx', '3xx', '4xx', '5xx'] as $opt)
                             <option value="{{ $opt }}" @selected(($filters['status_class'] ?? '') === $opt)>{{ $opt }}</option>
@@ -201,7 +201,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Success</span>
-                    <select name="success" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="success" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         <option value="true" @selected(($filters['success'] ?? '') === 'true')>Success</option>
                         <option value="false" @selected(($filters['success'] ?? '') === 'false')>Failure</option>
@@ -210,7 +210,7 @@
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Timeout</span>
-                    <select name="timeout" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                    <select name="timeout" class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         <option value="">All</option>
                         <option value="1" @selected(filter_var($filters['timeout'] ?? '', FILTER_VALIDATE_BOOL))>Timeouts only</option>
                     </select>
@@ -219,25 +219,25 @@
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Entity ID</span>
                     <input type="text" name="entity_id" value="{{ $filters['entity_id'] ?? '' }}"
-                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Trace ID</span>
                     <input type="text" name="trace_id" value="{{ $filters['trace_id'] ?? '' }}"
-                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">From</span>
                     <input type="datetime-local" name="from" value="{{ $fmtLocal($filters['from'] ?? null) }}"
-                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
 
                 <label class="block">
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">To</span>
                     <input type="datetime-local" name="to" value="{{ $fmtLocal($filters['to'] ?? null) }}"
-                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                           class="ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                 </label>
             </div>
 
@@ -270,7 +270,7 @@
                 </a>
             @endforeach
             <a href="{{ route('http-logs.logs.index', [], false) }}"
-               class="ea-focus rounded-sm text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
+               class="ea-focus rounded-xs text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
         </div>
     @endif
 
@@ -339,7 +339,7 @@
                                 @else <span class="text-slate-400">—</span> @endif
                             </td>
                             <td class="whitespace-nowrap px-4 py-3">
-                                <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ data_get($log, 'http.method', '—') }}</span>
+                                <span class="rounded-sm bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ data_get($log, 'http.method', '—') }}</span>
                             </td>
                             <td class="max-w-sm px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400" title="{{ data_get($log, 'http.path') }}">
                                 <span class="block truncate">{{ data_get($log, 'http.path') ?: '—' }}</span>
@@ -391,7 +391,7 @@
             <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                 <label for="per-page" class="sr-only">Rows per page</label>
                 <select id="per-page" onchange="location.href=this.value"
-                        class="ea-focus rounded-md border-slate-300 bg-white py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                        class="ea-focus rounded-md border-slate-300 bg-white py-1 text-xs shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     @foreach ($perPageOptions as $opt)
                         <option value="{{ $withParams(['per_page' => $opt]) }}" @selected($opt === $perPage)>{{ $opt }} / page</option>
                     @endforeach

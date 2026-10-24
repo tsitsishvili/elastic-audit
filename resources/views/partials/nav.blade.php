@@ -33,11 +33,11 @@
     $tabs = $dashboards[$current]['tabs'];
 @endphp
 
-<header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100">
+<header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100">
     <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
             <div class="flex items-center gap-2">
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-sm">EA</span>
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-xs">EA</span>
                 <div class="min-w-0">
                     <div class="truncate text-sm font-semibold leading-5">Elastic Audit</div>
                     <div class="text-xs leading-4 text-slate-500 dark:text-slate-400">{{ $dashboards[$current]['label'] }}</div>
@@ -50,7 +50,7 @@
                     @continue($key !== $current && ! $dash['enabled'])
                     @php $isCurrent = $key === $current; @endphp
                     <a href="{{ route($dash['route'], [], false) }}"
-                       class="ea-focus flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-center font-semibold transition sm:flex-none {{ $isCurrent ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">
+                       class="ea-focus flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-center font-semibold transition sm:flex-none {{ $isCurrent ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">
                         {{ $dash['label'] }}
                     </a>
                 @endforeach

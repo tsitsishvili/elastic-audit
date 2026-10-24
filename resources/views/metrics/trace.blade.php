@@ -136,7 +136,7 @@
                 <div class="px-4 py-3">
                     <div class="mb-2 flex items-baseline justify-between gap-4 text-sm">
                         <div class="flex min-w-0 items-baseline gap-2">
-                            <span class="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide {{ $style['chip'] }}">{{ $style['label'] }}</span>
+                            <span class="shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide {{ $style['chip'] }}">{{ $style['label'] }}</span>
 
                             @if ($type === 'db.query')
                                 {{-- The statement is the content, so it leads. --}}

@@ -80,10 +80,10 @@
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                     <p class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ data_get($log, 'provider') ?: 'Unknown provider' }}</p>
-                    <h1 class="mt-1 break-words text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ data_get($log, 'event_type') ?: 'HTTP log detail' }}</h1>
+                    <h1 class="mt-1 wrap-break-word text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ data_get($log, 'event_type') ?: 'HTTP log detail' }}</h1>
                     <div class="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm">
                         @if (data_get($log, 'http.method'))
-                            <span class="rounded bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ data_get($log, 'http.method') }}</span>
+                            <span class="rounded-sm bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ data_get($log, 'http.method') }}</span>
                         @endif
                         <span class="min-w-0 break-all font-mono text-xs text-slate-500 dark:text-slate-400">{{ data_get($log, 'http.path') ?: data_get($log, 'http.host') ?: '—' }}</span>
                     </div>
@@ -117,11 +117,11 @@
         </div>
 
         @if (data_get($log, 'error.class') || data_get($log, 'error.message'))
-            <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900 dark:bg-red-950">
+            <div class="mb-6 rounded-lg border border-red-200 bg-red-50 p-5 shadow-xs dark:border-red-900 dark:bg-red-950">
                 <h2 class="flex items-center gap-2 text-sm font-semibold text-red-800 dark:text-red-300">
                     Error
                     @if (data_get($log, 'http.timed_out'))
-                        <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Timeout</span>
+                        <span class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">Timeout</span>
                     @endif
                 </h2>
                 <p class="mt-1 font-mono text-xs text-red-700 dark:text-red-400">{{ data_get($log, 'error.class') }}</p>
@@ -141,7 +141,7 @@
                     <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-700">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ $title }}</h2>
                         @if ($truncated)
-                            <span class="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">truncated</span>
+                            <span class="rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">truncated</span>
                         @endif
                     </div>
                     <div class="space-y-4 p-5">
@@ -150,7 +150,7 @@
                             @if ($pretty($headers) !== '')
                                 <div x-data="{ copied: false }" class="overflow-hidden rounded-md bg-slate-950 ring-1 ring-slate-800">
                                     <div class="flex items-center justify-end border-b border-slate-800 px-2 py-1">
-                                        <button type="button" @click="navigator.clipboard.writeText($refs.headers.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
+                                        <button type="button" @click="navigator.clipboard.writeText($refs.headers.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded-sm px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
                                             <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
                                         </button>
                                     </div>
@@ -165,7 +165,7 @@
                             @if ($pretty($preview) !== '')
                                 <div x-data="{ copied: false }" class="overflow-hidden rounded-md bg-slate-950 ring-1 ring-slate-800">
                                     <div class="flex items-center justify-end border-b border-slate-800 px-2 py-1">
-                                        <button type="button" @click="navigator.clipboard.writeText($refs.body.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
+                                        <button type="button" @click="navigator.clipboard.writeText($refs.body.textContent).then(() => { copied = true; setTimeout(() => copied = false, 1200); })" class="ea-focus rounded-sm px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800">
                                             <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
                                         </button>
                                     </div>

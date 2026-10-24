@@ -169,7 +169,7 @@
                     @endforeach
                     <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="fn-sort">Sort</label>
                     <select id="fn-sort" name="sort" onchange="this.form.submit()"
-                            class="ea-focus h-9 rounded-md border-slate-300 bg-white text-sm shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                            class="ea-focus h-9 rounded-md border-slate-300 bg-white text-sm shadow-xs dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                         @foreach ($sorts as $key => $label)
                             <option value="{{ $key }}" @selected($sort === $key)>{{ $label }}</option>
                         @endforeach
@@ -192,7 +192,7 @@
                             {{-- Sparkline: the shape of the window at a glance, without expanding. --}}
                             <span class="hidden shrink-0 items-end gap-px sm:flex" aria-hidden="true">
                                 @foreach ($trend->take(-14) as $point)
-                                    <span class="w-1 rounded-sm bg-indigo-500/70" style="height: {{ max(2, round(($point['p75_ms'] / $peak) * 22)) }}px"></span>
+                                    <span class="w-1 rounded-xs bg-indigo-500/70" style="height: {{ max(2, round(($point['p75_ms'] / $peak) * 22)) }}px"></span>
                                 @endforeach
                             </span>
 
@@ -266,12 +266,12 @@
                                     <div class="flex items-baseline gap-1.5">
                                         <span class="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-200" title="{{ $row['key'] }}">{{ $row['key'] }}</span>
                                         @unless ($row['exact'])
-                                            <span class="shrink-0 rounded bg-fuchsia-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300" title="Sampled from the profiler; durations are estimates">est</span>
+                                            <span class="shrink-0 rounded-sm bg-fuchsia-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300" title="Sampled from the profiler; durations are estimates">est</span>
                                         @endunless
                                         @if ($row['status'] === 'new')
-                                            <span class="shrink-0 rounded bg-sky-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-sky-700 dark:bg-sky-950 dark:text-sky-300">new</span>
+                                            <span class="shrink-0 rounded-sm bg-sky-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-sky-700 dark:bg-sky-950 dark:text-sky-300">new</span>
                                         @elseif ($row['status'] === 'gone')
-                                            <span class="shrink-0 rounded bg-slate-200 px-1 py-0.5 text-[10px] font-semibold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">gone</span>
+                                            <span class="shrink-0 rounded-sm bg-slate-200 px-1 py-0.5 text-[10px] font-semibold uppercase text-slate-600 dark:bg-slate-700 dark:text-slate-300">gone</span>
                                         @endif
                                     </div>
                                 </td>
