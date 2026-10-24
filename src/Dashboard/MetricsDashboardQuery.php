@@ -195,7 +195,7 @@ final class MetricsDashboardQuery
                 && $before['avg_ms'] > 0;
 
             $deltaMs  = $comparable ? $stats['avg_ms'] - $before['avg_ms'] : null;
-            $deltaPct = $comparable && $deltaMs !== null ? ($deltaMs / $before['avg_ms']) * 100 : null;
+            $deltaPct = $comparable ? ($deltaMs / $before['avg_ms']) * 100 : null;
 
             $rows[] = [
                 'key'             => $name,
