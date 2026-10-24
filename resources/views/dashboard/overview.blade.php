@@ -152,7 +152,7 @@
                         </button>
                     @endif
                 </div>
-                <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $showCanvas ? 'bg-white' : '' }}">
+                <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $showCanvas ? 'bg-white dark:bg-slate-900' : '' }}">
                     @if ($noErrors)
                         <div class="flex h-full flex-col items-center justify-center text-center">
                             <span class="text-3xl">✓</span>
@@ -322,14 +322,18 @@
                     },
                 };
 
-                // Solid white backing so exported PNGs aren't transparent.
-                const whiteBg = {
-                    id: 'whiteBg',
+                // Chart surfaces follow the header's light/dark toggle (class on <html>).
+                const isDark = () => document.documentElement.classList.contains('dark');
+                const gridColor = () => isDark() ? '#1e293b' : '#f1f5f9';
+
+                // Solid backing (slate-900 in dark mode) so exported PNGs aren't transparent.
+                const chartBg = {
+                    id: 'chartBg',
                     beforeDraw(chart) {
                         const ctx = chart.ctx;
                         ctx.save();
                         ctx.globalCompositeOperation = 'destination-over';
-                        ctx.fillStyle = '#ffffff';
+                        ctx.fillStyle = isDark() ? '#0f172a' : '#ffffff';
                         ctx.fillRect(0, 0, chart.width, chart.height);
                         ctx.restore();
                     },
@@ -452,7 +456,7 @@
                             ticks: { maxTicksLimit: 6, maxRotation: 0, autoSkip: true, color: '#94a3b8', callback: function (v) { return fmtAxis(this.getLabelForValue(v)); } },
                             grid: { display: false },
                         },
-                        y: Object.assign({ beginAtZero: true, stacked: !!opts.stacked, grid: { color: '#f1f5f9' }, ticks: { precision: 0, color: '#94a3b8' } }, opts.y || {}),
+                        y: Object.assign({ beginAtZero: true, stacked: !!opts.stacked, grid: { color: gridColor }, ticks: { precision: 0, color: '#94a3b8' } }, opts.y || {}),
                     },
                 });
 
@@ -472,7 +476,7 @@
                         ],
                     },
                     options: baseOptions({ stacked: true, legend: true }),
-                    plugins: [crosshair, dragSelect, whiteBg],
+                    plugins: [crosshair, dragSelect, chartBg],
                 });
 
                 // Latency — avg (filled) + p95 (dashed), in ms.
@@ -487,10 +491,10 @@
                     },
                     options: baseOptions({
                         legend: true,
-                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', precision: 0, callback: (v) => v + ' ms' } },
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: '#94a3b8', precision: 0, callback: (v) => v + ' ms' } },
                         tooltipLabel: (ctx) => ctx.dataset.label + ': ' + (ctx.parsed.y == null ? '—' : ctx.parsed.y + ' ms'),
                     }),
-                    plugins: [crosshair, peakLabel, dragSelect, whiteBg],
+                    plugins: [crosshair, peakLabel, dragSelect, chartBg],
                 });
 
                 // Error rate — % of 4xx + 5xx per bucket. (Absent when the window has no errors.)
@@ -505,12 +509,16 @@
                             ],
                         },
                         options: baseOptions({
-                            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } },
+                            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } },
                             tooltipLabel: (ctx) => 'Error rate: ' + ctx.parsed.y + '%',
                         }),
-                        plugins: [crosshair, peakLabel, dragSelect, whiteBg],
+                        plugins: [crosshair, peakLabel, dragSelect, chartBg],
                     });
                 }
+
+                // Redraw with the new grid/background colors when the theme is toggled.
+                new MutationObserver(() => Object.values(charts).forEach((c) => c.update('none')))
+                    .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
                 // PNG export per chart.
                 document.querySelectorAll('[data-export]').forEach((btn) => {

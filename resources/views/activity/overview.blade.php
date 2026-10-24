@@ -101,7 +101,7 @@
             </button>
         @endif
     </div>
-    <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $hasData ? 'bg-white' : '' }}">
+    <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $hasData ? 'bg-white dark:bg-slate-900' : '' }}">
         @if($hasData)
             <canvas id="activityChart"></canvas>
         @else
@@ -204,14 +204,18 @@
                     },
                 };
 
-                // Solid white backing so exported PNGs aren't transparent.
-                const whiteBg = {
-                    id: 'whiteBg',
+                // Chart surfaces follow the header's light/dark toggle (class on <html>).
+                const isDark = () => document.documentElement.classList.contains('dark');
+                const gridColor = () => isDark() ? '#1e293b' : '#f1f5f9';
+
+                // Solid backing (slate-900 in dark mode) so exported PNGs aren't transparent.
+                const chartBg = {
+                    id: 'chartBg',
                     beforeDraw(chart) {
                         const ctx = chart.ctx;
                         ctx.save();
                         ctx.globalCompositeOperation = 'destination-over';
-                        ctx.fillStyle = '#ffffff';
+                        ctx.fillStyle = isDark() ? '#0f172a' : '#ffffff';
                         ctx.fillRect(0, 0, chart.width, chart.height);
                         ctx.restore();
                     },
@@ -318,7 +322,7 @@
                             ticks: { maxTicksLimit: 6, maxRotation: 0, autoSkip: true, color: '#94a3b8', callback: function (v) { return fmtAxis(this.getLabelForValue(v)); } },
                             grid: { display: false },
                         },
-                        y: { beginAtZero: true, stacked: true, grid: { color: '#f1f5f9' }, ticks: { precision: 0, color: '#94a3b8' } },
+                        y: { beginAtZero: true, stacked: true, grid: { color: gridColor }, ticks: { precision: 0, color: '#94a3b8' } },
                     },
                 };
 
@@ -335,8 +339,12 @@
                         ],
                     },
                     options: baseOptions,
-                    plugins: [crosshair, dragSelect, whiteBg],
+                    plugins: [crosshair, dragSelect, chartBg],
                 });
+
+                // Redraw with the new grid/background colors when the theme is toggled.
+                new MutationObserver(() => Object.values(charts).forEach((c) => c.update('none')))
+                    .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
                 // PNG export per chart.
                 document.querySelectorAll('[data-export]').forEach((btn) => {
