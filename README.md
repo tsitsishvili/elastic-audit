@@ -15,6 +15,12 @@ Each subsystem has its own config, Elasticsearch index/aliases, queue, console c
 application can enable only what it needs. Both document types include the configured application identity and a
 snapshotted execution origin (HTTP route/controller, queue job, Artisan command, or an explicit manual origin).
 
+Optional [application performance monitoring](METRICS.md) automatically captures transactions and spans for inbound
+HTTP, SQL, queues, commands, scheduled tasks, outbound Laravel HTTP, Redis, cache, mail, and notifications. Searchable
+timings use a dedicated metrics index; sampled Excimer/XHProf call stacks use a separate profiles index. A built-in
+performance dashboard links transactions, traces, and profiles. The subsystem is disabled by default and excludes
+request bodies, SQL bindings, query strings, message content, cache keys, Redis arguments, and error messages.
+
 ## Guides
 
 - [Audit Logs Guide](AUDIT_LOGS.md) — third-party HTTP request/callback logging, redaction, sampling, dashboards, and
@@ -28,21 +34,17 @@ snapshotted execution origin (HTTP route/controller, queue job, Artisan command,
   - [Configuration](ACTIVITY_LOGS.md#activity-configuration) · [Manual logging](ACTIVITY_LOGS.md#manual-logging) ·
     [Automatic model logging](ACTIVITY_LOGS.md#automatic-model-logging-the-activityloggable-trait) ·
     [Dashboard](ACTIVITY_LOGS.md#activity-dashboard)
+- [Metrics Guide](METRICS.md) — transactions/spans, W3C propagation, Excimer-first profiling, performance dashboard,
+  security, separate metrics/profile indices, queues, and retention.
 - [Agent Guide](AGENTS.md) — condensed rules, examples, and safety invariants for AI coding agents integrating the
   package. See [AI Agents](#ai-agents) for how to deliver it to an agent.
 
-## Screenshots
-
-![HTTP logs overview](docs/images/http-logs-overview.jpg)
-
-![Activity logs overview](docs/images/activity-logs-overview.jpg)
-
 ## Quick Start
 
-1. Install the stable v4 release from Packagist:
+1. Install the stable v5 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^4.0
+    composer require tsitsishvili/elastic-audit:^5.0
     ```
 
 2. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
@@ -60,8 +62,10 @@ snapshotted execution origin (HTTP route/controller, queue job, Artisan command,
 
     ```bash
     php artisan elastic-audit:lifecycle-policy
-    php artisan http-logs:create-index       # when HTTP logs are enabled
-    php artisan activity-logs:create-index   # when activity logs are enabled
+    php artisan http-logs:create-index              # when HTTP logs are enabled
+    php artisan activity-logs:create-index          # when activity logs are enabled
+    php artisan elastic-audit:metrics:create-index  # when metrics are enabled
+    php artisan elastic-audit:profiles:create-index # when profiles are enabled
     ```
 
 5. Run a queue worker for the configured logs queue (see [Queues](AUDIT_LOGS.md#queues)):
@@ -76,7 +80,8 @@ For usage, see [logging outgoing requests](AUDIT_LOGS.md#logging-outgoing-reques
 
 `ActivityLoggable` observes Eloquent lifecycle events only. Raw SQL and query-builder writes must call
 `ActivityLog::record()` explicitly with their meaningful before/after values; the package does not install a database
-query listener.
+query listener for activity auditing. Enabling application metrics does observe completed query timings, but those
+measurements are not an audit trail and do not infer model changes.
 
 Permanent retention is supported independently for documents and indexes. Use a subsystem's `retain_forever` setting
 or a context's `retainForever: true` for documents, and disable `log_elasticsearch.lifecycle.delete_enabled` to keep
@@ -92,7 +97,10 @@ moving an existing installation to this release line.
 - PHP `^8.2`
 - Laravel `^12.0 || ^13.0`
 - Elasticsearch PHP client `^8.5 || ^9.0`
-- A queue worker, because logs are indexed through queued jobs
+- A queue worker, because audit logs and enabled metrics are indexed through queued jobs
+
+Continuous profiles additionally require `ext-excimer` (recommended) or `ext-xhprof`; metrics and tracing work without
+either profiling extension.
 
 ## AI Agents
 
@@ -182,7 +190,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^4.0"
+    "tsitsishvili/elastic-audit": "^5.0"
   }
 }
 ```

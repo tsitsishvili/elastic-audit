@@ -1,21 +1,21 @@
 {
   "resources/css/elastic-audit.css": {
-    "file": "styles-DhEoPq2v.css",
-    "src": "resources/css/elastic-audit.css",
-    "isEntry": true,
+    "file": "styles-BxyTwRvl.css",
     "name": "styles",
     "names": [
       "styles.css"
-    ]
+    ],
+    "src": "resources/css/elastic-audit.css",
+    "isEntry": true
   },
   "resources/js/alpine.js": {
-    "file": "alpine-CzI1vhkK.js",
+    "file": "alpine-RtO928pj.js",
     "name": "alpine",
     "src": "resources/js/alpine.js",
     "isEntry": true
   },
   "resources/js/chart.js": {
-    "file": "chart-Ct78DFbm.js",
+    "file": "chart-BGnPYjVl.js",
     "name": "chart",
     "src": "resources/js/chart.js",
     "isEntry": true

@@ -100,7 +100,7 @@
             <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Request volume, failures, latency, and provider behavior for the selected window.</p>
         </div>
         <a href="{{ route('http-logs.logs.index', [], false) }}"
-           class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700">
+           class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-indigo-700">
             Browse logs →
         </a>
     </div>
@@ -152,7 +152,7 @@
                         </button>
                     @endif
                 </div>
-                <div class="mt-3 h-72 rounded-md bg-white p-2 ring-1 ring-slate-200 sm:h-80 dark:bg-slate-900 dark:ring-slate-700">
+                <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $showCanvas ? 'bg-white dark:bg-slate-900' : '' }}">
                     @if ($noErrors)
                         <div class="flex h-full flex-col items-center justify-center text-center">
                             <span class="text-3xl">✓</span>

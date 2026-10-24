@@ -27,6 +27,8 @@ Thumbs.db
 /.phpunit.cache/
 /.pest/
 /graphify-out/
+/.githooks/
+/CLAUDE.md
 /stubs/phpstan/
 /coverage/
 /build/

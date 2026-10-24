@@ -5,6 +5,59 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 4.2.0
+
+Require the new major release:
+
+```bash
+composer require tsitsishvili/elastic-audit:^5.0
+```
+
+5.0 adds optional application performance monitoring. HTTP and activity document schemas are unchanged, so existing
+indexes keep working without a rollover.
+
+### Medium impact: `elastic-audit:health --all` checks metrics and profiles aliases
+
+`--all` checks aliases even for disabled subsystems, and it now covers the metrics and profiles indexes too. A deployment
+that runs `elastic-audit:health --all` fails after upgrading until those aliases exist. Either provision them, even if
+metrics stay disabled:
+
+```bash
+php artisan elastic-audit:metrics:create-index
+php artisan elastic-audit:profiles:create-index
+php artisan elastic-audit:health --all
+```
+
+or drop `--all` so health only checks enabled subsystems.
+
+### Low impact: optional application performance metrics
+
+Application metrics are disabled by default. To adopt automatic endpoint, completed-query, queue-job, Artisan-command,
+and outbound Laravel HTTP timing, add or publish `config/elastic_audit_metrics.php`, enable the master switch, and
+provision the dedicated indexes:
+
+```bash
+php artisan elastic-audit:lifecycle-policy
+php artisan elastic-audit:metrics:create-index
+php artisan elastic-audit:profiles:create-index
+php artisan elastic-audit:health
+```
+
+Sampled PHP profiles live in a separate strict index and require `ext-excimer` (recommended for continuous production
+sampling) or modern `ext-xhprof`. Keep workers running for `ELASTIC_AUDIT_METRICS_QUEUE` and
+`ELASTIC_AUDIT_PROFILES_QUEUE`. Review sampling, minimum-duration thresholds, SQL statements, outbound paths, schedule
+descriptions, and source-path capture before enabling all operations in production. See
+[Application Performance Monitoring](METRICS.md).
+
+### Low impact: dashboard assets rebuilt
+
+Dashboard assets are now built with Tailwind CSS 4 and Vite 8. Dashboards serve the copy bundled with the package, so no
+action is needed unless the application serves a published static copy; refresh it with:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-assets --force
+```
+
 ## Upgrading from 4.1.0
 
 ### High impact: roll over strict mappings for application and execution source
@@ -34,9 +87,10 @@ published configuration is intentional.
 
 ### Low impact: raw database writes remain explicit
 
-The package does not install `DB::listen()` or attempt to infer model diffs from SQL. `ActivityLoggable` continues to
+Activity auditing does not use `DB::listen()` or attempt to infer model diffs from SQL. `ActivityLoggable` continues to
 capture Eloquent lifecycle events only. Call `ActivityLog::record()` after raw SQL/query-builder writes and provide
-meaningful before/after values, preferably within the surrounding transaction.
+meaningful before/after values, preferably within the surrounding transaction. Optional performance metrics may time
+completed queries, but those measurements are not an activity audit trail.
 
 ### Low impact: update the Guzzle runtime dependency
 

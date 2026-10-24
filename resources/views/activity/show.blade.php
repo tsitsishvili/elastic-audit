@@ -50,7 +50,7 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
                 <p class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $actor ?: 'Unknown actor' }}</p>
-                <h1 class="mt-1 break-words font-mono text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ $log['action'] ?? 'Activity detail' }}</h1>
+                <h1 class="mt-1 wrap-break-word font-mono text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ $log['action'] ?? 'Activity detail' }}</h1>
             </div>
             <div class="flex flex-wrap items-center gap-2 lg:justify-end">
                 @if($log['success'] ?? true)
@@ -132,7 +132,7 @@
 
     {{-- Error --}}
     @if(! empty($log['error']['class']))
-    <div class="rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900 dark:bg-red-950">
+    <div class="rounded-lg border border-red-200 bg-red-50 p-5 shadow-xs dark:border-red-900 dark:bg-red-950">
         <h2 class="text-sm font-semibold text-red-800 dark:text-red-300">Error</h2>
         <p class="mt-1 font-mono text-xs text-red-700 dark:text-red-400">{{ $log['error']['class'] }}</p>
         <pre class="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-red-700 dark:text-red-400">{{ $log['error']['message'] ?? '' }}</pre>

@@ -9,6 +9,8 @@ use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ActivityLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\HttpLogMapping;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchSchemaInspectorInterface;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\MetricMapping;
+use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ProfileMapping;
 
 /**
  * In-memory test double for the logs Elasticsearch client. Records every search
@@ -124,8 +126,18 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface, Log
 
     private function mappingFor(string $name): array
     {
-        return str_contains($name, 'activity')
-            ? ActivityLogMapping::get()
-            : HttpLogMapping::get();
+        if (str_contains($name, 'activity')) {
+            return ActivityLogMapping::get();
+        }
+
+        if (str_contains($name, 'metrics')) {
+            return MetricMapping::get();
+        }
+
+        if (str_contains($name, 'profiles')) {
+            return ProfileMapping::get();
+        }
+
+        return HttpLogMapping::get();
     }
 }

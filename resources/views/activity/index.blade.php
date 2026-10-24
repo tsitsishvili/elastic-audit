@@ -56,7 +56,7 @@
         'to'             => 'To',
     ];
 
-    $field = 'ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
+    $field = 'ea-focus mt-1 h-10 w-full rounded-md border-slate-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
     $button = 'ea-focus inline-flex h-10 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800';
 @endphp
 
@@ -193,7 +193,7 @@
                 </a>
             @endforeach
             <a href="{{ route('activity-logs.logs.index', [], false) }}"
-               class="ea-focus rounded-sm text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
+               class="ea-focus rounded-xs text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear all</a>
         </div>
     @endif
 
@@ -273,7 +273,7 @@
             <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                 <label for="per-page" class="sr-only">Rows per page</label>
                 <select id="per-page" onchange="location.href=this.value"
-                        class="ea-focus rounded-md border-slate-300 bg-white py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                        class="ea-focus rounded-md border-slate-300 bg-white py-1 text-xs shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
                     @foreach ($perPageOptions as $opt)
                         <option value="{{ $withParams(['per_page' => $opt]) }}" @selected($opt === $perPage)>{{ $opt }} / page</option>
                     @endforeach

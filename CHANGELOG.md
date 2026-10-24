@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-24
+
+### Added
+
+- Added opt-in application performance monitoring with explicit transaction/span documents for inbound HTTP, completed
+  SQL, queue publication/execution, Artisan commands, scheduled tasks, outbound Laravel HTTP, Redis, cache, mail, and
+  notifications. W3C trace context propagates across inbound/outbound HTTP and Laravel queues, while trace state is
+  isolated per Fiber/Swoole coroutine.
+- Added Excimer-first sampled PHP profiles with optional modern XHProf, a separate profiles index/queue/retention and
+  create/prune/rollover operations. Profiles link back to their transaction and expose bounded Speedscope or call-edge
+  payloads plus indexed hot-frame summaries.
+- Trace waterfalls give each kind of work its own colour and row shape, with a legend of the types present. A query
+  leads with its statement and carries operation/connection underneath; a measured function reads as a label; outbound
+  calls, cache, Redis, queue, mail, and notification spans each show their own metadata.
+- Added an authorized performance dashboard with average/p50/p95/p99 latency and failure summaries, a throughput
+  chart with PNG export, transaction browsing with type/outcome/service/window filters, trace waterfalls, and linked
+  profile views showing per-frame sample share. It shares the range, interval, custom-window, and live-refresh
+  controls with the HTTP and activity dashboards, and every summary drills through to the same window.
+- The function statistics page ranks by total time, self time, average, p95, or call count, and each row expands to a
+  p75 trend chart across the window with a sparkline in the collapsed row.
+- Added a function statistics page ranking application functions by cumulative and per-call cost and comparing each
+  against the preceding window of equal length, surfacing regressions, improvements, and functions that appeared or
+  stopped running. A movement is only reported past a 10% change with at least three calls in both windows.
+- Added automatic function timing. With `capture.functions.automatic`, the application's own frames are read out of
+  each captured profile and indexed as `app.function.profiled` spans carrying real `Class::method` names, so no code
+  has to be wrapped and no list of targets maintained. Coverage is `profiles.sample_rate` and sampling drivers report
+  estimates, so these stay a distinct type, are ranked rather than placed on the trace timeline, and are labelled as
+  estimates on the dashboard. Frames are matched against `capture.functions.namespaces`, defaulting to the
+  application's own namespace.
+- Added `Performance::measure()` for timing application code. Each call becomes an `app.function` span nested in the
+  surrounding transaction, so unlike sampled profiles it aggregates by name across every request. Calls nest, the
+  callback's return value and exceptions pass through untouched, and the new `capture.functions` category makes the
+  timing sampleable and disableable. The performance dashboard ranks measured code by total time spent.
+- Added `capture.http.exclude_paths` and `capture.jobs.exclude` so applications can name request paths and job classes
+  that must never be observed. Both suppress the whole unit of work, so an excluded request or job also stops
+  contributing query, cache, and outgoing-call spans.
+- Function spans carry `code.self_ms`: a function's exclusive time, with the cost of everything it called removed,
+  alongside the inclusive `duration_ms`.
+- Application performance monitoring never observes its own delivery path. The package's audit and telemetry jobs,
+  every enabled dashboard, and the dashboard asset route are excluded unconditionally, and `capture.commands.exclude`
+  covers long-running and interactive commands (`queue:work`, `horizon:work`, `octane:start` and its server commands,
+  `serve`, `pail`, `tinker`, `test`, `dusk`, and others) by default, so daemons, REPL sessions, and test runs do not
+  dominate latency percentiles. Jobs and scheduled tasks inside an excluded daemon remain observable as independent
+  transactions.
+- `max_spans` (default 1000) caps the spans buffered per transaction, so a long command or job cannot exhaust memory.
+- Metric documents never carry SQL bindings, HTTP bodies, headers, or query strings. Inline SQL literals are normalized
+  with driver-aware rules, fingerprints are computed before preview truncation, unmatched inbound requests use a
+  constant route label instead of the user-controlled path, outgoing path segments carrying ids, emails, or embedded
+  tokens are replaced with `{id}`, and profile frame names follow `profiles.include_paths` so absolute filesystem paths
+  are not stored when it is disabled.
+
+### Changed
+
+- `elastic-audit:health --all` now also checks the metrics and profiles aliases and their strict mappings, even while
+  metrics are disabled. Deployments that run `--all` must provision both indexes or stop passing `--all`; see the
+  [Upgrade Guide](UPGRADE.md#upgrading-from-420).
+- `AuditOperationFailed` can now report `subsystem=metrics` for metric capture and indexing failures.
+- Dashboard assets are built with Tailwind CSS 4 and Vite 8. The dashboards keep serving the copy bundled with the
+  package; only applications that serve a published static copy need to re-publish it.
+
+### Fixed
+
+- Dashboard pagination is clamped to `index.max_result_window`. Paging beyond roughly ten thousand documents raised an
+  Elasticsearch result-window error that surfaced as a generic query failure on all three dashboards.
+
 ## [4.2.0] - 2026-08-12
 
 ### Added
@@ -307,7 +372,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0
