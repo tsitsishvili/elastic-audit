@@ -24,6 +24,16 @@ class ActivityDashboardController
     /** Selectable histogram bucket sizes for the throughput chart. */
     private const INTERVALS = ['1h' => 'Per hour', '1d' => 'Per day'];
 
+    /** Sortable log columns, mapped from query value to the Elasticsearch field. */
+    private const SORTS = [
+        'time'   => '@timestamp',
+        'source' => 'service.name',
+        'actor'  => 'actor.type',
+        'action' => 'action',
+        'entity' => 'entity.type',
+        'result' => 'success',
+    ];
+
     /** Selectable page sizes for the log list. */
     private const PER_PAGE_OPTIONS = [25, 50, 100];
 
@@ -75,7 +85,10 @@ class ActivityDashboardController
     {
         $filters = $this->filters($request);
         $page    = max(1, (int) $request->query('page', 1));
-        $dir     = $request->query('dir') === 'asc' ? 'asc' : 'desc';
+
+        $sort = (string) $request->query('sort', 'time');
+        $sort = isset(self::SORTS[$sort]) ? $sort : 'time';
+        $dir  = $request->query('dir') === 'asc' ? 'asc' : 'desc';
 
         $defaultPerPage = (int) config('activity_logs.dashboard.per_page', 25);
         $perPage        = (int) $request->query('per_page', $defaultPerPage);
@@ -95,7 +108,7 @@ class ActivityDashboardController
         ];
 
         try {
-            $result  = $this->query->search([...$filters, 'timezone' => $timezone], $page, $perPage, '@timestamp', $dir);
+            $result  = $this->query->search([...$filters, 'timezone' => $timezone], $page, $perPage, self::SORTS[$sort], $dir);
             $logs    = $result['hits'];
             $total   = $result['total'];
             $options = $this->query->filterOptions();
@@ -110,6 +123,7 @@ class ActivityDashboardController
             'page'           => $page,
             'perPage'        => $perPage,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
+            'sort'           => $sort,
             'dir'            => $dir,
             'timezone'       => $timezone,
             'options'        => $options,

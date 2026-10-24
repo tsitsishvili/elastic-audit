@@ -28,6 +28,29 @@ class ActivityDashboardQueryTest extends TestCase
         $this->assertSame(self::READ_ALIAS, $this->client->lastSearch()['index']);
     }
 
+    public function test_search_sorts_by_column_with_timestamp_tiebreaker(): void
+    {
+        $this->query->search([], sortField: 'actor.type', sortDir: 'asc');
+
+        $this->assertSame(
+            [
+                ['actor.type' => ['order' => 'asc', 'unmapped_type' => 'keyword']],
+                ['@timestamp' => ['order' => 'desc']],
+            ],
+            $this->client->lastSearch()['body']['sort'],
+        );
+    }
+
+    public function test_search_falls_back_to_timestamp_for_unknown_sort(): void
+    {
+        $this->query->search([], sortField: 'changes', sortDir: 'sideways');
+
+        $this->assertSame(
+            [['@timestamp' => ['order' => 'desc', 'unmapped_type' => 'date']]],
+            $this->client->lastSearch()['body']['sort'],
+        );
+    }
+
     public function test_search_applies_action_filter(): void
     {
         $this->query->search(['action' => 'order.updated']);

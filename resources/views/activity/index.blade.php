@@ -20,6 +20,19 @@
     $withParams = fn (array $overrides) => request()->fullUrlWithQuery(array_merge($filters, $overrides, ['page' => 1]));
     $pageUrl    = fn (int $p) => request()->fullUrlWithQuery(array_merge($filters, ['page' => $p]));
 
+    $sortLink = fn (string $col) => $withParams(['sort' => $col, 'dir' => ($sort === $col && $dir === 'desc') ? 'asc' : 'desc']);
+    $sortIcon = fn (string $col) => $sort === $col ? ($dir === 'desc' ? '↓' : '↑') : '';
+
+    // Table header columns, keyed by the controller's sort value.
+    $columns = [
+        'time'   => 'Time',
+        'source' => 'Source',
+        'actor'  => 'Actor',
+        'action' => 'Action',
+        'entity' => 'Entity',
+        'result' => 'Result',
+    ];
+
     $hasFilters = ! empty($filters);
 @endphp
 
@@ -72,6 +85,10 @@
                class="rounded-sm border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
                onchange="this.form.submit()">
 
+        {{-- Preserve sort when filters change. --}}
+        <input type="hidden" name="sort" value="{{ $sort }}">
+        <input type="hidden" name="dir" value="{{ $dir }}">
+
         @if($hasFilters)
             <a href="{{ route('activity-logs.logs.index') }}" class="text-sm text-red-500 hover:underline">Clear filters</a>
         @endif
@@ -110,12 +127,12 @@
     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
         <thead class="bg-slate-50 dark:bg-slate-900/50">
             <tr>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Time</th>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Source</th>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Actor</th>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Action</th>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Entity</th>
-                <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Result</th>
+                @foreach($columns as $col => $label)
+                    <th class="px-4 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400"
+                        @if($sort === $col) aria-sort="{{ $dir === 'asc' ? 'ascending' : 'descending' }}" @endif>
+                        <a href="{{ $sortLink($col) }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === $col ? 'text-indigo-600 dark:text-indigo-400' : '' }}">{{ $label }} <span>{{ $sortIcon($col) }}</span></a>
+                    </th>
+                @endforeach
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
