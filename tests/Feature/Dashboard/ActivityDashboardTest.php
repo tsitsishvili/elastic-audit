@@ -35,6 +35,21 @@ class ActivityDashboardTest extends TestCase
         $this->get(route('activity-logs.logs.index'))->assertStatus(200);
     }
 
+    public function test_list_sorts_by_requested_column(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+
+        $this->get(route('activity-logs.logs.index', ['sort' => 'action', 'dir' => 'asc']))
+            ->assertOk()
+            ->assertSee('aria-sort="ascending"', false)
+            ->assertSee('<input type="hidden" name="sort" value="action">', false);
+
+        $search = collect($fake->searchCalls)->first(fn (array $s) => isset($s['body']['sort']));
+
+        $this->assertSame(['order' => 'asc', 'unmapped_type' => 'keyword'], $search['body']['sort'][0]['action']);
+    }
+
     public function test_show_returns_404_for_unknown_event(): void
     {
         $this->get(route('activity-logs.logs.show', 'nonexistent'))->assertStatus(404);

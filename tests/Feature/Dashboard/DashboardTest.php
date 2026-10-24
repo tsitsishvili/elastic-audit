@@ -175,6 +175,17 @@ class DashboardTest extends TestCase
             ->assertSee('/orders');
     }
 
+    public function test_logs_index_sorts_by_requested_column(): void
+    {
+        $this->get(route('http-logs.logs.index', ['sort' => 'provider', 'dir' => 'asc'], false))
+            ->assertOk()
+            ->assertSee('aria-sort="ascending"', false);
+
+        $search = collect($this->fake->searchCalls)->first(fn (array $s) => isset($s['body']['sort']));
+
+        $this->assertSame(['order' => 'asc', 'unmapped_type' => 'keyword'], $search['body']['sort'][0]['provider']);
+    }
+
     public function test_logs_show_renders_found_log(): void
     {
         $this->fake->searchResponse = [

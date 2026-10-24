@@ -25,7 +25,19 @@ class HttpLogDashboardController
     private const INTERVALS = ['1h' => 'Per hour', '1d' => 'Per day'];
 
     /** Sortable log columns, mapped from query value to the Elasticsearch field. */
-    private const SORTS = ['time' => '@timestamp', 'latency' => 'http.latency_ms'];
+    private const SORTS = [
+        'time'      => '@timestamp',
+        'source'    => 'service.name',
+        'provider'  => 'provider',
+        'event'     => 'event_type',
+        'direction' => 'direction',
+        'method'    => 'http.method',
+        'path'      => 'http.path',
+        'status'    => 'http.status_code',
+        'latency'   => 'http.latency_ms',
+        'entity'    => 'entity.type',
+        'result'    => 'success',
+    ];
 
     /** Selectable page sizes for the log list. */
     private const PER_PAGE_OPTIONS = [25, 50, 100];

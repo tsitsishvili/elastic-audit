@@ -15,6 +15,24 @@ class HttpLogDashboardQuery
     /** Hard cap on page size to protect Elasticsearch from large deep pages. */
     private const MAX_PER_PAGE = 200;
 
+    /**
+     * Sortable fields mapped to their type, sent as `unmapped_type` so older indexes
+     * behind the read alias that predate a field do not fail the whole search.
+     */
+    private const SORT_FIELDS = [
+        '@timestamp'       => 'date',
+        'service.name'     => 'keyword',
+        'provider'         => 'keyword',
+        'event_type'       => 'keyword',
+        'direction'        => 'keyword',
+        'http.method'      => 'keyword',
+        'http.path'        => 'keyword',
+        'http.status_code' => 'short',
+        'http.latency_ms'  => 'integer',
+        'entity.type'      => 'keyword',
+        'success'          => 'boolean',
+    ];
+
     public function __construct(
         private readonly LogElasticsearchClientInterface $client,
         private readonly string $readAlias,
@@ -36,8 +54,15 @@ class HttpLogDashboardQuery
         $page    = max(1, $page);
         $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
 
-        $sortField = in_array($sortField, ['@timestamp', 'http.latency_ms'], true) ? $sortField : '@timestamp';
+        $sortField = isset(self::SORT_FIELDS[$sortField]) ? $sortField : '@timestamp';
         $sortDir   = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+
+        $sort = [[$sortField => ['order' => $sortDir, 'unmapped_type' => self::SORT_FIELDS[$sortField]]]];
+
+        // Newest first within ties, so pages stay stable when many rows share a value.
+        if ($sortField !== '@timestamp') {
+            $sort[] = ['@timestamp' => ['order' => 'desc']];
+        }
 
         $result = $this->client->search([
             'index' => $this->readAlias,
@@ -45,7 +70,7 @@ class HttpLogDashboardQuery
                 'track_total_hits' => true,
                 'from'             => ($page - 1) * $perPage,
                 'size'             => $perPage,
-                'sort'             => [[$sortField => ['order' => $sortDir]]],
+                'sort'             => $sort,
                 'query'            => ['bool' => ['filter' => $this->filterClauses($filters)]],
             ],
         ]);

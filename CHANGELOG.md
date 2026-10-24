@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every column in the HTTP and activity log lists is now sortable from its header. Non-time sorts break ties newest
+  first, and sorting on a field missing from older indexes behind the read alias no longer fails the search.
+
 ## [4.2.0] - 2026-08-12
 
 ### Added
