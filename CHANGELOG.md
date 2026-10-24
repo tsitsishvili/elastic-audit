@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-10-24
+
 ### Added
 
 - Every column in the HTTP and activity log lists is now sortable from its header. Non-time sorts break ties newest
@@ -377,7 +379,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...v4.1.0
