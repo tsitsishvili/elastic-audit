@@ -23,100 +23,73 @@
     };
 @endphp
 
-<div class="mb-4">
-    <a href="{{ route('activity-logs.logs.index') }}" class="text-sm text-indigo-600 hover:underline dark:text-indigo-400">← Back to list</a>
-</div>
+<a href="{{ url()->previous() !== url()->current() ? url()->previous() : route('activity-logs.logs.index', [], false) }}"
+   class="ea-focus mb-4 inline-flex h-9 items-center gap-1 rounded-md text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">← Back to activity</a>
 
-@if($error)
-    <div class="rounded bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
-@elseif($log)
-@php $changes = is_array($log['changes'] ?? null) ? $log['changes'] : []; @endphp
+{{-- Query errors are shown by the layout banner. --}}
+@if($log)
+@php
+    $changes = is_array($log['changes'] ?? null) ? $log['changes'] : [];
+    $actor   = trim(($log['actor']['type'] ?? '') . (! empty($log['actor']['id']) ? ' #' . $log['actor']['id'] : ''));
+    $meta    = [
+        'Actor'            => $actor,
+        'Entity'           => trim(($log['entity']['type'] ?? '') . (! empty($log['entity']['id']) ? ' #' . $log['entity']['id'] : '')),
+        'Application'      => data_get($log, 'service.name'),
+        'Environment'      => data_get($log, 'service.environment'),
+        'Execution type'   => data_get($log, 'execution.type'),
+        'Execution name'   => data_get($log, 'execution.name'),
+        'Execution action' => data_get($log, 'execution.action'),
+        'Request ID'       => $log['request_id'] ?? null,
+        'Trace ID'         => data_get($log, 'trace.id'),
+        'Span ID'          => data_get($log, 'trace.span_id'),
+    ];
+@endphp
 
 <div class="space-y-6">
-    {{-- Summary card --}}
-    <div class="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Action</div>
-                <div class="mt-1 font-mono text-sm font-semibold">{{ $log['action'] ?? '—' }}</div>
+    <div class="ea-panel rounded-lg border p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="min-w-0">
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">{{ $actor ?: 'Unknown actor' }}</p>
+                <h1 class="mt-1 break-words font-mono text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">{{ $log['action'] ?? 'Activity detail' }}</h1>
             </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Time</div>
-                <div class="mt-1 text-sm">{{ $fmtTs($log['@timestamp'] ?? null) }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Result</div>
-                <div class="mt-1">
-                    @if($log['success'] ?? true)
-                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">success</span>
-                    @else
-                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">failure</span>
-                    @endif
-                </div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Actor</div>
-                <div class="mt-1 text-sm">
-                    {{ $log['actor']['type'] ?? '—' }}
-                    @if(!empty($log['actor']['id'])) <span class="text-slate-400">#{{ $log['actor']['id'] }}</span> @endif
-                </div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Application</div>
-                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'service.name') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Environment</div>
-                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'service.environment') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution type</div>
-                <div class="mt-1 font-mono text-sm">{{ data_get($log, 'execution.type') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution name</div>
-                <div class="mt-1 break-all font-mono text-xs">{{ data_get($log, 'execution.name') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Execution action</div>
-                <div class="mt-1 break-all font-mono text-xs">{{ data_get($log, 'execution.action') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Entity</div>
-                <div class="mt-1 text-sm">
-                    {{ $log['entity']['type'] ?? '—' }} <span class="text-slate-400">#{{ $log['entity']['id'] ?? '—' }}</span>
-                </div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Request ID</div>
-                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ $log['request_id'] ?? '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Trace ID</div>
-                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.id') ?: '—' }}</div>
-            </div>
-            <div>
-                <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Span ID</div>
-                <div class="mt-1 font-mono text-xs text-slate-500 break-all">{{ data_get($log, 'trace.span_id') ?: '—' }}</div>
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+                @if($log['success'] ?? true)
+                    <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">success</span>
+                @else
+                    <span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">failure</span>
+                @endif
+                <span class="font-mono text-xs text-slate-400" title="{{ $log['@timestamp'] ?? '' }}">{{ $fmtTs($log['@timestamp'] ?? null) }}</span>
             </div>
         </div>
     </div>
 
+    <div class="ea-panel rounded-lg border p-5">
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+            @foreach ($meta as $label => $value)
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ $label }}</dt>
+                    <dd class="mt-0.5 break-all font-mono text-sm text-slate-700 dark:text-slate-300">{{ ($value === null || $value === '') ? '—' : $value }}</dd>
+                </div>
+            @endforeach
+        </dl>
+    </div>
+
     {{-- Changes --}}
     @if(! empty($changes))
-    <div class="rounded-lg bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Changes</h3>
+    <div class="ea-panel overflow-hidden rounded-lg border">
+        <div class="border-b border-slate-200 px-5 py-3 dark:border-slate-700">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Changes</h2>
         </div>
-        <table class="min-w-full divide-y divide-slate-100 dark:divide-slate-700 text-sm">
-            <thead class="bg-slate-50 dark:bg-slate-900/50">
+        <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+            <thead class="bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
                 <tr>
-                    <th class="px-4 py-2.5 text-left font-medium text-slate-500 w-1/4">Field</th>
-                    <th class="px-4 py-2.5 text-left font-medium text-slate-500 w-5/12">Old value</th>
-                    <th class="px-4 py-2.5 text-left font-medium text-slate-500 w-5/12">New value</th>
+                    <th class="w-1/4 px-4 py-3 font-medium">Field</th>
+                    <th class="w-5/12 px-4 py-3 font-medium">Old value</th>
+                    <th class="w-5/12 px-4 py-3 font-medium">New value</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                 @foreach($changes as $field => $diff)
                 @php
                     $isDiff = is_array($diff)
@@ -126,15 +99,15 @@
                     $newValue = $isDiff ? $diff['new'] : $diff;
                 @endphp
                 <tr>
-                    <td class="px-4 py-2.5 font-mono text-xs font-medium">{{ $field }}</td>
-                    <td class="px-4 py-2.5 font-mono text-xs text-slate-500">
+                    <td class="px-4 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">{{ $field }}</td>
+                    <td class="break-all px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">
                         @if($oldValue === null)
                             <span class="italic text-slate-400">null</span>
                         @else
                             {{ $fmtValue($oldValue) }}
                         @endif
                     </td>
-                    <td class="px-4 py-2.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                    <td class="break-all px-4 py-3 font-mono text-xs text-emerald-700 dark:text-emerald-400">
                         @if($newValue === null)
                             <span class="italic text-slate-400">null</span>
                         @else
@@ -145,23 +118,24 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </div>
     @endif
 
     {{-- Metadata --}}
     @if(! empty($log['metadata']))
-    <div class="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
-        <h3 class="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Metadata</h3>
-        <pre class="overflow-auto rounded bg-slate-50 p-3 font-mono text-xs dark:bg-slate-900">{{ json_encode($log['metadata'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+    <div class="ea-panel rounded-lg border p-5">
+        <h2 class="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">Metadata</h2>
+        <pre class="max-h-96 overflow-auto rounded-md bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-100 ring-1 ring-slate-800">{{ json_encode($log['metadata'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
     </div>
     @endif
 
     {{-- Error --}}
     @if(! empty($log['error']['class']))
-    <div class="rounded-lg bg-red-50 p-6 shadow-sm ring-1 ring-red-100 dark:bg-red-900/20 dark:ring-red-900/50">
-        <h3 class="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Error</h3>
-        <p class="font-mono text-xs text-red-600 dark:text-red-400">{{ $log['error']['class'] }}</p>
-        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $log['error']['message'] }}</p>
+    <div class="rounded-lg border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-900 dark:bg-red-950">
+        <h2 class="text-sm font-semibold text-red-800 dark:text-red-300">Error</h2>
+        <p class="mt-1 font-mono text-xs text-red-700 dark:text-red-400">{{ $log['error']['class'] }}</p>
+        <pre class="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-red-700 dark:text-red-400">{{ $log['error']['message'] ?? '' }}</pre>
     </div>
     @endif
 </div>

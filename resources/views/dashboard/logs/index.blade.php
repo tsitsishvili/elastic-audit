@@ -356,7 +356,7 @@
                             <td class="whitespace-nowrap px-4 py-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
                                 {{ data_get($log, 'http.latency_ms') !== null ? number_format((int) data_get($log, 'http.latency_ms')) . ' ms' : '—' }}
                             </td>
-                            <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+                            <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                                 {{ data_get($log, 'entity.type') ?: '—' }}@if (data_get($log, 'entity.id')) <span class="text-slate-400 dark:text-slate-500">#{{ data_get($log, 'entity.id') }}</span>@endif
                             </td>
                             <td class="px-4 py-3">
