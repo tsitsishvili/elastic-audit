@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-10-24
+
+### Changed
+
+- The activity log list and event detail pages now match the HTTP log pages: a page header with the result count,
+  Live, Copy link, and filter toggles, a filter panel with From/To fields, removable filter chips, and a rows-per-page
+  footer.
+- The dashboard header groups the dashboard switcher, page tabs, and theme toggle on the right.
+
+### Fixed
+
+- Charts on the HTTP, activity, and performance dashboards no longer sit in a white box in dark mode. The chart
+  surface, gridlines, and PNG exports follow the theme and redraw when it is toggled.
+- The activity log list and detail pages no longer show an Elasticsearch error twice, and changing an activity filter
+  keeps the From/To window set by an overview link.
+- Entity ids in the HTTP log list stay on one line.
+
 ## [5.1.0] - 2026-10-24
 
 ### Added
@@ -379,7 +396,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...HEAD
+[5.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...v4.2.0
