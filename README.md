@@ -39,12 +39,6 @@ request bodies, SQL bindings, query strings, message content, cache keys, Redis 
 - [Agent Guide](AGENTS.md) — condensed rules, examples, and safety invariants for AI coding agents integrating the
   package. See [AI Agents](#ai-agents) for how to deliver it to an agent.
 
-## Screenshots
-
-![HTTP logs overview](docs/images/http-logs-overview.jpg)
-
-![Activity logs overview](docs/images/activity-logs-overview.jpg)
-
 ## Quick Start
 
 1. Install the stable v4 release from Packagist:
