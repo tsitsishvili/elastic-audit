@@ -223,7 +223,7 @@
                                 @endforeach
                             </div>
                             @if ($trend->isNotEmpty())
-                                <div class="mt-3 h-48 rounded-md bg-white p-2 ring-1 ring-slate-200 dark:ring-slate-700">
+                                <div class="mt-3 h-48 rounded-md bg-white p-2 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
                                     <canvas id="{{ $chartId }}" data-trend="{{ json_encode($trend->values()) }}"></canvas>
                                 </div>
                             @endif
@@ -315,6 +315,9 @@
                     return Number.isNaN(date.getTime()) ? String(iso) : date.toLocaleString([], opts);
                 };
 
+                // Gridlines follow the header's light/dark toggle (class on <html>).
+                const gridColor = () => document.documentElement.classList.contains('dark') ? '#1e293b' : '#f1f5f9';
+
                 // Charts are built the first time a row opens, so a page of
                 // functions does not pay for canvases nobody looked at.
                 const build = (canvas) => {
@@ -354,8 +357,8 @@
                                 },
                             },
                             scales: {
-                                y: { beginAtZero: true, ticks: { callback: (value) => value + ' ms' } },
-                                x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0 } },
+                                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: '#94a3b8', callback: (value) => value + ' ms' } },
+                                x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0, color: '#94a3b8' } },
                             },
                         },
                     });
@@ -367,6 +370,10 @@
                     if (row.open) build(canvas);
                     row.addEventListener('toggle', () => row.open && build(canvas));
                 });
+
+                // Redraw the charts already built with the new grid colors when the theme is toggled.
+                new MutationObserver(() => Object.values(Chart.instances).forEach((c) => c.update('none')))
+                    .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
             })();
         </script>
     @endif

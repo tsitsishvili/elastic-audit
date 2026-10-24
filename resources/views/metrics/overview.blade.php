@@ -105,7 +105,7 @@
                 </button>
             @endif
         </div>
-        <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $hasChart ? 'bg-white' : '' }}">
+        <div class="mt-3 h-72 rounded-md p-2 ring-1 ring-slate-200 sm:h-80 dark:ring-slate-700 {{ $hasChart ? 'bg-white dark:bg-slate-900' : '' }}">
             @if ($hasChart)
                 <canvas id="metricsThroughputChart"></canvas>
             @else
@@ -239,14 +239,18 @@
                     },
                 };
 
-                // Solid white backing so exported PNGs aren't transparent.
-                const whiteBg = {
-                    id: 'whiteBg',
+                // Chart surfaces follow the header's light/dark toggle (class on <html>).
+                const isDark = () => document.documentElement.classList.contains('dark');
+                const gridColor = () => isDark() ? '#1e293b' : '#f1f5f9';
+
+                // Solid backing (slate-900 in dark mode) so exported PNGs aren't transparent.
+                const chartBg = {
+                    id: 'chartBg',
                     beforeDraw(chart) {
                         const ctx = chart.ctx;
                         ctx.save();
                         ctx.globalCompositeOperation = 'destination-over';
-                        ctx.fillStyle = '#ffffff';
+                        ctx.fillStyle = isDark() ? '#0f172a' : '#ffffff';
                         ctx.fillRect(0, 0, chart.width, chart.height);
                         ctx.restore();
                     },
@@ -267,6 +271,7 @@
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
+                            legend: { labels: { color: '#64748b' } },
                             tooltip: {
                                 callbacks: {
                                     title: (items) => items.length ? fmt(labels[items[0].dataIndex], fullOpts) : '',
@@ -277,13 +282,17 @@
                             },
                         },
                         scales: {
-                            count: { beginAtZero: true, position: 'left', ticks: { precision: 0 } },
-                            latency: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: value => value + ' ms' } },
-                            x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkip: true } },
+                            count: { beginAtZero: true, position: 'left', grid: { color: gridColor }, ticks: { precision: 0, color: '#94a3b8' } },
+                            latency: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#94a3b8', callback: value => value + ' ms' } },
+                            x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkip: true, color: '#94a3b8' } },
                         },
                     },
-                    plugins: [crosshair, whiteBg],
+                    plugins: [crosshair, chartBg],
                 });
+
+                // Redraw with the new grid/background colors when the theme is toggled.
+                new MutationObserver(() => chart.update('none'))
+                    .observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
                 document.querySelector('[data-export="metricsThroughputChart"]')?.addEventListener('click', (event) => {
                     const link = document.createElement('a');
