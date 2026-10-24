@@ -61,6 +61,21 @@
     $sortLink = fn (string $col) => $withParams(['sort' => $col, 'dir' => ($sort === $col && $dir === 'desc') ? 'asc' : 'desc']);
     $sortIcon = fn (string $col) => $sort === $col ? ($dir === 'desc' ? '↓' : '↑') : '';
 
+    // Table header columns, keyed by the controller's sort value.
+    $columns = [
+        'time'      => 'Time',
+        'source'    => 'Source',
+        'provider'  => 'Provider',
+        'event'     => 'Event',
+        'direction' => 'Dir',
+        'method'    => 'Method',
+        'path'      => 'Path',
+        'status'    => 'Status',
+        'latency'   => 'Latency',
+        'entity'    => 'Entity',
+        'result'    => 'Result',
+    ];
+
     $filterLabels = [
         'provider'     => 'Provider',
         'event_type'   => 'Event type',
@@ -279,21 +294,12 @@
             <table class="min-w-[1280px] divide-y divide-slate-200 text-sm dark:divide-slate-700">
                 <thead class="bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
                     <tr>
-                        <th class="px-4 py-3 font-medium">
-                            <a href="{{ $sortLink('time') }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === 'time' ? 'text-indigo-600 dark:text-indigo-400' : '' }}">Time <span>{{ $sortIcon('time') }}</span></a>
-                        </th>
-                        <th class="px-4 py-3 font-medium">Source</th>
-                        <th class="px-4 py-3 font-medium">Provider</th>
-                        <th class="px-4 py-3 font-medium">Event</th>
-                        <th class="px-4 py-3 font-medium">Dir</th>
-                        <th class="px-4 py-3 font-medium">Method</th>
-                        <th class="px-4 py-3 font-medium">Path</th>
-                        <th class="px-4 py-3 font-medium">Status</th>
-                        <th class="px-4 py-3 text-right font-medium">
-                            <a href="{{ $sortLink('latency') }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === 'latency' ? 'text-indigo-600 dark:text-indigo-400' : '' }}">Latency <span>{{ $sortIcon('latency') }}</span></a>
-                        </th>
-                        <th class="px-4 py-3 font-medium">Entity</th>
-                        <th class="px-4 py-3 font-medium"></th>
+                        @foreach ($columns as $col => $label)
+                            <th class="px-4 py-3 font-medium {{ $col === 'latency' ? 'text-right' : '' }}"
+                                @if ($sort === $col) aria-sort="{{ $dir === 'asc' ? 'ascending' : 'descending' }}" @endif>
+                                <a href="{{ $sortLink($col) }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === $col ? 'text-indigo-600 dark:text-indigo-400' : '' }}">{{ $label }} <span>{{ $sortIcon($col) }}</span></a>
+                            </th>
+                        @endforeach
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-700">

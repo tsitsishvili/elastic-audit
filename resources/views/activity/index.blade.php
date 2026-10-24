@@ -23,20 +23,33 @@
         catch (\Throwable) { return ''; }
     };
 
-    // List URL preserving filters + order + page size; a null override drops that key, page is always reset.
+    // List URL preserving filters + sort + page size; a null override drops that key, page is always reset.
     $withParams = fn (array $overrides) => route(
         'activity-logs.logs.index',
         array_filter(
-            array_merge($filters, ['per_page' => $perPage, 'dir' => $dir], $overrides, ['page' => null]),
+            array_merge($filters, ['per_page' => $perPage, 'sort' => $sort, 'dir' => $dir], $overrides, ['page' => null]),
             fn ($v) => $v !== null && $v !== '',
         ),
         false,
     );
     $pageLink = fn (int $n) => route(
         'activity-logs.logs.index',
-        array_filter(array_merge($filters, ['per_page' => $perPage, 'dir' => $dir, 'page' => $n]), fn ($v) => $v !== null && $v !== ''),
+        array_filter(array_merge($filters, ['per_page' => $perPage, 'sort' => $sort, 'dir' => $dir, 'page' => $n]), fn ($v) => $v !== null && $v !== ''),
         false,
     );
+
+    $sortLink = fn (string $col) => $withParams(['sort' => $col, 'dir' => ($sort === $col && $dir === 'desc') ? 'asc' : 'desc']);
+    $sortIcon = fn (string $col) => $sort === $col ? ($dir === 'desc' ? '↓' : '↑') : '';
+
+    // Table header columns, keyed by the controller's sort value.
+    $columns = [
+        'time'   => 'Time',
+        'source' => 'Source',
+        'actor'  => 'Actor',
+        'action' => 'Action',
+        'entity' => 'Entity',
+        'result' => 'Result',
+    ];
 
     $hasFilters = ! empty($filters);
 
@@ -165,10 +178,11 @@
                 </label>
             </div>
 
-            {{-- Keep filters without a field (set from links) plus order and page size when applying. --}}
+            {{-- Keep filters without a field (set from links) plus sort and page size when applying. --}}
             @foreach (['actor_id', 'entity_type', 'request_id'] as $key)
                 @isset($filters[$key])<input type="hidden" name="{{ $key }}" value="{{ $filters[$key] }}">@endisset
             @endforeach
+            <input type="hidden" name="sort" value="{{ $sort }}">
             <input type="hidden" name="dir" value="{{ $dir }}">
             <input type="hidden" name="per_page" value="{{ $perPage }}">
 
@@ -202,14 +216,12 @@
             <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
                 <thead class="bg-slate-50/90 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
                     <tr>
-                        <th class="px-4 py-3 font-medium">
-                            <a href="{{ $withParams(['dir' => $dir === 'desc' ? 'asc' : 'desc']) }}" class="inline-flex items-center gap-1 text-indigo-600 hover:text-slate-700 dark:text-indigo-400 dark:hover:text-slate-200">Time <span>{{ $dir === 'desc' ? '↓' : '↑' }}</span></a>
-                        </th>
-                        <th class="px-4 py-3 font-medium">Source</th>
-                        <th class="px-4 py-3 font-medium">Actor</th>
-                        <th class="px-4 py-3 font-medium">Action</th>
-                        <th class="px-4 py-3 font-medium">Entity</th>
-                        <th class="px-4 py-3 font-medium">Result</th>
+                        @foreach ($columns as $col => $label)
+                            <th class="px-4 py-3 font-medium"
+                                @if ($sort === $col) aria-sort="{{ $dir === 'asc' ? 'ascending' : 'descending' }}" @endif>
+                                <a href="{{ $sortLink($col) }}" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === $col ? 'text-indigo-600 dark:text-indigo-400' : '' }}">{{ $label }} <span>{{ $sortIcon($col) }}</span></a>
+                            </th>
+                        @endforeach
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-700">

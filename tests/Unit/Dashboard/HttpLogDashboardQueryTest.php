@@ -22,8 +22,35 @@ class HttpLogDashboardQueryTest extends TestCase
         $this->assertSame('test_alias', $client->lastSearch()['index']);
         $this->assertSame(10, $body['from']);
         $this->assertSame(10, $body['size']);
-        $this->assertSame([['@timestamp' => ['order' => 'desc']]], $body['sort']);
+        $this->assertSame([['@timestamp' => ['order' => 'desc', 'unmapped_type' => 'date']]], $body['sort']);
         $this->assertSame(42, $result['total']);
+    }
+
+    public function test_search_sorts_by_column_with_timestamp_tiebreaker(): void
+    {
+        $client = new FakeLogElasticsearchClient;
+
+        $this->dashboardQuery($client)->search([], sortField: 'http.status_code', sortDir: 'asc');
+
+        $this->assertSame(
+            [
+                ['http.status_code' => ['order' => 'asc', 'unmapped_type' => 'short']],
+                ['@timestamp' => ['order' => 'desc']],
+            ],
+            $client->lastSearch()['body']['sort'],
+        );
+    }
+
+    public function test_search_falls_back_to_timestamp_for_unknown_sort(): void
+    {
+        $client = new FakeLogElasticsearchClient;
+
+        $this->dashboardQuery($client)->search([], sortField: 'request.body', sortDir: 'sideways');
+
+        $this->assertSame(
+            [['@timestamp' => ['order' => 'desc', 'unmapped_type' => 'date']]],
+            $client->lastSearch()['body']['sort'],
+        );
     }
 
     public function test_search_translates_filters_into_term_clauses(): void
