@@ -2,10 +2,6 @@
 
 [Back to Elastic Audit](README.md) · [Activity Logs](ACTIVITY_LOGS.md)
 
-![HTTP logs overview](docs/images/http-logs-overview.jpg)
-
-![HTTP logs list](docs/images/http-logs-list.jpg)
-
 This guide covers the third-party HTTP audit subsystem: outgoing provider calls, incoming callbacks, latency,
 status codes, entity context, and sanitized request/response payload previews. It is independent from the
 [Activity Logs](ACTIVITY_LOGS.md) subsystem and can be enabled on its own.
