@@ -47,13 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alongside the inclusive `duration_ms`.
 - Application performance monitoring never observes its own delivery path. The package's audit and telemetry jobs,
   every enabled dashboard, and the dashboard asset route are excluded unconditionally, and `capture.commands.exclude`
-  covers long-running and interactive commands (`queue:work`, `horizon`, `octane:start`, `serve`, `pail`, `tinker`,
-  `test`, `dusk`, and others) by default, so daemons, REPL sessions, and test runs do not dominate latency
-  percentiles. Jobs and scheduled tasks inside an excluded daemon remain observable as independent transactions.
+  covers long-running and interactive commands (`queue:work`, `horizon:work`, `octane:start` and its server commands,
+  `serve`, `pail`, `tinker`, `test`, `dusk`, and others) by default, so daemons, REPL sessions, and test runs do not
+  dominate latency percentiles. Jobs and scheduled tasks inside an excluded daemon remain observable as independent
+  transactions.
+- `max_spans` (default 1000) caps the spans buffered per transaction, so a long command or job cannot exhaust memory.
 - Metric documents never carry SQL bindings, HTTP bodies, headers, or query strings. Inline SQL literals are normalized
   with driver-aware rules, fingerprints are computed before preview truncation, unmatched inbound requests use a
-  constant route label instead of the user-controlled path, and profile frame names follow `profiles.include_paths` so
-  absolute filesystem paths are not stored when it is disabled.
+  constant route label instead of the user-controlled path, outgoing path segments carrying ids, emails, or embedded
+  tokens are replaced with `{id}`, and profile frame names follow `profiles.include_paths` so absolute filesystem paths
+  are not stored when it is disabled.
 
 ### Changed
 

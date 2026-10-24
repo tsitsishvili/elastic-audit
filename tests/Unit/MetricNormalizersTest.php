@@ -66,4 +66,46 @@ class MetricNormalizersTest extends TestCase
         $this->assertSame('api.example.test', $endpoint['host']);
         $this->assertSame('/orders/{id}/{id}', $endpoint['path']);
     }
+
+    public function test_a_trailing_backslash_cannot_leak_the_next_literal_where_backslash_is_not_an_escape(): void
+    {
+        $normalizer = new SqlStatementNormalizer;
+        $sql        = "UPDATE files SET path = 'C:\\' WHERE token = 'sk_live_secret'";
+
+        foreach (['pgsql', 'sqlite', 'sqlsrv'] as $driver) {
+            $this->assertSame(
+                'UPDATE files SET path = ? WHERE token = ?',
+                $normalizer->normalize($sql, driver: $driver),
+                $driver,
+            );
+        }
+
+        // MySQL does escape with backslashes, as do PostgreSQL E'' strings.
+        $this->assertSame(
+            'SELECT ? AS note, ? AS token',
+            $normalizer->normalize("SELECT 'it\\'s' AS note, 'sk_live_secret' AS token", driver: 'mysql'),
+        );
+        $this->assertSame(
+            'SELECT E? AS note, ? AS token',
+            $normalizer->normalize("SELECT E'it\\'s' AS note, 'sk_live_secret' AS token", driver: 'pgsql'),
+        );
+    }
+
+    public function test_endpoint_normalizer_masks_tokens_prefixed_ids_and_emails_in_paths(): void
+    {
+        $normalizer = new EndpointNormalizer;
+
+        $this->assertSame(
+            '/{id}/sendMessage',
+            $normalizer->normalize('https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage')['path'],
+        );
+        $this->assertSame(
+            '/v1/customers/{id}',
+            $normalizer->normalize('https://api.stripe.com/v1/customers/cus_N8x9aBcDeF')['path'],
+        );
+        $this->assertSame(
+            '/users/{id}/orders',
+            $normalizer->normalize('https://crm.example.test/users/jane@example.test/orders')['path'],
+        );
+    }
 }

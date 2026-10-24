@@ -47,7 +47,7 @@
 
         <section class="ea-panel overflow-hidden rounded-lg border">
             <div class="flex items-baseline justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Hottest frames <span class="text-xs font-normal text-slate-400">by self samples</span></h2>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Hottest frames <span class="text-xs font-normal text-slate-400">{{ data_get($profile, 'mode') === 'instrumentation' ? 'by self time (µs)' : 'by self samples' }}</span></h2>
                 <span class="text-xs text-slate-400 dark:text-slate-500">{{ number_format($frames->count()) }} shown</span>
             </div>
             <div class="divide-y divide-slate-100 dark:divide-slate-800">

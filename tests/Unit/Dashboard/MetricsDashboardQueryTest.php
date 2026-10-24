@@ -166,6 +166,58 @@ final class MetricsDashboardQueryTest extends TestCase
         $this->assertFalse($rows['App\\Services\\Sampled::run']['exact']);
     }
 
+    public function test_functions_just_outside_either_top_n_are_not_called_new_or_gone(): void
+    {
+        $bucket = static fn (string $name, float $avg): array => [
+            'key'            => $name,
+            'doc_count'      => 10,
+            'avg_duration'   => ['value' => $avg],
+            'total_duration' => ['value' => $avg * 10],
+            'sources'        => ['buckets' => [['key' => 'app.function']]],
+        ];
+        // Current top N, baseline top N, then a by-name lookup in each window.
+        $responses = [
+            ['aggregations' => ['functions' => ['buckets' => [$bucket('App\\Climbed::run', 100.0)]]]],
+            ['aggregations' => ['functions' => ['buckets' => [$bucket('App\\Slipped::run', 100.0)]]]],
+            ['aggregations' => ['functions' => ['buckets' => [$bucket('App\\Climbed::run', 100.0)]]]],
+            ['aggregations' => ['functions' => ['buckets' => [$bucket('App\\Slipped::run', 100.0)]]]],
+        ];
+        $this->client->searchResolver = static function () use (&$responses): array {
+            return array_shift($responses) ?? ['aggregations' => ['functions' => ['buckets' => []]]];
+        };
+
+        $rows = collect($this->query->functionStatistics([
+            'from' => '2026-08-21T12:00:00+00:00',
+            'to'   => '2026-08-21T13:00:00+00:00',
+        ], size: 1))->keyBy('key');
+
+        $this->assertSame(['App\\Climbed::run'], $this->client->searchCalls[2]['body']['aggs']['functions']['terms']['include']);
+        $this->assertSame(['App\\Slipped::run'], $this->client->searchCalls[3]['body']['aggs']['functions']['terms']['include']);
+        $this->assertSame('stable', $rows['App\\Climbed::run']['status']);
+        $this->assertArrayNotHasKey('App\\Slipped::run', $rows);
+    }
+
+    public function test_long_windows_coarsen_the_function_trend_to_stay_under_max_buckets(): void
+    {
+        $this->query->functionStatistics([
+            'from'     => '2026-05-23T00:00:00+00:00',
+            'to'       => '2026-08-21T00:00:00+00:00',
+            'interval' => '1h',
+        ]);
+
+        // 90 days per hour across 50 functions would be 108,000 buckets.
+        $trend = $this->client->searchCalls[0]['body']['aggs']['functions']['aggs']['trend']['date_histogram'];
+        $this->assertSame('1d', $trend['calendar_interval']);
+
+        $this->query->functionStatistics([
+            'from'     => '2026-08-20T00:00:00+00:00',
+            'to'       => '2026-08-21T00:00:00+00:00',
+            'interval' => '1h',
+        ]);
+
+        $this->assertSame('1h', $this->client->lastSearch()['body']['aggs']['functions']['aggs']['trend']['date_histogram']['calendar_interval']);
+    }
+
     public function test_profile_query_uses_separate_profiles_alias(): void
     {
         $this->query->profile('profile-1');

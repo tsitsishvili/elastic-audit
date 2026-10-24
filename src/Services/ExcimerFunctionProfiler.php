@@ -202,8 +202,13 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
                 continue;
             }
 
+            // Once per sample: a recursive frame appears at several depths of one
+            // stack, but the sample is still one period of its inclusive time.
+            $seen = [];
+
             foreach ($stack as $frameId) {
-                if (is_int($frameId) || is_numeric($frameId)) {
+                if ((is_int($frameId) || is_numeric($frameId)) && ! isset($seen[(int) $frameId])) {
+                    $seen[(int) $frameId]  = true;
                     $total[(int) $frameId] = ($total[(int) $frameId] ?? 0) + 1;
                 }
             }

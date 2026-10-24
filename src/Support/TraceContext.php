@@ -50,7 +50,13 @@ final readonly class TraceContext
         );
     }
 
-    /** Prefer explicit caller-provided fields, falling back to traceparent. */
+    /**
+     * Prefer explicit caller-provided fields, falling back to traceparent.
+     *
+     * Explicit ids are stored as given (trimmed, lowercased), as they were in
+     * 4.x: audit documents may correlate on non-W3C ids such as request UUIDs.
+     * Propagation still validates through toTraceParent().
+     */
     public static function merge(
         ?string $traceId = null,
         ?string $spanId = null,
@@ -60,8 +66,8 @@ final readonly class TraceContext
         $parsed = self::fromTraceParent($traceParent, $traceState);
 
         return new self(
-            traceId: self::normalizeId($traceId, 32) ?? $parsed->traceId,
-            spanId: self::normalizeId($spanId, 16) ?? $parsed->spanId,
+            traceId: self::normalizeHeader($traceId) ?? $parsed->traceId,
+            spanId: self::normalizeHeader($spanId) ?? $parsed->spanId,
             traceParent: self::normalizeHeader($traceParent) ?? $parsed->traceParent,
             sampled: $parsed->sampled,
             traceState: $parsed->traceState,

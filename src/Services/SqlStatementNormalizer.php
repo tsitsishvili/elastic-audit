@@ -37,19 +37,27 @@ final class SqlStatementNormalizer
         $normalized          = '';
         $doubleQuotesAreData = ! in_array($driver, ['pgsql', 'oci', 'oracle'], true);
         $hashStartsComment   = in_array($driver, ['mysql', 'mariadb', 'unknown'], true);
+        // Standard SQL has no backslash escapes. Honouring one where the database
+        // does not would end a literal like 'C:\' late and leak the next literal.
+        $backslashEscapes = in_array($driver, ['mysql', 'mariadb', 'unknown'], true);
 
         for ($offset = 0; $offset < $length;) {
             $character = $sql[$offset];
 
             if ($character === "'") {
                 $normalized .= '?';
-                $offset = $this->quotedEnd($sql, $offset, "'");
+                $offset = $this->quotedEnd(
+                    $sql,
+                    $offset,
+                    "'",
+                    $backslashEscapes || ($driver === 'pgsql' && $this->isEscapeStringPrefix($sql, $offset)),
+                );
 
                 continue;
             }
 
             if ($character === '"') {
-                $end = $this->quotedEnd($sql, $offset, '"', $doubleQuotesAreData);
+                $end = $this->quotedEnd($sql, $offset, '"', $doubleQuotesAreData && $backslashEscapes);
                 $normalized .= $doubleQuotesAreData
                     ? '?'
                     : substr($sql, $offset, $end - $offset);
@@ -145,6 +153,18 @@ final class SqlStatementNormalizer
         }
 
         return $length;
+    }
+
+    /** PostgreSQL E'...' strings are the one place it honours backslash escapes. */
+    private function isEscapeStringPrefix(string $sql, int $quoteOffset): bool
+    {
+        // Explicit bounds: a negative string offset reads from the end in PHP.
+        $prefix = $quoteOffset > 0 ? $sql[$quoteOffset - 1] : '';
+        $before = $quoteOffset > 1 ? $sql[$quoteOffset - 2] : '';
+
+        return ($prefix === 'E' || $prefix === 'e')
+            && ! ctype_alnum($before)
+            && $before !== '_';
     }
 
     private function bracketedIdentifierEnd(string $sql, int $offset): int

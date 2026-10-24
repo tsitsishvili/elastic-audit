@@ -38,14 +38,12 @@ use Illuminate\Queue\Events\JobQueueing;
 use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Redis\Events\CommandExecuted;
 use Illuminate\Redis\Events\CommandFailed;
-use Symfony\Component\Mime\Email;
 use Throwable;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Support\ExecutionContextId;
 use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
-use WeakMap;
 
 final class ApplicationMetricsSubscriber
 {
@@ -64,8 +62,14 @@ final class ApplicationMetricsSubscriber
         'queue:listen',
         'schedule:work',
         'horizon',
+        'horizon:supervisor',
+        'horizon:work',
         'octane:start',
+        'octane:frankenphp',
+        'octane:roadrunner',
+        'octane:swoole',
         'reverb:start',
+        'pulse:check',
         'pulse:work',
         'serve',
         'pail',
@@ -98,8 +102,13 @@ final class ApplicationMetricsSubscriber
     /** @var array<string, list<int>> */
     private array $cacheTimers = [];
 
-    /** @var WeakMap<Email, int> */
-    private WeakMap $mailTimers;
+    /**
+     * Send start times per execution context. Symfony transports clone the
+     * message before MessageSent, so the message object cannot key the timer.
+     *
+     * @var array<string, list<int>>
+     */
+    private array $mailTimers = [];
 
     /** @var array<string, int> */
     private array $notificationTimers = [];
@@ -111,9 +120,7 @@ final class ApplicationMetricsSubscriber
         private readonly EndpointNormalizer $endpoints,
         private readonly OutgoingTracePropagation $propagation,
         private readonly MetricsExclusions $exclusions,
-    ) {
-        $this->mailTimers = new WeakMap;
-    }
+    ) {}
 
     public function register(Dispatcher $events): void
     {
@@ -153,6 +160,12 @@ final class ApplicationMetricsSubscriber
     public function queryExecuted(QueryExecuted $event): void
     {
         if ($this->metrics->isSuppressed() || ! $this->metrics->categoryEnabled('queries')) {
+            return;
+        }
+
+        // Drop what record() would drop before tokenizing and hashing the SQL.
+        if ((float) $event->time < (float) config('elastic_audit_metrics.capture.queries.min_duration_ms', 0)
+            || $this->metrics->propagationContext()?->sampled === false) {
             return;
         }
 
@@ -463,21 +476,30 @@ final class ApplicationMetricsSubscriber
 
     public function messageSending(MessageSending $event): void
     {
+        $this->mailTimers = $this->purgeTimerStacks($this->mailTimers);
+
         if ($this->metrics->categoryEnabled('mail')) {
-            $this->mailTimers[$event->message] = (int) hrtime(true);
+            $this->mailTimers[ExecutionContextId::current()][] = hrtime(true);
         }
     }
 
     public function messageSent(MessageSent $event): void
     {
-        $message = $event->message;
+        // Sending is synchronous, so the newest start in this context is this
+        // message's; a vetoed or failed send leaves an older entry to expire.
+        $slot      = ExecutionContextId::current();
+        $timers    = $this->mailTimers[$slot] ?? [];
+        $startedAt = array_pop($timers);
 
-        if (! isset($this->mailTimers[$message])) {
-            return;
+        if ($timers === []) {
+            unset($this->mailTimers[$slot]);
+        } else {
+            $this->mailTimers[$slot] = $timers;
         }
 
-        $startedAt = $this->mailTimers[$message];
-        unset($this->mailTimers[$message]);
+        if (! is_int($startedAt)) {
+            return;
+        }
 
         $this->metrics->record(
             category: 'mail',
@@ -620,7 +642,7 @@ final class ApplicationMetricsSubscriber
 
     private function cacheStarting(CacheEvent $event, string $operation): void
     {
-        $this->purgeCacheTimers();
+        $this->cacheTimers = $this->purgeTimerStacks($this->cacheTimers);
 
         if (! $this->metrics->categoryEnabled('cache')) {
             return;
@@ -822,21 +844,27 @@ final class ApplicationMetricsSubscriber
         }
     }
 
-    private function purgeCacheTimers(): void
+    /**
+     * @param  array<string, list<int>>  $stacks
+     * @return array<string, list<int>>
+     */
+    private function purgeTimerStacks(array $stacks): array
     {
         $cutoff = hrtime(true) - self::TIMER_TTL_NS;
 
-        foreach ($this->cacheTimers as $key => $timers) {
+        foreach ($stacks as $key => $timers) {
             $timers = array_values(array_filter(
                 $timers,
                 static fn (int $startedAt): bool => $startedAt >= $cutoff,
             ));
 
             if ($timers === []) {
-                unset($this->cacheTimers[$key]);
+                unset($stacks[$key]);
             } else {
-                $this->cacheTimers[$key] = $timers;
+                $stacks[$key] = $timers;
             }
         }
+
+        return $stacks;
     }
 }

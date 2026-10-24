@@ -10,7 +10,10 @@ return [
     'enabled'    => env('ELASTIC_AUDIT_METRICS_ENABLED', false),
     'queue'      => env('ELASTIC_AUDIT_METRICS_QUEUE', 'default'),
     'batch_size' => env('ELASTIC_AUDIT_METRICS_BATCH_SIZE', 100),
-    'job'        => [
+    // Spans are buffered until their transaction finishes; past this many the
+    // rest are dropped, so a long command or job cannot exhaust memory.
+    'max_spans' => env('ELASTIC_AUDIT_METRICS_MAX_SPANS', 1000),
+    'job'       => [
         'tries'         => env('ELASTIC_AUDIT_METRICS_JOB_TRIES', 3),
         'backoff'       => explode(',', (string) env('ELASTIC_AUDIT_METRICS_JOB_BACKOFF', '10,30,120')),
         'timeout'       => env('ELASTIC_AUDIT_METRICS_JOB_TIMEOUT', 30),
@@ -68,8 +71,14 @@ return [
                 'queue:listen',
                 'schedule:work',
                 'horizon',
+                'horizon:supervisor',
+                'horizon:work',
                 'octane:start',
+                'octane:frankenphp',
+                'octane:roadrunner',
+                'octane:swoole',
                 'reverb:start',
+                'pulse:check',
                 'pulse:work',
                 'serve',
                 'pail',

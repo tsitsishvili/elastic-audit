@@ -32,6 +32,16 @@ final class TraceContextTest extends TestCase
         $this->assertNull($extra->traceId);
     }
 
+    public function test_merge_keeps_explicit_non_w3c_ids_for_audit_correlation(): void
+    {
+        $context = TraceContext::merge(traceId: ' 550E8400-E29B-41D4-A716-446655440000 ', spanId: 'req-42');
+
+        // Stored as 4.x stored them; only propagation requires W3C ids.
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $context->traceId);
+        $this->assertSame('req-42', $context->spanId);
+        $this->assertNull($context->toTraceParent());
+    }
+
     public function test_drops_invalid_tracestate_instead_of_forwarding_it(): void
     {
         $context = TraceContext::fromTraceParent(

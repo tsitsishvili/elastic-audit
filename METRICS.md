@@ -65,6 +65,10 @@ Transactions record `transaction.span_count` and, when profiling succeeded, `tra
 has an independent `enabled`, `sample_rate`, and `min_duration_ms` configuration. Sampling a root off keeps only the
 minimal in-memory context required to propagate its W3C sampled flag; it does not enqueue its transactions or spans.
 
+Spans are buffered in memory until their transaction finishes. `max_spans` (`ELASTIC_AUDIT_METRICS_MAX_SPANS`, default
+1000) caps that buffer per transaction; later spans are dropped, so a long import command or job cannot exhaust memory.
+`span_count` counts the spans that were kept.
+
 ## Timing application code
 
 There are two sources of function timing, and they answer different questions.
@@ -198,7 +202,8 @@ makes the metrics queue feed itself:
 `capture.commands.exclude` ships with two groups of Laravel commands whose
 duration measures something other than application work: processes that run for
 their whole lifetime (`queue:work`, `queue:listen`, `schedule:work`, `horizon`,
-`octane:start`, `reverb:start`, `pulse:work`, `serve`, `pail`) and development
+`horizon:supervisor`, `horizon:work`, `octane:start` and the `octane:frankenphp`, `octane:roadrunner`, and
+`octane:swoole` servers it runs, `reverb:start`, `pulse:check`, `pulse:work`, `serve`, `pail`) and development
 entrypoints (`tinker`, `test`, `dusk`). `php artisan test` would otherwise record
 an entire suite run as one transaction and dominate the latency percentiles.
 

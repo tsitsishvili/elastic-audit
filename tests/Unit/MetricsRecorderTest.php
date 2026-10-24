@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 
 use Fiber;
+use Illuminate\Contracts\Bus\Dispatcher;
+use Illuminate\Contracts\Bus\QueueingDispatcher;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Testing\Fakes\BusFake;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Contracts\FunctionProfiler;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\CapturedProfile;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
@@ -185,6 +189,8 @@ class MetricsRecorderTest extends TestCase
                     'App\\Services\\OrderService::checkout',
                     'App\\Repositories\\OrderRepository::save',
                 ]
+                // Estimates are ranked, not drawn on the trace, so they are not span_count.
+                && $root->spanCount === 0
                 && $functions['App\\Services\\OrderService::checkout']->parentSpanId === $root->spanId
                 && $functions['App\\Services\\OrderService::checkout']->transactionId === $root->transactionId;
         });
@@ -303,6 +309,122 @@ class MetricsRecorderTest extends TestCase
 
         $this->assertCount(2, $traceIds);
         $this->assertNotSame($traceIds[0], $traceIds[1]);
+    }
+
+    public function test_a_transaction_buffers_at_most_max_spans(): void
+    {
+        Bus::fake();
+        $config              = $this->enabledConfig();
+        $config['max_spans'] = 3;
+        $recorder            = new MetricsRecorder(config: $config);
+
+        $token = $recorder->begin('commands', MetricData::TYPE_CONSOLE_COMMAND, 'import:users');
+
+        for ($query = 0; $query < 10; $query++) {
+            $recorder->record('queries', MetricData::TYPE_DB_QUERY, 'select sqlite', MetricData::OUTCOME_SUCCESS, 1.0);
+        }
+
+        $recorder->finish($token, 'import:users', MetricData::OUTCOME_SUCCESS);
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $job): bool {
+            $spans = array_filter($job->items, static fn (MetricData $metric): bool => $metric->kind === MetricData::KIND_SPAN);
+            $root  = array_values(array_filter($job->items, static fn (MetricData $metric): bool => $metric->kind === MetricData::KIND_TRANSACTION));
+
+            return count($spans) === 3 && count($root) === 1 && $root[0]->spanCount === 3;
+        });
+    }
+
+    public function test_a_merged_child_transaction_keeps_its_own_document_at_the_cap(): void
+    {
+        Bus::fake();
+        $config              = $this->enabledConfig();
+        $config['max_spans'] = 2;
+        $recorder            = new MetricsRecorder(config: $config);
+
+        $parent = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET orders');
+        $recorder->record('queries', MetricData::TYPE_DB_QUERY, 'select sqlite', MetricData::OUTCOME_SUCCESS, 1.0);
+
+        // A nested transaction in the same trace, like Artisan::call() inside a request.
+        $child = $recorder->begin('commands', MetricData::TYPE_CONSOLE_COMMAND, 'cache:clear');
+        $recorder->record('queries', MetricData::TYPE_DB_QUERY, 'select sqlite', MetricData::OUTCOME_SUCCESS, 1.0);
+        $recorder->finish($child, 'cache:clear', MetricData::OUTCOME_SUCCESS);
+        $recorder->finish($parent, 'GET orders', MetricData::OUTCOME_SUCCESS);
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $job): bool {
+            $names = array_map(static fn (MetricData $metric): string => $metric->name, $job->items);
+
+            return count($job->items) === 3 && in_array('cache:clear', $names, true) && end($names) === 'GET orders';
+        });
+    }
+
+    public function test_measure_outside_a_transaction_never_starts_the_profiler(): void
+    {
+        Bus::fake();
+        $profiler = new class implements FunctionProfiler
+        {
+            public int $starts = 0;
+
+            public function available(): bool
+            {
+                return true;
+            }
+
+            public function driver(): ?string
+            {
+                return 'fake';
+            }
+
+            public function start(): bool
+            {
+                $this->starts++;
+
+                return true;
+            }
+
+            public function stop(): ?CapturedProfile
+            {
+                return new CapturedProfile('fake', 'sampling', 'speedscope', 99.0, 1, [], []);
+            }
+        };
+        $config                         = $this->enabledConfig();
+        $config['profiles']             = ['enabled' => true, 'sample_rate' => 1];
+        $config['capture']['functions'] = ['enabled' => true, 'sample_rate' => 1, 'min_duration_ms' => 0];
+        $recorder                       = new MetricsRecorder(config: $config, profiler: $profiler);
+
+        $this->assertSame('ok', $recorder->measure('Standalone::work', static fn (): string => 'ok'));
+
+        $this->assertSame(0, $profiler->starts);
+        Bus::assertNotDispatched(LogProfileJob::class);
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $job): bool {
+            return ($job->items[0] ?? null)?->name === 'Standalone::work';
+        });
+    }
+
+    public function test_a_profile_that_fails_to_queue_is_not_linked_from_the_transaction(): void
+    {
+        $fake = new class(app(QueueingDispatcher::class)) extends BusFake
+        {
+            public function dispatch($command)
+            {
+                if ($command instanceof LogProfileJob) {
+                    throw new RuntimeException('Payload exceeds the queue message size limit.');
+                }
+
+                return parent::dispatch($command);
+            }
+        };
+        $this->app->instance(Dispatcher::class, $fake);
+
+        $config             = $this->enabledConfig();
+        $config['profiles'] = ['enabled' => true, 'sample_rate' => 1];
+        $recorder           = new MetricsRecorder(config: $config, profiler: $this->profilerReturning([]));
+
+        $token = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET orders');
+        $recorder->finish($token, 'GET orders', MetricData::OUTCOME_SUCCESS);
+
+        $fake->assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $job): bool {
+            return $job->items[0]->kind === MetricData::KIND_TRANSACTION && $job->items[0]->profileId === null;
+        });
     }
 
     /** @param list<array{function: string, self_ms: float, total_ms: float, calls: ?int}> $timings */

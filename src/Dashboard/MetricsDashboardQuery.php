@@ -40,6 +40,12 @@ final class MetricsDashboardQuery
      */
     private const MAX_RESULT_WINDOW = 10000;
 
+    /** Calendar intervals a function trend can coarsen to, with their nominal length in seconds. */
+    private const TREND_INTERVALS = ['1h' => 3600, '1d' => 86400, '1w' => 604800, '1M' => 2678400, '1y' => 31622400];
+
+    /** Headroom under Elasticsearch's default search.max_buckets of 65,536. */
+    private const MAX_TREND_BUCKETS = 50000;
+
     public function __construct(
         private readonly LogElasticsearchClientInterface $client,
         private readonly string $metricsAlias,
@@ -181,9 +187,26 @@ final class MetricsDashboardQuery
         int $minimumCalls = 3,
         string $sort = self::SORT_SELF,
     ): array {
-        $current  = $this->functionAggregation($filters, $size, $sort);
-        $baseline = $this->functionAggregation($this->precedingWindow($filters), $size, $sort);
-        $rows     = [];
+        $preceding = $this->precedingWindow($filters);
+        $current   = $this->functionAggregation($filters, $size, $sort);
+        $baseline  = $this->functionAggregation($preceding, $size, $sort);
+        $rows      = [];
+
+        // Each window is cut to its own top N, so a function just outside one
+        // cut has not appeared or vanished. Look those up in the other window
+        // by name before calling them new or gone.
+        $baseline += $this->functionAggregation(
+            $preceding,
+            $size,
+            $sort,
+            array_keys(array_diff_key($current, $baseline)),
+        );
+        $stillRunning = $this->functionAggregation(
+            $filters,
+            $size,
+            $sort,
+            array_keys(array_diff_key($baseline, $current)),
+        );
 
         foreach ($current as $name => $stats) {
             $before = $baseline[$name] ?? null;
@@ -224,7 +247,7 @@ final class MetricsDashboardQuery
 
         // Functions that ran before and have since stopped appearing.
         foreach ($baseline as $name => $before) {
-            if (isset($current[$name]) || $before['count'] < $minimumCalls) {
+            if (isset($current[$name]) || isset($stillRunning[$name]) || $before['count'] < $minimumCalls) {
                 continue;
             }
 
@@ -323,22 +346,13 @@ final class MetricsDashboardQuery
      */
     private function precedingWindow(array $filters): array
     {
-        if (! isset($filters['from'], $filters['to'])) {
+        $length = $this->windowSeconds($filters);
+
+        if ($length === null) {
             return $filters;
         }
 
-        try {
-            $from = new DateTimeImmutable($filters['from']);
-            $to   = new DateTimeImmutable($filters['to']);
-        } catch (Exception) {
-            return $filters;
-        }
-
-        $length = $to->getTimestamp() - $from->getTimestamp();
-
-        if ($length <= 0) {
-            return $filters;
-        }
+        $from = new DateTimeImmutable($filters['from']);
 
         return [
             ...$filters,
@@ -348,11 +362,70 @@ final class MetricsDashboardQuery
     }
 
     /**
+     * Length of the requested window, or null when it is open-ended or invalid.
+     *
      * @param  array<string, string>  $filters
+     */
+    private function windowSeconds(array $filters): ?int
+    {
+        if (! isset($filters['from'], $filters['to'])) {
+            return null;
+        }
+
+        try {
+            $length = (new DateTimeImmutable($filters['to']))->getTimestamp()
+                - (new DateTimeImmutable($filters['from']))->getTimestamp();
+        } catch (Exception) {
+            return null;
+        }
+
+        return $length > 0 ? $length : null;
+    }
+
+    /**
+     * Every function row carries its own trend histogram, so the selected
+     * interval is coarsened until all of them fit under Elasticsearch's
+     * default search.max_buckets (65,536). 90 days per hour across 50
+     * functions would otherwise be 108,000 buckets and a rejected query.
+     *
+     * @param  array<string, string>  $filters
+     */
+    private function trendInterval(array $filters, int $functions): string
+    {
+        $interval = $filters['interval'] ?? '1h';
+        $length   = $this->windowSeconds($filters);
+
+        if ($length === null || ! isset(self::TREND_INTERVALS[$interval])) {
+            return $interval;
+        }
+
+        $candidates = array_slice(self::TREND_INTERVALS, (int) array_search($interval, array_keys(self::TREND_INTERVALS), true), null, true);
+
+        foreach ($candidates as $candidate => $seconds) {
+            if ((intdiv($length, $seconds) + 1) * max(1, $functions) <= self::MAX_TREND_BUCKETS) {
+                return $candidate;
+            }
+        }
+
+        return array_key_last(self::TREND_INTERVALS);
+    }
+
+    /**
+     * @param  array<string, string>  $filters
+     * @param  list<string>|null  $include  Restrict to these exact names instead of the top N.
      * @return array<string, array{count: int, avg_ms: float, p75_ms: float, p95_ms: float, max_ms: float, total_ms: float, self_ms: float, exact: bool, trend: list<array{at: string, p75_ms: float, count: int}>}>
      */
-    private function functionAggregation(array $filters, int $size, string $sort = self::SORT_SELF): array
-    {
+    private function functionAggregation(
+        array $filters,
+        int $size,
+        string $sort = self::SORT_SELF,
+        ?array $include = null,
+    ): array {
+        if ($include === []) {
+            return [];
+        }
+
+        $size   = $include !== null ? count($include) : $size;
         $result = $this->client->search([
             'index' => $this->metricsAlias,
             'body'  => [
@@ -368,7 +441,7 @@ final class MetricsDashboardQuery
                             'field' => 'name',
                             'size'  => $size,
                             'order' => self::SORT_ORDERS[$sort] ?? self::SORT_ORDERS[self::SORT_SELF],
-                        ],
+                        ] + ($include !== null ? ['include' => $include] : []),
                         'aggs' => [
                             'avg_duration'   => ['avg' => ['field' => 'duration_ms']],
                             'max_duration'   => ['max' => ['field' => 'duration_ms']],
@@ -379,7 +452,7 @@ final class MetricsDashboardQuery
                             'trend'          => [
                                 'date_histogram' => [
                                     'field'             => '@timestamp',
-                                    'calendar_interval' => $filters['interval'] ?? '1h',
+                                    'calendar_interval' => $this->trendInterval($filters, $size),
                                     'min_doc_count'     => 0,
                                     'time_zone'         => $filters['timezone'] ?? 'UTC',
                                 ] + (isset($filters['from'], $filters['to'])

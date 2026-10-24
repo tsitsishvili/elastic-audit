@@ -9,6 +9,9 @@ use Illuminate\Cache\Events\RetrievingKey;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Redis\Connections\Connection;
@@ -21,6 +24,9 @@ use Illuminate\Support\Facades\Route;
 use RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Mailer\Envelope;
+use Symfony\Component\Mailer\SentMessage as SymfonySentMessage;
+use Symfony\Component\Mime\Email;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\Facades\Performance;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
@@ -598,6 +604,43 @@ class MetricsInstrumentationTest extends TestCase
 
             return false;
         });
+    }
+
+    public function test_mail_is_timed_when_the_transport_clones_the_message(): void
+    {
+        Bus::fake();
+        $email = (new Email)->from('sender@example.test')->to('recipient@example.test')->subject('Hi')->text('Body');
+
+        Event::dispatch(new MessageSending($email));
+        // Symfony's AbstractTransport::send() clones before building the SentMessage.
+        Event::dispatch(new MessageSent(new SentMessage(new SymfonySentMessage(clone $email, Envelope::create($email)))));
+
+        Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
+            return ($batch->items[0] ?? null)?->type === MetricData::TYPE_MAIL_SEND;
+        });
+    }
+
+    public function test_horizon_workers_and_nested_octane_servers_are_daemons(): void
+    {
+        Bus::fake();
+        $output = new BufferedOutput;
+
+        $horizon = new ArrayInput([]);
+        Event::dispatch(new CommandStarting('horizon:work', $horizon, $output));
+        DB::select('select 1 as polled');
+        Event::dispatch(new CommandFinished('horizon:work', $horizon, $output, 0));
+
+        // octane:start runs octane:swoole in the same process; leaving the inner
+        // daemon must not lift the guard while the outer one is still running.
+        $start  = new ArrayInput([]);
+        $server = new ArrayInput([]);
+        Event::dispatch(new CommandStarting('octane:start', $start, $output));
+        Event::dispatch(new CommandStarting('octane:swoole', $server, $output));
+        Event::dispatch(new CommandFinished('octane:swoole', $server, $output, 0));
+        DB::select('select 1 as between_daemons');
+        Event::dispatch(new CommandFinished('octane:start', $start, $output, 0));
+
+        Bus::assertNotDispatched(LogMetricBatchJob::class);
     }
 
     public function test_measured_spans_can_be_disabled_like_any_other_category(): void

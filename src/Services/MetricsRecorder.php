@@ -41,9 +41,10 @@ final class MetricsRecorder
      * itself caused by delivering metrics. Recording it would make the
      * telemetry self-feeding, so context-less spans are dropped for the
      * daemon's lifetime. Work inside a job or scheduled task still runs under
-     * its own root transaction and is captured normally.
+     * its own root transaction and is captured normally. A depth rather than a
+     * flag, because daemons nest: octane:start runs octane:swoole in-process.
      */
-    private bool $daemonProcess = false;
+    private int $daemonDepth = 0;
 
     /** @param array<string, mixed>|null $config */
     public function __construct(
@@ -80,12 +81,12 @@ final class MetricsRecorder
 
     public function enterDaemonProcess(): void
     {
-        $this->daemonProcess = true;
+        $this->daemonDepth++;
     }
 
     public function leaveDaemonProcess(): void
     {
-        $this->daemonProcess = false;
+        $this->daemonDepth = max(0, $this->daemonDepth - 1);
     }
 
     public function categoryEnabled(string $category): bool
@@ -148,7 +149,9 @@ final class MetricsRecorder
 
             // Native profilers are process-global. Execution-local trace stacks
             // prevent attribution leaks; the driver also rejects overlapping runs.
-            if ($sampled && $active === null && $this->shouldProfile()) {
+            // Only a transaction owns a profile; a profile needs a transaction id
+            // to link back to, which a measured block outside one does not have.
+            if ($sampled && $active === null && $kind === MetricData::KIND_TRANSACTION && $this->shouldProfile()) {
                 $context->ownsProfiler = $this->profiler?->start() ?? false;
             }
 
@@ -201,9 +204,14 @@ final class MetricsRecorder
                 $profilerStopped = true;
 
                 if ($capture !== null && $keepRoot) {
-                    $profile            = ProfileData::fromCapture($context, $capture, $durationMs);
-                    $context->profileId = $profile->profileId;
-                    $this->flushProfile($profile);
+                    $profile = ProfileData::fromCapture($context, $capture, $durationMs);
+
+                    // Link only a profile that was actually queued, so a failed
+                    // dispatch cannot leave the transaction pointing at nothing.
+                    if ($this->flushProfile($profile)) {
+                        $context->profileId = $profile->profileId;
+                    }
+
                     $this->recordProfiledFunctions($context, $capture, $durationMs);
                 }
             }
@@ -218,9 +226,12 @@ final class MetricsRecorder
 
             if ($keepRoot) {
                 $isTransaction = $context->kind === MetricData::KIND_TRANSACTION;
-                $spanCount     = $isTransaction ? count(array_filter(
+                // Profiled function estimates are ranked, never drawn on the trace,
+                // so they do not count as the transaction's spans.
+                $spanCount = $isTransaction ? count(array_filter(
                     $context->spans,
-                    static fn (MetricData $metric): bool => $metric->kind === MetricData::KIND_SPAN,
+                    static fn (MetricData $metric): bool => $metric->kind === MetricData::KIND_SPAN
+                        && $metric->type !== MetricData::TYPE_APP_FUNCTION_PROFILED,
                 )) : 0;
                 $context->spans[] = MetricData::make(
                     type: $context->type,
@@ -273,7 +284,7 @@ final class MetricsRecorder
             $parent = $this->current($slot);
 
             if ($parent !== null && $parent->traceId === $context->traceId) {
-                $parent->spans = array_merge($parent->spans, $context->spans);
+                $this->append($parent, $context->spans);
 
                 return;
             }
@@ -372,13 +383,18 @@ final class MetricsRecorder
             $context = $this->current();
 
             // A span with no root inside a daemon is the daemon's own loop.
-            if ($context === null && $this->daemonProcess) {
+            if ($context === null && $this->daemonDepth > 0) {
                 return;
             }
 
             if (($context !== null && ! $context->sampled)
                 || ($context === null && ! $this->sampled($category))
                 || ($context !== null && ! $this->sampled($category))) {
+                return;
+            }
+
+            // Checked before building the document: past the cap it is dropped anyway.
+            if ($context !== null && count($context->spans) >= $this->maxSpans()) {
                 return;
             }
 
@@ -493,9 +509,29 @@ final class MetricsRecorder
             );
         }
 
-        if ($spans !== []) {
-            $context->spans = array_merge($context->spans, $spans);
+        $this->append($context, $spans);
+    }
+
+    /**
+     * Add spans to a context without exceeding the per-transaction cap. Spans
+     * are buffered until their root finishes, so an uncapped long command or
+     * job would hold every query it ran in memory. The newest spans are kept,
+     * which keeps a merged child transaction's own document (always its last).
+     *
+     * @param  list<MetricData>  $spans
+     */
+    private function append(ApplicationMetricContext $context, array $spans): void
+    {
+        $room = $this->maxSpans() - count($context->spans);
+
+        if ($room > 0 && $spans !== []) {
+            $context->spans = array_merge($context->spans, array_slice($spans, -$room));
         }
+    }
+
+    private function maxSpans(): int
+    {
+        return max(1, (int) $this->setting('max_spans', 1000));
     }
 
     /** @param list<MetricData> $metrics */
@@ -519,13 +555,16 @@ final class MetricsRecorder
         }
     }
 
-    private function flushProfile(ProfileData $profile): void
+    private function flushProfile(ProfileData $profile): bool
     {
         try {
             $this->suppress();
             LogProfileJob::dispatch($profile);
+
+            return true;
         } catch (Throwable) {
             // Profiles are observational and must not alter application behavior.
+            return false;
         } finally {
             $this->resume();
         }
