@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-24
+
 ### Added
 
 - Added opt-in application performance monitoring with explicit transaction/span documents for inbound HTTP, completed
@@ -23,9 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chart with PNG export, transaction browsing with type/outcome/service/window filters, trace waterfalls, and linked
   profile views showing per-frame sample share. It shares the range, interval, custom-window, and live-refresh
   controls with the HTTP and activity dashboards, and every summary drills through to the same window.
-- Metrics schema version 4 adds `code.self_ms`: a function's exclusive time, with the cost of everything it called
-  removed, alongside the inclusive `duration_ms`. Run `elastic-audit:metrics:create-index` to roll the write alias
-  onto the new mapping; documents written before the roll simply have no self time.
 - The function statistics page ranks by total time, self time, average, p95, or call count, and each row expands to a
   p75 trend chart across the window with a sparkline in the collapsed row.
 - Added a function statistics page ranking application functions by cumulative and per-call cost and comparing each
@@ -44,39 +43,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `capture.http.exclude_paths` and `capture.jobs.exclude` so applications can name request paths and job classes
   that must never be observed. Both suppress the whole unit of work, so an excluded request or job also stops
   contributing query, cache, and outgoing-call spans.
+- Function spans carry `code.self_ms`: a function's exclusive time, with the cost of everything it called removed,
+  alongside the inclusive `duration_ms`.
+- Application performance monitoring never observes its own delivery path. The package's audit and telemetry jobs,
+  every enabled dashboard, and the dashboard asset route are excluded unconditionally, and `capture.commands.exclude`
+  covers long-running and interactive commands (`queue:work`, `horizon`, `octane:start`, `serve`, `pail`, `tinker`,
+  `test`, `dusk`, and others) by default, so daemons, REPL sessions, and test runs do not dominate latency
+  percentiles. Jobs and scheduled tasks inside an excluded daemon remain observable as independent transactions.
+- Metric documents never carry SQL bindings, HTTP bodies, headers, or query strings. Inline SQL literals are normalized
+  with driver-aware rules, fingerprints are computed before preview truncation, unmatched inbound requests use a
+  constant route label instead of the user-controlled path, and profile frame names follow `profiles.include_paths` so
+  absolute filesystem paths are not stored when it is disabled.
+
+### Changed
+
+- `elastic-audit:health --all` now also checks the metrics and profiles aliases and their strict mappings, even while
+  metrics are disabled. Deployments that run `--all` must provision both indexes or stop passing `--all`; see the
+  [Upgrade Guide](UPGRADE.md#upgrading-from-420).
+- `AuditOperationFailed` can now report `subsystem=metrics` for metric capture and indexing failures.
+- Dashboard assets are built with Tailwind CSS 4 and Vite 8. The dashboards keep serving the copy bundled with the
+  package; only applications that serve a published static copy need to re-publish it.
 
 ### Fixed
 
-- `capture.commands.exclude` now also covers `serve`, `pail`, `tinker`, `test`, and `dusk` by default. A test-suite
-  run was recorded as a single multi-second transaction and a REPL session as however long someone stayed in it, so
-  both dominated the slowest-transaction groups and the latency percentiles.
-- Application performance monitoring no longer observes its own delivery path. The package's audit and telemetry jobs,
-  every enabled dashboard, and the dashboard asset route are excluded unconditionally. Previously a dashboard page or
-  an audit job was recorded like application work, so the performance UI ranked itself among the slowest endpoints.
-- A daemon command matched by `capture.commands.exclude` now drops work that belongs to no transaction for as long as
-  it owns the process. On the `database` queue and cache drivers the worker's own polling was recorded as spans, each
-  dispatching a delivery job whose own polling produced more spans; a single idle worker generated documents and queue
-  entries without bound. Jobs and scheduled tasks inside the daemon still produce their own root transactions.
-- A transaction below its `min_duration_ms` threshold now discards the spans collected under it. They were still
-  indexed carrying the dropped transaction's id, so tuning the threshold produced documents that no dashboard lists
-  and that nothing can navigate to, while still consuming retention.
-- Sampled profiles no longer leak absolute filesystem paths. Since PHP 8.4 a closure is named after its declaring
-  file, so `profiles.include_paths=false` still stored paths inside frame names; names now follow the same policy as
-  the separate `file` field for both the Excimer and XHProf drivers.
-- Resolving the application root while sanitizing profile paths no longer throws when the bound container cannot
-  answer `base_path()`. Profiling runs inside a catch-all guard, so that exception silently discarded whole profiles.
 - Dashboard pagination is clamped to `index.max_result_window`. Paging beyond roughly ten thousand documents raised an
   Elasticsearch result-window error that surfaced as a generic query failure on all three dashboards.
-- Metric timestamps are stored with millisecond precision. At second precision every span in a sub-second request
-  shared one instant, which left the trace waterfall unable to show where a span actually started.
-- Queue jobs now use independent trace and flush boundaries, while common daemon commands are excluded from command
-  timing by default so workers cannot retain job metrics or native profiles for their entire lifetime.
-- Failed outbound Laravel HTTP requests use the underlying PSR request identity, preserving connection-failure metrics
-  without leaking stale timers in long-running processes.
-- SQL normalization is driver-aware for double-quoted data and hash comments, and unmatched inbound requests use a
-  constant route label instead of indexing user-controlled paths.
-- SQL fingerprints are computed from the normalized statement before storage truncation, avoiding collisions caused
-  solely by the configured preview length.
 
 ## [4.2.0] - 2026-08-12
 
@@ -378,7 +369,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0
 [4.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v3.2.0...v4.0.0

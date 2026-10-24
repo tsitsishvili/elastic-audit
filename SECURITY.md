@@ -5,7 +5,7 @@ sensitive data. Security reports are treated as a priority even when the affecte
 
 ## Supported Versions
 
-Only the latest stable major release receives security fixes. The currently supported line is `4.x`. Older major
+Only the latest stable major release receives security fixes. The currently supported line is `5.x`. Older major
 versions should be upgraded before reporting a version-specific problem unless their release notes explicitly state
 otherwise.
 

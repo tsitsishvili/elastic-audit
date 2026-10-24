@@ -47,10 +47,10 @@ request bodies, SQL bindings, query strings, message content, cache keys, Redis 
 
 ## Quick Start
 
-1. Install the stable v4 release from Packagist:
+1. Install the stable v5 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^4.0
+    composer require tsitsishvili/elastic-audit:^5.0
     ```
 
 2. Publish the config files and enum stubs (see [Publish Configuration](AUDIT_LOGS.md#publish-configuration)):
@@ -196,7 +196,7 @@ Applications should depend on stable tags:
 ```json
 {
   "require": {
-    "tsitsishvili/elastic-audit": "^4.0"
+    "tsitsishvili/elastic-audit": "^5.0"
   }
 }
 ```

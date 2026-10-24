@@ -5,26 +5,36 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
-## Unreleased
+## Upgrading from 4.2.0
 
-### Low impact: metrics schema version 4 adds function self time
+Require the new major release:
 
-Function spans now carry `code.self_ms` — exclusive time, with the cost of everything the function called removed.
-Nothing breaks without it, but the performance dashboard cannot rank by self time until the write alias points at the
-new strict mapping:
+```bash
+composer require tsitsishvili/elastic-audit:^5.0
+```
+
+5.0 adds optional application performance monitoring. HTTP and activity document schemas are unchanged, so existing
+indexes keep working without a rollover.
+
+### Medium impact: `elastic-audit:health --all` checks metrics and profiles aliases
+
+`--all` checks aliases even for disabled subsystems, and it now covers the metrics and profiles indexes too. A deployment
+that runs `elastic-audit:health --all` fails after upgrading until those aliases exist. Either provision them, even if
+metrics stay disabled:
 
 ```bash
 php artisan elastic-audit:metrics:create-index
-php artisan elastic-audit:health
+php artisan elastic-audit:profiles:create-index
+php artisan elastic-audit:health --all
 ```
 
-Documents written before the roll keep working and simply have no self time.
+or drop `--all` so health only checks enabled subsystems.
 
 ### Low impact: optional application performance metrics
 
 Application metrics are disabled by default. To adopt automatic endpoint, completed-query, queue-job, Artisan-command,
 and outbound Laravel HTTP timing, add or publish `config/elastic_audit_metrics.php`, enable the master switch, and
-provision the dedicated index:
+provision the dedicated indexes:
 
 ```bash
 php artisan elastic-audit:lifecycle-policy
@@ -33,12 +43,20 @@ php artisan elastic-audit:profiles:create-index
 php artisan elastic-audit:health
 ```
 
-Metrics schema v3 introduces explicit transaction/span fields, so rerunning the metrics create-index command is
-required when upgrading from the earlier metrics preview. Sampled PHP profiles now live in a separate strict index.
-Install `ext-excimer` (recommended for continuous production sampling) or modern `ext-xhprof`, then create the profiles
-index before enabling profiles. The old call-edge-as-span model and archived `ext-tideways_xhprof` driver are removed.
-Review sampling, minimum-duration thresholds, SQL statements, outbound paths, schedule descriptions, and source-path
-capture before enabling all operations in production. See [Application Performance Monitoring](METRICS.md).
+Sampled PHP profiles live in a separate strict index and require `ext-excimer` (recommended for continuous production
+sampling) or modern `ext-xhprof`. Keep workers running for `ELASTIC_AUDIT_METRICS_QUEUE` and
+`ELASTIC_AUDIT_PROFILES_QUEUE`. Review sampling, minimum-duration thresholds, SQL statements, outbound paths, schedule
+descriptions, and source-path capture before enabling all operations in production. See
+[Application Performance Monitoring](METRICS.md).
+
+### Low impact: dashboard assets rebuilt
+
+Dashboard assets are now built with Tailwind CSS 4 and Vite 8. Dashboards serve the copy bundled with the package, so no
+action is needed unless the application serves a published static copy; refresh it with:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-assets --force
+```
 
 ## Upgrading from 4.1.0
 

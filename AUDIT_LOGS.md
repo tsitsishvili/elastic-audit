@@ -45,10 +45,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Quick Start
 
-1. Install the stable v4 release from Packagist:
+1. Install the stable v5 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^4.0
+    composer require tsitsishvili/elastic-audit:^5.0
     ```
 
 2. Publish the config files and enum stubs:
@@ -83,10 +83,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Installation
 
-Install the stable v4 release from Packagist:
+Install the stable v5 release from Packagist:
 
 ```bash
-composer require tsitsishvili/elastic-audit:^4.0
+composer require tsitsishvili/elastic-audit:^5.0
 ```
 
 Laravel auto-discovers the package service provider.
