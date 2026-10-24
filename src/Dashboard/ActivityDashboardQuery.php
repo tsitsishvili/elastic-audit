@@ -10,6 +10,14 @@ class ActivityDashboardQuery
 {
     private const MAX_PER_PAGE = 200;
 
+    /**
+     * Elasticsearch refuses a search where `from + size` exceeds
+     * `index.max_result_window` (10000 by default). Deep pages are clamped to
+     * the last reachable one so browsing far into a large result set stops
+     * paging instead of raising a query error.
+     */
+    private const MAX_RESULT_WINDOW = 10000;
+
     public function __construct(
         private readonly LogElasticsearchClientInterface $client,
         private readonly string $readAlias,
@@ -31,7 +39,7 @@ class ActivityDashboardQuery
             'index' => $this->readAlias,
             'body'  => [
                 'track_total_hits' => true,
-                'from'             => ($page - 1) * $perPage,
+                'from'             => ($this->offsetPage($page, $perPage) - 1) * $perPage,
                 'size'             => $perPage,
                 'sort'             => [[$sortField => ['order' => $sortDir]]],
                 'query'            => ['bool' => ['filter' => $this->filterClauses($filters)]],
@@ -181,5 +189,13 @@ class ActivityDashboardQuery
         }
 
         return $clauses;
+    }
+
+    /**
+     * The highest page whose window Elasticsearch will still serve.
+     */
+    private function offsetPage(int $page, int $perPage): int
+    {
+        return max(1, min(max(1, $page), intdiv(self::MAX_RESULT_WINDOW, max(1, $perPage))));
     }
 }

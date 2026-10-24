@@ -28,13 +28,13 @@
 </div>
 
 @if($error)
-    <div class="rounded bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
+    <div class="rounded-sm bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
 @elseif($log)
 @php $changes = is_array($log['changes'] ?? null) ? $log['changes'] : []; @endphp
 
 <div class="space-y-6">
     {{-- Summary card --}}
-    <div class="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+    <div class="rounded-lg bg-white p-6 shadow-xs ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div>
                 <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Action</div>
@@ -104,7 +104,7 @@
 
     {{-- Changes --}}
     @if(! empty($changes))
-    <div class="rounded-lg bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 overflow-hidden">
+    <div class="rounded-lg bg-white shadow-xs ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700 overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Changes</h3>
         </div>
@@ -150,15 +150,15 @@
 
     {{-- Metadata --}}
     @if(! empty($log['metadata']))
-    <div class="rounded-lg bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+    <div class="rounded-lg bg-white p-6 shadow-xs ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
         <h3 class="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Metadata</h3>
-        <pre class="overflow-auto rounded bg-slate-50 p-3 font-mono text-xs dark:bg-slate-900">{{ json_encode($log['metadata'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+        <pre class="overflow-auto rounded-sm bg-slate-50 p-3 font-mono text-xs dark:bg-slate-900">{{ json_encode($log['metadata'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
     </div>
     @endif
 
     {{-- Error --}}
     @if(! empty($log['error']['class']))
-    <div class="rounded-lg bg-red-50 p-6 shadow-sm ring-1 ring-red-100 dark:bg-red-900/20 dark:ring-red-900/50">
+    <div class="rounded-lg bg-red-50 p-6 shadow-xs ring-1 ring-red-100 dark:bg-red-900/20 dark:ring-red-900/50">
         <h3 class="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Error</h3>
         <p class="font-mono text-xs text-red-600 dark:text-red-400">{{ $log['error']['class'] }}</p>
         <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $log['error']['message'] }}</p>

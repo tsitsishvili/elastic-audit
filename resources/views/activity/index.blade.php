@@ -26,28 +26,28 @@
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     {{-- Filters form --}}
     <form method="GET" class="flex flex-wrap items-center gap-2">
-        <select name="action" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+        <select name="action" onchange="this.form.submit()" class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All actions</option>
             @foreach($options['actions'] as $a)
                 <option value="{{ $a }}" @selected(($filters['action'] ?? '') === $a)>{{ $a }}</option>
             @endforeach
         </select>
 
-        <select name="actor_type" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+        <select name="actor_type" onchange="this.form.submit()" class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All actor types</option>
             @foreach($options['actor_types'] as $t)
                 <option value="{{ $t }}" @selected(($filters['actor_type'] ?? '') === $t)>{{ $t }}</option>
             @endforeach
         </select>
 
-        <select name="service" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+        <select name="service" onchange="this.form.submit()" class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All applications</option>
             @foreach($options['services'] as $service)
                 <option value="{{ $service }}" @selected(($filters['service'] ?? '') === $service)>{{ $service }}</option>
             @endforeach
         </select>
 
-        <select name="execution_type" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+        <select name="execution_type" onchange="this.form.submit()" class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All origins</option>
             @foreach($options['executions'] as $execution)
                 <option value="{{ $execution }}" @selected(($filters['execution_type'] ?? '') === $execution)>{{ $execution }}</option>
@@ -55,21 +55,21 @@
         </select>
 
         <input type="text" name="execution_name" value="{{ $filters['execution_name'] ?? '' }}" placeholder="Route, job, or command"
-               class="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
+               class="rounded-sm border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
                onchange="this.form.submit()">
 
-        <select name="success" onchange="this.form.submit()" class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
+        <select name="success" onchange="this.form.submit()" class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800">
             <option value="">All results</option>
             <option value="1" @selected(($filters['success'] ?? '') === '1')>Success</option>
             <option value="0" @selected(($filters['success'] ?? '') === '0')>Failure</option>
         </select>
 
         <input type="text" name="entity_id" value="{{ $filters['entity_id'] ?? '' }}" placeholder="Entity ID"
-               class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
+               class="rounded-sm border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800"
                onchange="this.form.submit()">
 
         <input type="text" name="trace_id" value="{{ $filters['trace_id'] ?? '' }}" placeholder="Trace ID"
-               class="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
+               class="rounded-sm border border-slate-300 bg-white px-2 py-1 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
                onchange="this.form.submit()">
 
         @if($hasFilters)
@@ -95,7 +95,7 @@
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
                 : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
             :title="on ? 'Live: refreshing every 10s' : 'Auto-refresh the list every 10s'"
-            class="inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-sm font-medium transition">
+            class="inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-sm font-medium transition">
         <span class="inline-flex h-2 w-2 rounded-full" :class="on ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'"></span>
         Live
         <span x-show="on" x-cloak class="text-[11px] opacity-70">10s</span>
@@ -103,10 +103,10 @@
 </div>
 
 @if($error)
-    <div class="mb-4 rounded bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
+    <div class="mb-4 rounded-sm bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{{ $error }}</div>
 @endif
 
-<div class="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+<div class="overflow-hidden rounded-lg bg-white shadow-xs ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
         <thead class="bg-slate-50 dark:bg-slate-900/50">
             <tr>
@@ -179,10 +179,10 @@
     <span>Showing {{ number_format($from) }}–{{ number_format($to) }} of {{ number_format($total) }}</span>
     <div class="flex gap-1">
         @if($page > 1)
-            <a href="{{ $pageUrl($page - 1) }}" class="rounded px-2.5 py-1 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 dark:ring-slate-700 dark:hover:bg-slate-800">← Prev</a>
+            <a href="{{ $pageUrl($page - 1) }}" class="rounded-sm px-2.5 py-1 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 dark:ring-slate-700 dark:hover:bg-slate-800">← Prev</a>
         @endif
         @if($page < $totalPages)
-            <a href="{{ $pageUrl($page + 1) }}" class="rounded px-2.5 py-1 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 dark:ring-slate-700 dark:hover:bg-slate-800">Next →</a>
+            <a href="{{ $pageUrl($page + 1) }}" class="rounded-sm px-2.5 py-1 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 dark:ring-slate-700 dark:hover:bg-slate-800">Next →</a>
         @endif
     </div>
 </div>

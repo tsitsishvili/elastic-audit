@@ -1,6 +1,41 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility ea-panel {
+  background: var(--ea-panel);
+  border-color: var(--ea-border);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+}
+
+@utility ea-focus {
+  &:focus-visible {
+    outline: 2px solid var(--ea-accent);
+    outline-offset: 2px;
+  }
+}
 
 @layer base {
   [x-cloak] {
@@ -35,18 +70,5 @@
     background:
       linear-gradient(180deg, rgb(79 70 229 / 8%), transparent 280px),
       var(--ea-bg);
-  }
-}
-
-@layer components {
-  .ea-panel {
-    background: var(--ea-panel);
-    border-color: var(--ea-border);
-    box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
-  }
-
-  .ea-focus:focus-visible {
-    outline: 2px solid var(--ea-accent);
-    outline-offset: 2px;
   }
 }

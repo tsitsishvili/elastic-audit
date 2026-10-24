@@ -2,10 +2,6 @@
 
 [Back to Elastic Audit](README.md) · [Activity Logs](ACTIVITY_LOGS.md)
 
-![HTTP logs overview](docs/images/http-logs-overview.jpg)
-
-![HTTP logs list](docs/images/http-logs-list.jpg)
-
 This guide covers the third-party HTTP audit subsystem: outgoing provider calls, incoming callbacks, latency,
 status codes, entity context, and sanitized request/response payload previews. It is independent from the
 [Activity Logs](ACTIVITY_LOGS.md) subsystem and can be enabled on its own.
@@ -45,10 +41,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Quick Start
 
-1. Install the stable v4 release from Packagist:
+1. Install the stable v5 release from Packagist:
 
     ```bash
-    composer require tsitsishvili/elastic-audit:^4.0
+    composer require tsitsishvili/elastic-audit:^5.0
     ```
 
 2. Publish the config files and enum stubs:
@@ -83,10 +79,10 @@ status codes, entity context, and sanitized request/response payload previews. I
 
 ## Installation
 
-Install the stable v4 release from Packagist:
+Install the stable v5 release from Packagist:
 
 ```bash
-composer require tsitsishvili/elastic-audit:^4.0
+composer require tsitsishvili/elastic-audit:^5.0
 ```
 
 Laravel auto-discovers the package service provider.
@@ -103,6 +99,7 @@ This publishes:
 config/http_logs.php
 config/log_elasticsearch.php
 config/activity_logs.php
+config/elastic_audit_metrics.php
 app/Enums/ElasticAudit/Provider.php
 app/Enums/ElasticAudit/EventType.php
 app/Enums/ElasticAudit/EntityType.php

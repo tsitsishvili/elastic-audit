@@ -1,6 +1,6 @@
 {
     "name": "tsitsishvili/elastic-audit",
-    "description": "Laravel package that logs third-party HTTP traffic (outgoing requests and incoming callbacks) and actor/model activity to a dedicated Elasticsearch cluster, with redaction, queued indexing, sampling, and optional dashboards.",
+    "description": "Laravel audit logging and application performance monitoring for Elasticsearch, with redaction, queued indexing, traces, profiles, and dashboards.",
     "type": "library",
     "keywords": [
         "laravel",
@@ -37,6 +37,10 @@
         "laravel/pint": "^1.29",
         "orchestra/testbench": "^10.0 || ^11.0",
         "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
+    },
+    "suggest": {
+        "ext-excimer": "Recommended low-overhead sampling profiler for continuous production profiles.",
+        "ext-xhprof": "Optional instrumentation profiler for detailed, opt-in PHP call profiles."
     },
     "autoload": {
         "psr-4": {
