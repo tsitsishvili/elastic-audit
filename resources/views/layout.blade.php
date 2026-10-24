@@ -1,6 +1,10 @@
 @php
     $currentDashboard = trim($__env->yieldContent('dashboard', 'http'));
-    $defaultTitle = $currentDashboard === 'activity' ? 'Activity Logs' : 'Third-Party HTTP Logs';
+    $defaultTitle = match ($currentDashboard) {
+        'activity' => 'Activity Logs',
+        'metrics'  => 'Application Performance',
+        default    => 'Third-Party HTTP Logs',
+    };
 @endphp
 <!DOCTYPE html>
 <html lang="en" class="h-full">

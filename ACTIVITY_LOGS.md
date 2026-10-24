@@ -2,10 +2,6 @@
 
 [Back to Elastic Audit](README.md) · [Audit Logs](AUDIT_LOGS.md)
 
-![Activity logs overview](docs/images/activity-logs-overview.jpg)
-
-![Activity logs list](docs/images/activity-logs-list.jpg)
-
 This guide is independent from the [Audit Logs](AUDIT_LOGS.md) subsystem and can be enabled on its own.
 
 ## Project Documents
