@@ -22,6 +22,14 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  /* Preflight strips field borders and padding, so `border-slate-*` on a field colours nothing without this. */
+  input:where(:not([type='checkbox'], [type='radio'])),
+  select,
+  textarea {
+    border-width: 1px;
+    padding-inline: 0.75rem;
+  }
 }
 
 @utility ea-panel {

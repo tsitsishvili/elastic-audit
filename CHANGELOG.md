@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every column in the performance transaction list is now sortable from its header, and the All functions table
+  re-ranks by calls, average, p95, self, or total time from its header.
+- Transactions can be searched by a case-insensitive fragment of their name and narrowed to those slower than a given
+  number of milliseconds. Type and service are picked from the values actually recorded.
+- The function statistics page has a name search that narrows the cards, movement lists, and table alike.
+
+### Changed
+
+- The performance transaction list matches the HTTP and activity log lists: a header with the result count, Live,
+  Copy link, and filter toggles, removable filter chips, and a rows-per-page footer.
+- A collapsed function row shows the figure the list is ranked by instead of always showing self time, and an
+  unchanged function's delta is no longer coloured as an improvement.
+
+### Fixed
+
+- Text fields, selects, and date fields on every dashboard have a visible border and inner padding again.
+- Changing the range or interval on the function statistics page keeps the chosen sort and search.
+
 ## [5.1.1] - 2026-10-24
 
 ### Changed

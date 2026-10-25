@@ -33,6 +33,16 @@ final class MetricsDashboardController
         MetricsDashboardQuery::SORT_CALLS   => 'call count',
     ];
 
+    /** Sortable transaction columns, mapped from query value to the Elasticsearch field. */
+    private const TRANSACTION_SORTS = [
+        'time'     => '@timestamp',
+        'name'     => 'name',
+        'type'     => 'type',
+        'outcome'  => 'outcome',
+        'duration' => 'duration_ms',
+        'spans'    => 'transaction.span_count',
+    ];
+
     public function __construct(
         private readonly MetricsDashboardQuery $query,
     ) {}
@@ -70,6 +80,11 @@ final class MetricsDashboardController
         $sort  = isset(self::SORTS[$sort]) ? $sort : MetricsDashboardQuery::SORT_TOTAL;
         $error = null;
         $rows  = [];
+        $name  = $request->query('name');
+
+        if (is_string($name) && $name !== '') {
+            $filters['name'] = $name;
+        }
 
         try {
             $rows = $this->query->functionStatistics($filters, sort: $sort);
@@ -91,20 +106,27 @@ final class MetricsDashboardController
         $page    = max(1, (int) $request->query('page', 1));
         $perPage = (int) $request->query('per_page', config('elastic_audit_metrics.dashboard.per_page', 25));
         $perPage = in_array($perPage, self::PER_PAGE_OPTIONS, true) ? $perPage : 25;
+        $sort    = (string) $request->query('sort', 'time');
+        $sort    = isset(self::TRANSACTION_SORTS[$sort]) ? $sort : 'time';
+        $dir     = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $error   = null;
         $data    = ['hits' => [], 'total' => 0];
+        $options = ['types' => [], 'services' => []];
 
         try {
             $data = $this->query->transactions(
                 [...$filters, 'timezone' => $this->timezone()],
                 $page,
                 $perPage,
+                self::TRANSACTION_SORTS[$sort],
+                $dir,
             );
+            $options = $this->query->filterOptions();
         } catch (Throwable $exception) {
             $error = $this->queryError($exception);
         }
 
-        return view('elastic-audit::metrics.transactions', compact('data', 'filters', 'page', 'perPage', 'error') + [
+        return view('elastic-audit::metrics.transactions', compact('data', 'filters', 'page', 'perPage', 'sort', 'dir', 'options', 'error') + [
             'timezone'       => $this->timezone(),
             'perPageOptions' => self::PER_PAGE_OPTIONS,
         ]);
@@ -193,7 +215,7 @@ final class MetricsDashboardController
     {
         $filters = [];
 
-        foreach (['type', 'outcome', 'service', 'trace_id', 'from', 'to'] as $key) {
+        foreach (['name', 'type', 'outcome', 'service', 'min_duration', 'trace_id', 'from', 'to'] as $key) {
             $value = $request->query($key);
 
             if (is_string($value) && $value !== '') {

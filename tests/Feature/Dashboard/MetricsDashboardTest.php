@@ -35,6 +35,41 @@ final class MetricsDashboardTest extends TestCase
             ->assertSee('Transactions');
     }
 
+    public function test_transactions_pass_sort_and_search_filters_to_the_query(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+
+        $this->get(route('elastic-audit-metrics.transactions', ['sort' => 'duration', 'dir' => 'asc', 'name' => 'orders']))
+            ->assertOk()
+            ->assertSee('Name:', false)
+            ->assertSee('aria-sort="ascending"', false);
+
+        $body = $fake->searchCalls[0]['body'];
+
+        $this->assertSame(['order' => 'asc', 'unmapped_type' => 'double'], $body['sort'][0]['duration_ms']);
+        $this->assertContains(['wildcard' => ['name' => ['value' => '*orders*', 'case_insensitive' => true]]], $body['query']['bool']['filter']);
+    }
+
+    public function test_functions_search_narrows_every_window_by_name(): void
+    {
+        /** @var FakeLogElasticsearchClient $fake */
+        $fake = $this->app->make(LogElasticsearchClientInterface::class);
+
+        $this->get(route('elastic-audit-metrics.functions', ['name' => 'Checkout']))
+            ->assertOk()
+            ->assertSee('No functions match');
+
+        $this->assertNotEmpty($fake->searchCalls);
+
+        foreach ($fake->searchCalls as $call) {
+            $this->assertContains(
+                ['wildcard' => ['name' => ['value' => '*Checkout*', 'case_insensitive' => true]]],
+                $call['body']['query']['bool']['filter'],
+            );
+        }
+    }
+
     public function test_trace_and_profile_render_linked_data(): void
     {
         /** @var FakeLogElasticsearchClient $fake */

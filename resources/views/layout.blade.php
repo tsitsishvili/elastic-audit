@@ -25,17 +25,19 @@
 <body class="min-h-full text-slate-800 antialiased dark:text-slate-200">
     @include('elastic-audit::partials.nav', ['current' => $currentDashboard])
 
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        @isset($error)
-            @if ($error)
-                <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-                    <span class="font-semibold">Elasticsearch error:</span> {{ $error }}
-                </div>
-            @endif
-        @endisset
+    <div class="lg:pl-60">
+        <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+            @isset($error)
+                @if ($error)
+                    <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                        <span class="font-semibold">Elasticsearch error:</span> {{ $error }}
+                    </div>
+                @endif
+            @endisset
 
-        @yield('content')
-    </main>
+            @yield('content')
+        </main>
+    </div>
 
     <script type="module" src="{{ route('elastic-audit.assets', ['asset' => $elasticAuditAssets['resources/js/alpine.js']['file']], false) }}"></script>
     @stack('scripts')
