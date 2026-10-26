@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- HTTP and activity log lists, detail pages, trace pages and the trace search treat a missing index or alias as empty
+  instead of a query failure, so an application with that log type turned off no longer sees errors there.
 - The performance transaction list matches the HTTP and activity log lists: a header with the result count, Live,
   Copy link, and filter toggles, removable filter chips, and a rows-per-page footer.
 - A collapsed function row shows the figure the list is ranked by instead of always showing self time, and an
