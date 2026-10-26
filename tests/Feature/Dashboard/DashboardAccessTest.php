@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
 use Closure;
-use Illuminate\Auth\AuthenticationException;
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Symfony\Component\HttpFoundation\Response;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
 use Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
@@ -46,71 +44,59 @@ final class DashboardAccessTest extends TestCase
         $this->assertFalse($this->allows());
     }
 
-    public function test_extra_middleware_that_aborts_with_403_denies(): void
+    public function test_target_with_extra_middleware_is_denied(): void
     {
-        $this->extraMiddleware(fn () => abort(403));
+        $this->app['router']->aliasMiddleware('deny', Authenticate::class);
+        config()->set('http_logs.dashboard.middleware', ['web', 'deny']);
 
         $this->assertFalse($this->allows());
     }
 
-    public function test_extra_middleware_that_redirects_to_login_denies(): void
+    public function test_metrics_with_stricter_middleware_than_target_is_denied(): void
     {
-        $this->extraMiddleware(fn () => redirect('/login'));
+        config()->set('elastic_audit_metrics.dashboard.middleware', ['web', Authenticate::class.':admin']);
 
         $this->assertFalse($this->allows());
     }
 
-    public function test_extra_middleware_that_passes_allows(): void
+    public function test_parameterised_middleware_counts_as_different(): void
     {
-        $this->extraMiddleware(fn (Request $request, Closure $next) => $next($request));
-
-        $this->assertTrue($this->allows());
-    }
-
-    public function test_extra_middleware_that_throws_denies(): void
-    {
-        $this->extraMiddleware(fn () => throw new AuthenticationException);
+        config()->set('elastic_audit_metrics.dashboard.middleware', ['web', Authenticate::class.':admin']);
+        config()->set('http_logs.dashboard.middleware', ['web', Authenticate::class]);
 
         $this->assertFalse($this->allows());
     }
 
-    public function test_extra_middleware_that_replaces_the_response_with_a_failure_denies(): void
+    public function test_allows_runs_no_middleware(): void
     {
-        $this->extraMiddleware(fn (Request $request, Closure $next) => $next($request) ? new Response('', 403) : null);
+        $called = false;
+        $this->app->instance('test.recorder', new class($called)
+        {
+            public function __construct(private bool &$called) {}
 
-        $this->assertFalse($this->allows());
-    }
+            public function handle(Request $request, Closure $next): mixed
+            {
+                $this->called = true;
 
-    public function test_extra_middleware_cannot_switch_the_default_guard(): void
-    {
-        $guard = Auth::getDefaultDriver();
-        $this->extraMiddleware(function (Request $request, Closure $next) {
-            Auth::shouldUse('admin');
-
-            return $next($request);
+                return $next($request);
+            }
         });
+        $this->app['router']->aliasMiddleware('recorder', 'test.recorder');
+        config()->set('http_logs.dashboard.middleware', ['web', 'recorder']);
 
-        $this->assertTrue($this->allows());
-        $this->assertSame($guard, Auth::getDefaultDriver());
+        $this->assertFalse($this->allows());
+        $this->assertFalse($called);
+    }
+
+    public function test_metrics_dashboard_itself_is_allowed_when_gate_passes(): void
+    {
+        config()->set('elastic_audit_metrics.dashboard.middleware', ['web', Authenticate::class.':admin']);
+
+        $this->assertTrue(app(DashboardAccess::class)->allows(request(), DashboardAccess::METRICS));
     }
 
     private function allows(): bool
     {
         return app(DashboardAccess::class)->allows(request(), DashboardAccess::HTTP);
-    }
-
-    private function extraMiddleware(Closure $handle): void
-    {
-        $this->app->instance('test.extra-middleware', new class($handle)
-        {
-            public function __construct(private readonly Closure $handle) {}
-
-            public function handle(Request $request, Closure $next): mixed
-            {
-                return ($this->handle)($request, $next);
-            }
-        });
-        $this->app['router']->aliasMiddleware('extra', 'test.extra-middleware');
-        config()->set('http_logs.dashboard.middleware', ['web', 'extra']);
     }
 }

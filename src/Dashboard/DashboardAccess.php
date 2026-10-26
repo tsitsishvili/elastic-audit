@@ -4,21 +4,18 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Dashboard;
 
-use Illuminate\Auth\AuthManager;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Http\Request;
-use Illuminate\Pipeline\Pipeline;
 use Illuminate\Routing\Router;
 use InvalidArgumentException;
-use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Http\Middleware\AuthorizeDashboard;
 
 /**
- * Answers "would this viewer get into that dashboard?" from inside the metrics dashboard.
+ * Answers "would this viewer get into that dashboard?" from inside the metrics dashboard, without running any middleware.
  *
- * Only meaningful for a request that already passed the metrics dashboard's middleware:
- * that middleware is assumed passed and is not run again.
+ * Access is granted only when the target runs the identical middleware stack the viewer already passed on the
+ * metrics route, so the answer is exact and side-effect free; any difference fails closed.
  */
 final class DashboardAccess
 {
@@ -43,44 +40,16 @@ final class DashboardAccess
         return ($this->config($dashboard)['enabled'] ?? false) !== false;
     }
 
-    /** Enabled, passes Dashboard::check(), and passes the dashboard's own middleware beyond the metrics dashboard's. */
+    /** Enabled, runs exactly the metrics dashboard's middleware, and passes Dashboard::check(). */
     public function allows(Request $request, string $dashboard): bool
     {
-        if (! $this->enabled($dashboard)) {
-            return false;
-        }
-
-        $auth    = $this->container->make(AuthManager::class);
-        $guard   = $auth->getDefaultDriver();
-        $reached = false;
-
         try {
-            if (! Dashboard::check($request)) {
-                return false;
-            }
-
-            $metrics = $this->middleware(self::METRICS);
-            $extra   = array_values(array_filter(
-                $this->middleware($dashboard),
-                fn ($middleware) => ! in_array($middleware, $metrics, true),
-            ));
-
-            $response = (new Pipeline($this->container))
-                ->send(clone $request)
-                ->through($extra)
-                ->then(function () use (&$reached): Response {
-                    $reached = true;
-
-                    return new Response;
-                });
+            return $this->enabled($dashboard)
+                && $this->middleware($dashboard) === $this->middleware(self::METRICS)
+                && Dashboard::check($request);
         } catch (Throwable) {
             return false;
-        } finally {
-            // `auth:<guard>` calls shouldUse(), which would switch the guard for the rest of this request.
-            $auth->setDefaultDriver($guard);
         }
-
-        return $reached && $response instanceof Response && $response->isSuccessful();
     }
 
     /** @return array<string, mixed> */

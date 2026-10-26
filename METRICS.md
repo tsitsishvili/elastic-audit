@@ -251,6 +251,8 @@ When `dashboard.enabled=true`, the performance UI is served at `/logger/metrics`
 average and percentile latency, failure rate, type/slow-transaction groups, a transaction list, trace waterfall, and
 linked profile hot frames/raw payload. It uses the same `Dashboard::auth(...)` authorization callback as the audit
 dashboards and is local-only until the application overrides that callback.
+HTTP and activity audit rows appear on a trace page only when that dashboard is enabled and uses the same
+`dashboard.middleware` as the performance dashboard; otherwise the page says some audit data is hidden.
 
 ## Operations and testing
 
