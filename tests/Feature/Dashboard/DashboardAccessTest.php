@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
 use Closure;
+use Illuminate\Auth\GenericUser;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Http\Request;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
@@ -93,6 +94,41 @@ final class DashboardAccessTest extends TestCase
         config()->set('elastic_audit_metrics.dashboard.middleware', ['web', Authenticate::class.':admin']);
 
         $this->assertTrue(app(DashboardAccess::class)->allows(request(), DashboardAccess::METRICS));
+    }
+
+    public function test_gate_is_evaluated_against_the_target_dashboards_path(): void
+    {
+        $paths = [];
+        Dashboard::auth(function (Request $r) use (&$paths): bool {
+            $paths[] = $r->path();
+
+            return ! $r->is('logger/http-logs*');
+        });
+        $request = Request::create('/logger/metrics/traces/'.str_repeat('a', 32));
+
+        $this->assertFalse(app(DashboardAccess::class)->allows($request, DashboardAccess::HTTP));
+        $this->assertTrue(app(DashboardAccess::class)->allows($request, DashboardAccess::METRICS));
+        $this->assertSame(['logger/http-logs', 'logger/metrics'], $paths);
+        $this->assertSame('logger/metrics/traces/'.str_repeat('a', 32), $request->path());
+    }
+
+    public function test_gate_follows_a_custom_dashboard_path(): void
+    {
+        config()->set('activity_logs.dashboard.prefix', 'admin');
+        config()->set('activity_logs.dashboard.path', 'audit');
+        Dashboard::auth(fn (Request $r): bool => $r->is('admin/audit'));
+
+        $this->assertTrue(app(DashboardAccess::class)->allows(Request::create('/logger/metrics'), DashboardAccess::ACTIVITY));
+    }
+
+    public function test_gate_still_sees_the_viewers_user(): void
+    {
+        $user    = new GenericUser(['id' => 7]);
+        $request = Request::create('/logger/metrics');
+        $request->setUserResolver(fn () => $user);
+        Dashboard::auth(fn (Request $r): bool => $r->user()?->getAuthIdentifier() === 7);
+
+        $this->assertTrue(app(DashboardAccess::class)->allows($request, DashboardAccess::HTTP));
     }
 
     private function allows(): bool

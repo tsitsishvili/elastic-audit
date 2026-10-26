@@ -10,6 +10,7 @@ use Illuminate\Routing\Router;
 use InvalidArgumentException;
 use Throwable;
 use Tsitsishvili\ElasticAudit\Http\Middleware\AuthorizeDashboard;
+use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 
 /**
  * Answers "would this viewer get into that dashboard?" from inside the metrics dashboard, without running any middleware.
@@ -31,6 +32,13 @@ final class DashboardAccess
         self::METRICS  => 'elastic_audit_metrics.dashboard',
     ];
 
+    /** Default route path of each dashboard, as the service provider mounts it. */
+    private const PATHS = [
+        self::HTTP     => 'http-logs',
+        self::ACTIVITY => 'activity',
+        self::METRICS  => 'metrics',
+    ];
+
     public function __construct(private readonly Router $router, private readonly Container $container) {}
 
     /** The dashboard's `enabled` flag. */
@@ -40,16 +48,28 @@ final class DashboardAccess
         return ($this->config($dashboard)['enabled'] ?? false) !== false;
     }
 
-    /** Enabled, runs exactly the metrics dashboard's middleware, and passes Dashboard::check(). */
+    /**
+     * Enabled, runs exactly the metrics dashboard's middleware, and passes Dashboard::check() as a request
+     * for that dashboard's own path would, so a gate that branches on the path gives the same answer.
+     */
     public function allows(Request $request, string $dashboard): bool
     {
         try {
             return $this->enabled($dashboard)
                 && $this->middleware($dashboard) === $this->middleware(self::METRICS)
-                && Dashboard::check($request);
+                && Dashboard::check($this->probe($request, $dashboard));
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /** A copy of the request (same user, session, route and headers) whose path is the dashboard's root. */
+    private function probe(Request $request, string $dashboard): Request
+    {
+        $probe = $request->duplicate();
+        $probe->server->set('REQUEST_URI', $request->getBaseUrl().'/'.MetricsExclusions::dashboardPrefix($this->config($dashboard), self::PATHS[$dashboard]));
+
+        return $probe;
     }
 
     /** @return array<string, mixed> */

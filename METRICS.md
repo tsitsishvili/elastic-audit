@@ -254,6 +254,10 @@ dashboards and is local-only until the application overrides that callback.
 HTTP and activity audit rows appear on a trace page only when that dashboard is enabled and uses the same
 `dashboard.middleware` as the performance dashboard. Rows from a disabled dashboard are left out; when it is enabled
 but uses different middleware, its rows are withheld and the page says some audit data is hidden.
+For this check the `Dashboard::auth(...)` callback is evaluated against each dashboard's own path (for example
+`logger/http-logs`), so a callback that branches on `$request->is(...)` gives the same answer it gives when that
+dashboard is opened directly. Per-dashboard restrictions are best placed in each dashboard's `dashboard.middleware`
+rather than in path checks inside the shared callback.
 
 ### Trace explorer
 
