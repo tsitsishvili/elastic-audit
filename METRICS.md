@@ -143,6 +143,9 @@ that made it. When the start and end genuinely cannot share a scope, use
 `beginMeasure()`/`endMeasure()` instead.
 
 Blocks measured outside any transaction are still recorded, with their own trace.
+
+HTTP and activity audit documents written inside a trace carry its `trace.id` and `trace.span_id`, unless an explicit id
+or an inbound `traceparent` already names one.
 Timing is governed by `capture.functions`, so it can be sampled, thresholded, or
 turned off like any other category. Names become an Elasticsearch `keyword`:
 use a bounded label such as `checkout.totals`, never one built from user input or

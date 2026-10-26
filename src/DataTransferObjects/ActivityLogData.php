@@ -47,6 +47,7 @@ final readonly class ActivityLogData
             traceId: $context->traceId,
             spanId: $context->spanId,
             traceParent: $context->traceParent,
+            active: TraceContext::active(),
         );
 
         return new self(

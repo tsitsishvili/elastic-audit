@@ -73,6 +73,7 @@ final readonly class HttpLogData
             traceId: $context->traceId,
             spanId: $context->spanId,
             traceParent: $context->traceParent ?? $traceParent,
+            active: TraceContext::active(),
         );
 
         $statusClass = $httpStatusCode !== null

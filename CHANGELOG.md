@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- HTTP and activity audit logs written inside a metrics trace now carry its `trace.id` and `trace.span_id` when no
+  explicit id or inbound `traceparent` supplies one.
 - Every column in the performance transaction list is now sortable from its header, and the All functions table
   re-ranks by calls, average, p95, self, or total time from its header.
 - Transactions can be searched by a case-insensitive fragment of their name and narrowed to those slower than a given
