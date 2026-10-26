@@ -95,6 +95,29 @@ final class TraceSearchTest extends TestCase
         }
     }
 
+    public function test_a_failing_source_does_not_break_the_search(): void
+    {
+        $this->serve(activity: [$this->activityDoc()], throwing: 'http_logs');
+
+        $this->find('req-1')->assertRedirect($this->traceUrl());
+    }
+
+    public function test_a_failing_source_with_no_match_says_the_search_may_be_incomplete(): void
+    {
+        $this->serve(throwing: 'http_logs');
+
+        $this->find('req-1')
+            ->assertNotFound()
+            ->assertSee('No trace or request found for "req-1".', false)
+            ->assertSee('Some sources could not be searched, so this may be incomplete.');
+    }
+
+    public function test_array_id_input_redirects_to_the_overview(): void
+    {
+        $this->get(route('elastic-audit-metrics.find').'?id[]=x')
+            ->assertRedirect(route('elastic-audit-metrics.overview'));
+    }
+
     public function test_nav_shows_the_search_box_when_the_metrics_dashboard_is_enabled(): void
     {
         $this->get(route('elastic-audit-metrics.overview'))
@@ -126,9 +149,13 @@ final class TraceSearchTest extends TestCase
      * @param  list<array<string, mixed>>  $http
      * @param  list<array<string, mixed>>  $activity
      */
-    private function serve(array $http = [], array $activity = []): void
+    private function serve(array $http = [], array $activity = [], ?string $throwing = null): void
     {
-        $this->fake->searchResolver = function (array $params) use ($http, $activity): array {
+        $this->fake->searchResolver = function (array $params) use ($http, $activity, $throwing): array {
+            if ($throwing !== null && str_contains((string) $params['index'], $throwing)) {
+                throw new \RuntimeException('boom');
+            }
+
             $docs = match (true) {
                 str_contains((string) $params['index'], 'http_logs')     => $http,
                 str_contains((string) $params['index'], 'activity_logs') => $activity,

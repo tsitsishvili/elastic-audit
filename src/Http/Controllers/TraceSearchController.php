@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
 use Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess;
 use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
@@ -28,7 +30,8 @@ final class TraceSearchController
         ActivityDashboardQuery $activity,
         DashboardAccess $access,
     ): Response {
-        $id = trim((string) $request->query('id', ''));
+        $raw = $request->query('id');
+        $id  = is_string($raw) ? trim($raw) : '';
 
         if ($id === '') {
             return redirect()->route('elastic-audit-metrics.overview');
@@ -43,17 +46,26 @@ final class TraceSearchController
         }
 
         // Only sources the viewer could open themselves are searched; a match never leads into a closed dashboard.
-        $found = [];
+        $found  = [];
+        $failed = false;
 
         foreach ([DashboardAccess::HTTP => $http, DashboardAccess::ACTIVITY => $activity] as $source => $query) {
             if (! $access->allows($request, $source)) {
                 continue;
             }
 
-            $docs = $query->search(['request_id' => $id], 1, 25)['hits'];
+            try {
+                $docs = $query->search(['request_id' => $id], 1, 25)['hits'];
 
-            if (($event = $query->find($id)) !== null && ! in_array($event['event_id'] ?? null, array_column($docs, 'event_id'), true)) {
-                $docs[] = $event;
+                if (($event = $query->find($id)) !== null && ! in_array($event['event_id'] ?? null, array_column($docs, 'event_id'), true)) {
+                    $docs[] = $event;
+                }
+            } catch (Throwable $exception) {
+                // One failing source must not break the search of the other.
+                Log::error('Elastic Audit trace search query failed', ['source' => $source, 'error' => $exception->getMessage()]);
+                $failed = true;
+
+                continue;
             }
 
             foreach ($docs as $doc) {
@@ -77,6 +89,6 @@ final class TraceSearchController
                 : redirect()->route(self::SOURCES[$source]['index'], ['request_id' => $id]);
         }
 
-        return response()->view('elastic-audit::metrics.search-miss', ['id' => $id], 404);
+        return response()->view('elastic-audit::metrics.search-miss', ['id' => $id, 'incomplete' => $failed], 404);
     }
 }
