@@ -7,7 +7,7 @@
 @endphp
 @if ($linkable)
     <a href="{{ route('elastic-audit-metrics.traces.show', $traceId, false) }}" onclick="event.stopPropagation()"
-       class="ea-focus rounded-xs font-mono text-indigo-600 hover:underline dark:text-indigo-400" @if (! empty($compact)) title="{{ $traceId }}" @endif>{{ ! empty($compact) ? 'trace ↗' : $traceId }}</a>
+       class="ea-focus rounded-xs font-mono text-indigo-600 hover:underline dark:text-indigo-400 {{ empty($compact) ? 'whitespace-nowrap' : '' }}" @if (! empty($compact)) title="{{ $traceId }}" @endif>{{ ! empty($compact) ? 'trace ↗' : $traceId }}</a>
 @elseif (! empty($compact))
 @elseif ($traceId === null || $traceId === '')
     —
