@@ -82,7 +82,7 @@ final readonly class HttpLogData
 
         return new self(
             eventId: (string) Str::ulid(),
-            timestamp: now()->toIso8601ZuluString(),
+            timestamp: now()->toIso8601ZuluString('millisecond'),
             requestId: $context->requestId,
             provider: $provider,
             eventType: $eventType,

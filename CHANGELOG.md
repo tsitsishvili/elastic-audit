@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Copy link, and filter toggles, removable filter chips, and a rows-per-page footer.
 - A collapsed function row shows the figure the list is ranked by instead of always showing self time, and an
   unchanged function's delta is no longer coloured as an improvement.
+- HTTP and activity audit documents record `@timestamp` with millisecond precision in UTC. Documents written before this
+  release keep second precision.
 
 ### Fixed
 

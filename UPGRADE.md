@@ -5,6 +5,15 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 5.1.1
+
+### Low impact: audit timestamps have milliseconds
+
+New HTTP and activity audit documents store `@timestamp` with millisecond precision in UTC, such as
+`2026-10-26T17:50:51.123Z`, so they sit on the same timeline as metrics spans. Documents indexed before the upgrade keep
+second precision (`2026-10-26T17:50:51Z`) and have no trace link to a metrics trace. No reindex or mapping change is
+needed: the `date` mapping accepts both formats.
+
 ## Upgrading from 4.2.0
 
 Require the new major release:

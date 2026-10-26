@@ -59,6 +59,29 @@ class AuditTraceLinkTest extends TestCase
         ))->traceId);
     }
 
+    public function test_http_log_timestamp_has_milliseconds(): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',
+            $this->httpLogData()->timestamp,
+        );
+    }
+
+    public function test_activity_log_timestamp_has_milliseconds(): void
+    {
+        $data = ActivityLogData::make('order.updated', ActivityLogContext::forActor(
+            actorType: 'user',
+            actorId: 1,
+            entityType: 'order',
+            entityId: '1',
+        ));
+
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',
+            $data->timestamp,
+        );
+    }
+
     private function beginTransaction(): TraceContext
     {
         Bus::fake();
