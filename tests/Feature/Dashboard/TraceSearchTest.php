@@ -61,6 +61,21 @@ final class TraceSearchTest extends TestCase
         $this->find('req-1')->assertRedirect(route('activity-logs.logs.show', 'evt-act-1'));
     }
 
+    public function test_a_non_w3c_trace_id_is_not_followed(): void
+    {
+        // Explicit trace ids may be any string; the trace page only accepts 32 hex characters.
+        $this->serve(http: [$this->httpDoc(['trace' => ['id' => 'order-42-correlation']])]);
+
+        $this->find('req-1')->assertRedirect(route('http-logs.logs.show', 'evt-http-1'));
+    }
+
+    public function test_an_upper_case_trace_id_on_a_match_is_lower_cased(): void
+    {
+        $this->serve(http: [$this->httpDoc(['trace' => ['id' => strtoupper($this->traceId)]])]);
+
+        $this->find('req-1')->assertRedirect($this->traceUrl());
+    }
+
     public function test_request_id_shared_by_several_logs_redirects_to_the_filtered_list(): void
     {
         $this->serve(http: [$this->httpDoc(['trace' => []]), $this->httpDoc(['trace' => [], 'event_id' => 'evt-http-2'])]);

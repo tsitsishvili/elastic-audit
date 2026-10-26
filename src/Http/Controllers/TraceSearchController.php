@@ -73,7 +73,9 @@ final class TraceSearchController
             }
         }
 
-        $traced = array_filter($found, static fn (array $match): bool => is_string($match['doc']['trace']['id'] ?? null));
+        // Explicit trace ids may be any string, but only a W3C id has a trace page; others count as untraced.
+        $traced = array_filter($found, static fn (array $match): bool => is_string($match['doc']['trace']['id'] ?? null)
+            && preg_match(self::TRACE_ID, $match['doc']['trace']['id']) === 1);
         usort($traced, static fn (array $a, array $b): int => strcmp((string) ($a['doc']['@timestamp'] ?? ''), (string) ($b['doc']['@timestamp'] ?? '')));
 
         if ($traced !== []) {
