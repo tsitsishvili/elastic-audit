@@ -32,8 +32,8 @@
     ];
 @endphp
 
-<aside x-data="{ open: false }"
-       class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100 lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-60 lg:flex-col lg:border-b-0 lg:border-r">
+<aside x-data="{ open: false }" id="ea-sidebar"
+       class="ea-sidebar sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100 lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-60 lg:flex-col lg:border-b-0 lg:border-r">
     <div class="flex items-center justify-between gap-2 px-4 py-3 lg:py-5">
         <div class="flex min-w-0 items-center gap-2">
             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-xs">EA</span>
@@ -52,6 +52,17 @@
                     :aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'"
                     class="ea-focus inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white">
                 <span x-cloak x-text="dark ? '☀' : '☾'"></span>
+            </button>
+
+            {{-- Hide toggle (lg+); the layout's show button brings the sidebar back. --}}
+            <button type="button" id="ea-sidebar-hide"
+                    onclick="eaToggleSidebar()"
+                    aria-controls="ea-sidebar"
+                    aria-expanded="true"
+                    aria-label="Hide sidebar"
+                    title="Hide sidebar"
+                    class="ea-focus hidden h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white lg:inline-flex">
+                «
             </button>
 
             {{-- Menu toggle: the sidebar collapses into this top bar below lg. --}}

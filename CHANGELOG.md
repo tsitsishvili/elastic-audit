@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactions can be searched by a case-insensitive fragment of their name and narrowed to those slower than a given
   number of milliseconds. Type and service are picked from the values actually recorded.
 - The function statistics page has a name search that narrows the cards, movement lists, and table alike.
+- On wide screens the dashboard sidebar can be hidden from its header and brought back with a button at the top left.
+  The choice is remembered in the browser.
 
 ### Changed
 
@@ -21,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Copy link, and filter toggles, removable filter chips, and a rows-per-page footer.
 - A collapsed function row shows the figure the list is ranked by instead of always showing self time, and an
   unchanged function's delta is no longer coloured as an improvement.
+- Browse transactions on the performance overview opens the full transaction list instead of one filtered to the
+  overview's time range. The stat cards and transaction types still open filtered to that range.
 
 ### Fixed
 

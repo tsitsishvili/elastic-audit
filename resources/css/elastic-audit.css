@@ -80,3 +80,18 @@
       var(--ea-bg);
   }
 }
+
+/* Unlayered so it overrides the lg:flex / lg:pl-60 / hidden utilities while the sidebar is hidden (lg+ only). */
+@media (width >= 64rem) {
+  .ea-sidebar-hidden .ea-sidebar {
+    display: none;
+  }
+
+  .ea-sidebar-hidden .ea-content {
+    padding-left: 3.5rem;
+  }
+
+  .ea-sidebar-hidden .ea-sidebar-show {
+    display: inline-flex;
+  }
+}

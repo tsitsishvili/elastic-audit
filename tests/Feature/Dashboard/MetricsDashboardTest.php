@@ -28,11 +28,22 @@ final class MetricsDashboardTest extends TestCase
         $this->get(route('elastic-audit-metrics.overview'))
             ->assertOk()
             ->assertSee('Application performance')
-            ->assertSee('p95 latency');
+            ->assertSee('p95 latency')
+            ->assertSee('aria-label="Hide sidebar"', false)
+            ->assertSee('aria-label="Show sidebar"', false);
 
         $this->get(route('elastic-audit-metrics.transactions'))
             ->assertOk()
             ->assertSee('Transactions');
+    }
+
+    public function test_browse_transactions_opens_the_unfiltered_list(): void
+    {
+        $html = $this->get(route('elastic-audit-metrics.overview'))->assertOk()->getContent();
+
+        preg_match('/<a href="([^"]*)"[^>]*>\s*Browse transactions/', $html, $match);
+
+        $this->assertSame(route('elastic-audit-metrics.transactions', [], false), $match[1] ?? null);
     }
 
     public function test_transactions_pass_sort_and_search_filters_to_the_query(): void
