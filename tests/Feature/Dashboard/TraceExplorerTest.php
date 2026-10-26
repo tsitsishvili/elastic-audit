@@ -182,7 +182,7 @@ final class TraceExplorerTest extends TestCase
             'provider'   => 'payment',
             'event_type' => 'charge',
             'direction'  => 'outbound',
-            '@timestamp' => '2026-01-01T10:00:00.002Z',
+            '@timestamp' => '2026-01-01T10:00:00.014Z', // stamped at the end of the 12 ms call, so it starts at +2 ms
             'http'       => ['method' => 'POST', 'url' => 'https://pay.test/charge', 'status_code' => 201, 'latency_ms' => 12],
             'trace'      => ['id' => $this->traceId],
         ];

@@ -77,11 +77,33 @@ class TraceTimelineTest extends TestCase
 
     public function test_audit_row_before_the_trace_start_gets_a_negative_offset(): void
     {
-        $out = TraceTimeline::build([$this->tx('root', '600')], [$this->http('597')], []);
+        $out = TraceTimeline::build([$this->tx('root', '600')], [], [$this->activity('597')]);
 
         $this->assertCount(2, $out['rows']);
         $this->assertSame('transaction', $out['rows'][0]['kind']);
         $this->assertSame(-3.0, $out['rows'][1]['offset_ms']);
+    }
+
+    public function test_http_rows_start_at_their_timestamp_minus_latency(): void
+    {
+        // An HTTP log is stamped after the response, so its row starts latency_ms earlier.
+        $http = ['event_id' => 'h', '@timestamp' => self::T.'803Z', 'http' => ['latency_ms' => 192], 'trace' => ['id' => 't1']];
+
+        $out = TraceTimeline::build([$this->tx('root', '600'), $this->span('s', 'root', '612')], [$http], []);
+
+        $this->assertSame(['transaction', 'http', 'span'], array_column($out['rows'], 'kind'));
+        $this->assertSame(11.0, $out['rows'][1]['offset_ms']);
+        $this->assertSame(192.0, $out['rows'][1]['duration_ms']);
+    }
+
+    public function test_http_row_keeps_a_zero_latency_and_its_timestamp(): void
+    {
+        $http = ['event_id' => 'h', '@timestamp' => self::T.'610Z', 'http' => ['latency_ms' => 0], 'trace' => ['id' => 't1']];
+
+        $out = TraceTimeline::build([$this->tx('root', '600')], [$http], []);
+
+        $this->assertSame(10.0, $out['rows'][1]['offset_ms']);
+        $this->assertSame(0.0, $out['rows'][1]['duration_ms']);
     }
 
     public function test_counts_per_kind(): void

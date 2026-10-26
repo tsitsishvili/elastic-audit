@@ -69,7 +69,8 @@ final class TraceTimeline
         }
 
         foreach ($httpLogs as $doc) {
-            $top[] = self::row($doc, 'http', $start, 'http', (float) data_get($doc, 'http.latency_ms') ?: null);
+            $latency = data_get($doc, 'http.latency_ms');
+            $top[]   = self::row($doc, 'http', $start, 'http', is_numeric($latency) ? (float) $latency : null);
         }
 
         foreach ($activityLogs as $doc) {
@@ -104,6 +105,11 @@ final class TraceTimeline
     private static function row(array $doc, string $kind, ?float $start, ?string $type = null, ?float $duration = null): array
     {
         $at = self::at($doc);
+
+        // An HTTP log is stamped after the response, so its @timestamp is the end of the call, not its start.
+        if ($kind === 'http' && $at !== null && $duration > 0) {
+            $at -= $duration;
+        }
 
         return [
             'kind'        => $kind,
