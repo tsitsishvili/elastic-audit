@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactions can be searched by a case-insensitive fragment of their name and narrowed to those slower than a given
   number of milliseconds. Type and service are picked from the values actually recorded.
 - The function statistics page has a name search that narrows the cards, movement lists, and table alike.
+- The performance sidebar has a search box that takes a trace ID, `traceparent`, request ID or event ID and opens the
+  matching trace or log, searching only the dashboards the viewer can open.
 
 ### Changed
 

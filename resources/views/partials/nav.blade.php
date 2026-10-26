@@ -66,6 +66,16 @@
         </div>
     </div>
 
+    {{-- Jump to a trace, request or event by ID. --}}
+    @if (app(\Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess::class)->enabled(\Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess::METRICS))
+        <form method="GET" action="{{ route('elastic-audit-metrics.find', [], false) }}" role="search"
+              :class="{ 'max-lg:block': open }" class="hidden px-3 pb-3 lg:block">
+            <input type="search" name="id" required placeholder="Find trace or request ID…" aria-label="Find trace or request ID"
+                   autocomplete="off" spellcheck="false"
+                   class="ea-focus h-9 w-full rounded-md border-slate-300 bg-white font-mono text-xs shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        </form>
+    @endif
+
     {{-- Every enabled dashboard with its pages; the current one is always shown. --}}
     <nav id="ea-sidebar-nav" aria-label="Dashboards"
          :class="{ 'max-lg:flex': open }"

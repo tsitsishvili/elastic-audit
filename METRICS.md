@@ -266,6 +266,11 @@ away until it is opened. A trace with no performance data still renders from its
 Each audit source contributes at most 200 rows, with a notice giving the real total when there are more. A source that
 fails to load shows a notice while the rest of the page renders.
 
+The sidebar search box (`/logger/metrics/find?id=…`) takes a trace ID, a pasted `traceparent` header, a request ID or an
+event ID and opens the right page: the trace page when the match carries a trace ID, otherwise the single matching log or
+the log list filtered by that request ID. It searches only the HTTP and activity dashboards the viewer could open
+themselves, and shows a not-found page when nothing matches.
+
 ## Operations and testing
 
 ```bash
