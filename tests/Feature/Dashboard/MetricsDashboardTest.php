@@ -96,6 +96,10 @@ final class MetricsDashboardTest extends TestCase
                 ]]]];
             }
 
+            if (str_contains((string) $params['index'], 'http_logs') || str_contains((string) $params['index'], 'activity_logs')) {
+                return ['hits' => ['total' => ['value' => 0], 'hits' => []]];
+            }
+
             return ['hits' => ['total' => ['value' => 1], 'hits' => [[
                 '_id'     => 'event-1',
                 '_source' => [

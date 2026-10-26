@@ -9,7 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
+use Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess;
+use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
 use Tsitsishvili\ElasticAudit\Dashboard\MetricsDashboardQuery;
+use Tsitsishvili\ElasticAudit\Dashboard\TraceTimeline;
 
 final class MetricsDashboardController
 {
@@ -23,6 +27,9 @@ final class MetricsDashboardController
     private const INTERVALS = ['1h' => 'Per hour', '1d' => 'Per day'];
 
     private const PER_PAGE_OPTIONS = [25, 50, 100];
+
+    /** Both queries clamp page size to 200; a trace with more rows from one source is truncated with a notice. */
+    private const AUDIT_ROWS_PER_SOURCE = 200;
 
     /** How the function list can be ranked, mirroring what each column means. */
     private const SORTS = [
@@ -132,22 +139,58 @@ final class MetricsDashboardController
         ]);
     }
 
-    public function trace(string $traceId): View
-    {
+    public function trace(
+        Request $request,
+        string $traceId,
+        HttpLogDashboardQuery $http,
+        ActivityDashboardQuery $activity,
+        DashboardAccess $access,
+    ): View {
         abort_unless(preg_match('/^[a-f0-9]{32}$/', $traceId) === 1, 404);
-        $error = null;
-        $items = [];
+
+        $errors      = [];
+        $truncated   = [];
+        $auditHidden = false;
+        $metrics     = [];
+        $audit       = [DashboardAccess::HTTP => [], DashboardAccess::ACTIVITY => []];
 
         try {
-            $items = $this->query->trace($traceId);
+            $metrics = $this->query->trace($traceId);
         } catch (Throwable $exception) {
-            $error = $this->queryError($exception);
+            $errors[DashboardAccess::METRICS] = $this->queryError($exception);
         }
 
-        abort_if($items === [] && $error === null, 404);
+        foreach ([DashboardAccess::HTTP => $http, DashboardAccess::ACTIVITY => $activity] as $source => $query) {
+            if (! $access->enabled($source)) {
+                continue;
+            }
 
-        return view('elastic-audit::metrics.trace', compact('items', 'traceId', 'error') + [
+            // Never query a source the viewer cannot open on its own dashboard.
+            if (! $access->allows($request, $source)) {
+                $auditHidden = true;
+
+                continue;
+            }
+
+            try {
+                $result         = $query->search(['trace_id' => $traceId], 1, self::AUDIT_ROWS_PER_SOURCE, '@timestamp', 'asc');
+                $audit[$source] = $result['hits'];
+
+                if ($result['total'] > self::AUDIT_ROWS_PER_SOURCE) {
+                    $truncated[$source] = $result['total'];
+                }
+            } catch (Throwable $exception) {
+                $errors[$source] = $this->queryError($exception);
+            }
+        }
+
+        $timeline = TraceTimeline::build($metrics, $audit[DashboardAccess::HTTP], $audit[DashboardAccess::ACTIVITY]);
+
+        abort_if($timeline['rows'] === [] && $timeline['profiled'] === [] && $errors === [], 404);
+
+        return view('elastic-audit::metrics.trace', compact('timeline', 'errors', 'auditHidden', 'truncated', 'traceId') + [
             'timezone' => $this->timezone(),
+            'auditCap' => self::AUDIT_ROWS_PER_SOURCE,
         ]);
     }
 

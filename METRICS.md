@@ -254,6 +254,17 @@ dashboards and is local-only until the application overrides that callback.
 HTTP and activity audit rows appear on a trace page only when that dashboard is enabled and uses the same
 `dashboard.middleware` as the performance dashboard; otherwise the page says some audit data is hidden.
 
+### Trace explorer
+
+A trace page (`/logger/metrics/traces/{traceId}`) is one timeline of everything the trace touched: spans and queue
+jobs from the performance index, plus the HTTP logs and activity events written inside it, ordered by start time and
+positioned against the first span. Filter chips hide a kind of row, a row can be opened to show the stored request and
+response previews or an activity's before/after changes, with a link to the full log, and a queue job folds its spans
+away until it is opened. A trace with no performance data still renders from its audit rows alone, with absolute times.
+
+Each audit source contributes at most 200 rows, with a notice giving the real total when there are more. A source that
+fails to load shows a notice while the rest of the page renders.
+
 ## Operations and testing
 
 ```bash

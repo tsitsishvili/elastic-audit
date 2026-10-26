@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The trace page is now a merged timeline of performance spans, queue jobs, HTTP logs and activity events, with filter
+  chips, expandable audit rows linking to the full log, and a notice when audit data is hidden, capped or failed.
 - HTTP and activity audit logs written inside a metrics trace now carry its `trace.id` and `trace.span_id` when no
   explicit id or inbound `traceparent` supplies one.
 - Every column in the performance transaction list is now sortable from its header, and the All functions table
