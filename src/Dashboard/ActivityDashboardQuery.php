@@ -31,6 +31,12 @@ class ActivityDashboardQuery
      */
     private const MAX_RESULT_WINDOW = 10000;
 
+    /**
+     * Search params that make a missing index or alias answer with no hits instead of index_not_found,
+     * so a log type that was never enabled reads as empty rather than as a failure.
+     */
+    private const MISSING_INDEX_IS_EMPTY = ['ignore_unavailable' => true, 'allow_no_indices' => true];
+
     public function __construct(
         private readonly LogElasticsearchClientInterface $client,
         private readonly string $readAlias,
@@ -57,7 +63,8 @@ class ActivityDashboardQuery
 
         $result = $this->client->search([
             'index' => $this->readAlias,
-            'body'  => [
+            ...self::MISSING_INDEX_IS_EMPTY,
+            'body' => [
                 'track_total_hits' => true,
                 'from'             => ($this->offsetPage($page, $perPage) - 1) * $perPage,
                 'size'             => $perPage,
@@ -79,7 +86,8 @@ class ActivityDashboardQuery
     {
         $result = $this->client->search([
             'index' => $this->readAlias,
-            'body'  => [
+            ...self::MISSING_INDEX_IS_EMPTY,
+            'body' => [
                 'size'  => 1,
                 'query' => ['term' => ['event_id' => $eventId]],
             ],

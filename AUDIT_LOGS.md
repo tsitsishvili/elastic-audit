@@ -336,8 +336,8 @@ data, and failure information.
 | `execution.type`    | `http`, `queue`, `console`, `manual`, or `unknown`.                                      |
 | `execution.name`    | Route name/template, queue job class, Artisan command, or explicit manual name.          |
 | `execution.action`  | Controller action or explicit manual action when available.                              |
-| `trace.id`          | Optional W3C trace id parsed from `traceparent` or provided by the context.               |
-| `trace.span_id`     | Optional W3C span id parsed from `traceparent` or provided by the context.                |
+| `trace.id`          | Optional trace id from the context, `traceparent`, or the active metrics trace.           |
+| `trace.span_id`     | Optional span id from the context, `traceparent`, or the active metrics trace.            |
 | `provider`          | Provider enum value, for example `delivery` or `payment`.                                 |
 | `event_type`        | Event type enum value, for example `delivery_order_create`.                               |
 | `direction`         | `outgoing` for provider calls or `incoming` for callbacks.                                |
@@ -535,7 +535,9 @@ sanitized exception details and rethrows the original exception.
 
 Outgoing request headers are captured and redacted alongside the body. If a request carries a W3C `traceparent` header,
 the log stores queryable `trace.id` / `trace.span_id` fields and the raw `trace.traceparent` value for correlation.
-You can also set `traceId`, `spanId`, or `traceParent` explicitly on `HttpLogContext::forEntity(...)`.
+You can also set `traceId`, `spanId`, or `traceParent` explicitly on `HttpLogContext::forEntity(...)`. When none of
+these yields a trace and metrics are enabled, the log adopts the trace the metrics recorder has open, so it lines up
+with the performance transaction that produced it.
 
 ## Logging Incoming Callbacks
 

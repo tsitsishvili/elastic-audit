@@ -375,6 +375,7 @@
                                         <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>fail
                                     </span>
                                 @endif
+                                @include('elastic-audit::partials.trace-link', ['traceId' => data_get($log, 'trace.id'), 'compact' => true])
                             </td>
                         </tr>
                     @empty
