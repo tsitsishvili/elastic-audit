@@ -156,6 +156,9 @@ continues the producer trace while creating a new queue-job transaction. Disable
 `trace.propagate_http` and `trace.propagate_queue`; `trace.honor_incoming_sampled` controls whether an upstream sampled
 flag of `00` suppresses local capture.
 
+HTTP and activity audit documents written inside a trace carry its `trace.id` and `trace.span_id`, unless an explicit id
+or an inbound `traceparent` already names one.
+
 Trace stacks and suppression guards are isolated by Swoole coroutine or PHP Fiber identity, so interleaved Octane and
 concurrent execution cannot merge request data into another trace. Native profiler drivers remain process-global and
 refuse overlapping runs.
@@ -248,6 +251,29 @@ When `dashboard.enabled=true`, the performance UI is served at `/logger/metrics`
 average and percentile latency, failure rate, type/slow-transaction groups, a transaction list, trace waterfall, and
 linked profile hot frames/raw payload. It uses the same `Dashboard::auth(...)` authorization callback as the audit
 dashboards and is local-only until the application overrides that callback.
+HTTP and activity audit rows appear on a trace page only when that dashboard is enabled and uses the same
+`dashboard.middleware` as the performance dashboard. Rows from a disabled dashboard are left out; when it is enabled
+but uses different middleware, its rows are withheld and the page says some audit data is hidden.
+For this check the `Dashboard::auth(...)` callback is evaluated against each dashboard's own path (for example
+`logger/http-logs`), so a callback that branches on `$request->is(...)` gives the same answer it gives when that
+dashboard is opened directly. Per-dashboard restrictions are best placed in each dashboard's `dashboard.middleware`
+rather than in path checks inside the shared callback.
+
+### Trace explorer
+
+A trace page (`/logger/metrics/traces/{traceId}`) is one timeline of everything the trace touched: spans and queue
+jobs from the performance index, plus the HTTP logs and activity events written inside it, ordered by start time and
+positioned against the first span. Filter chips hide a kind of row, a row can be opened to show the stored request and
+response previews or an activity's before/after changes, with a link to the full log, and a queue job folds its spans
+away until it is opened. A trace with no performance data still renders from its audit rows alone, with absolute times.
+
+Each audit source contributes at most 200 rows, with a notice giving the real total when there are more. A source that
+fails to load shows a notice while the rest of the page renders.
+
+The sidebar search box (`/logger/metrics/find?id=…`) takes a trace ID, a pasted `traceparent` header, a request ID or an
+event ID and opens the right page: the trace page when the match carries a trace ID, otherwise the single matching log or
+the log list filtered by that request ID. It searches only the HTTP and activity dashboards the viewer could open
+themselves, and shows a not-found page when nothing matches.
 
 ## Operations and testing
 

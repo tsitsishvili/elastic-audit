@@ -1,4 +1,4 @@
-{{-- Shared dashboard header. Expects $current: 'http' | 'activity' | 'metrics'. --}}
+{{-- Shared dashboard sidebar. Expects $current: 'http' | 'activity' | 'metrics'. --}}
 @php
     $dashboards = [
         'http' => [
@@ -30,11 +30,11 @@
             ],
         ],
     ];
-    $tabs = $dashboards[$current]['tabs'];
 @endphp
 
-<header class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100">
-    <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 md:flex-row md:items-center md:justify-between">
+<aside x-data="{ open: false }" id="ea-sidebar"
+       class="ea-sidebar sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 text-slate-900 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95 dark:text-slate-100 lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-60 lg:flex-col lg:border-b-0 lg:border-r">
+    <div class="flex items-center justify-between gap-2 px-4 py-3 lg:py-5">
         <div class="flex min-w-0 items-center gap-2">
             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-xs">EA</span>
             <div class="min-w-0">
@@ -43,39 +43,69 @@
             </div>
         </div>
 
-        <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-            {{-- Dashboard switcher: current is always shown; the other only when enabled. --}}
-            <nav class="flex w-full items-center gap-1 rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-900 sm:w-auto">
-                @foreach ($dashboards as $key => $dash)
-                    @continue($key !== $current && ! $dash['enabled'])
-                    @php $isCurrent = $key === $current; @endphp
-                    <a href="{{ route($dash['route'], [], false) }}"
-                       class="ea-focus flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-center font-semibold transition sm:flex-none {{ $isCurrent ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">
-                        {{ $dash['label'] }}
-                    </a>
-                @endforeach
-            </nav>
-
-            {{-- Current dashboard's page tabs. --}}
-            <nav class="flex w-full items-center gap-1 text-sm sm:w-auto">
-                @foreach ($tabs as $tab)
-                    @php $active = request()->routeIs($tab['match']); @endphp
-                    <a href="{{ route($tab['route'], [], false) }}"
-                       class="ea-focus flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-center font-medium transition sm:flex-none {{ $active ? 'bg-slate-900 text-white dark:bg-slate-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white' }}">
-                        {{ $tab['label'] }}
-                    </a>
-                @endforeach
-            </nav>
-
+        <div class="flex shrink-0 items-center gap-1">
             {{-- Theme toggle (writes the shared tphl_theme key). --}}
             <button type="button"
                     x-data="{ dark: document.documentElement.classList.contains('dark') }"
                     @click="dark = !dark; document.documentElement.classList.toggle('dark', dark); localStorage.setItem('tphl_theme', dark ? 'dark' : 'light')"
                     :title="dark ? 'Switch to light mode' : 'Switch to dark mode'"
                     :aria-label="dark ? 'Switch to light mode' : 'Switch to dark mode'"
-                    class="ea-focus inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white sm:self-auto">
+                    class="ea-focus inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white">
                 <span x-cloak x-text="dark ? '☀' : '☾'"></span>
+            </button>
+
+            {{-- Hide toggle (lg+); the layout's show button brings the sidebar back. --}}
+            <button type="button" id="ea-sidebar-hide"
+                    onclick="eaToggleSidebar()"
+                    aria-controls="ea-sidebar"
+                    aria-expanded="true"
+                    aria-label="Hide sidebar"
+                    title="Hide sidebar"
+                    class="ea-focus hidden h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white lg:inline-flex">
+                «
+            </button>
+
+            {{-- Menu toggle: the sidebar collapses into this top bar below lg. --}}
+            <button type="button"
+                    @click="open = !open"
+                    :aria-expanded="open.toString()"
+                    aria-controls="ea-sidebar-nav"
+                    aria-label="Toggle navigation"
+                    class="ea-focus inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white lg:hidden">
+                ☰
             </button>
         </div>
     </div>
-</header>
+
+    {{-- Jump to a trace, request or event by ID. --}}
+    @if (app(\Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess::class)->enabled(\Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess::METRICS))
+        <form method="GET" action="{{ route('elastic-audit-metrics.find', [], false) }}" role="search"
+              :class="{ 'max-lg:block': open }" class="hidden px-3 pb-3 lg:block">
+            <input type="search" name="id" required placeholder="Find trace or request ID…" aria-label="Find trace or request ID"
+                   autocomplete="off" spellcheck="false"
+                   class="ea-focus h-9 w-full rounded-md border-slate-300 bg-white font-mono text-xs shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        </form>
+    @endif
+
+    {{-- Every enabled dashboard with its pages; the current one is always shown. --}}
+    <nav id="ea-sidebar-nav" aria-label="Dashboards"
+         :class="{ 'max-lg:flex': open }"
+         class="hidden flex-col gap-5 px-3 pb-4 text-sm lg:flex lg:flex-1 lg:overflow-y-auto">
+        @foreach ($dashboards as $key => $dash)
+            @continue($key !== $current && ! $dash['enabled'])
+            <div>
+                <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide {{ $key === $current ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500' }}">
+                    {{ $dash['label'] }}
+                </div>
+                @foreach ($dash['tabs'] as $tab)
+                    @php $active = request()->routeIs($tab['match']); @endphp
+                    <a href="{{ route($tab['route'], [], false) }}"
+                       @if ($active) aria-current="page" @endif
+                       class="ea-focus block rounded-md px-3 py-1.5 font-medium transition {{ $active ? 'bg-slate-900 text-white dark:bg-slate-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white' }}">
+                        {{ $tab['label'] }}
+                    </a>
+                @endforeach
+            </div>
+        @endforeach
+    </nav>
+</aside>

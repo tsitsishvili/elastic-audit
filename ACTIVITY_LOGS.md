@@ -312,7 +312,8 @@ For manual `ActivityLog::record()` calls you set the actor explicitly via the co
 
 If an activity is recorded while an HTTP request with a W3C `traceparent` header is active, the trait stores
 `trace.id`, `trace.span_id`, and `trace.traceparent` automatically. Manual calls can pass `traceId`, `spanId`, or
-`traceParent` to `ActivityLogContext::forActor(...)`.
+`traceParent` to `ActivityLogContext::forActor(...)`. With none of these and metrics enabled, `trace.id` and
+`trace.span_id` are filled from the trace the metrics recorder has open.
 
 ### Document Shape
 

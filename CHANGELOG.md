@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The trace page is now a merged timeline of performance spans, queue jobs, HTTP logs and activity events, with filter
+  chips, expandable audit rows linking to the full log, and a notice when audit data is hidden, capped or failed.
+- HTTP and activity audit logs written inside a metrics trace now carry its `trace.id` and `trace.span_id` when no
+  explicit id or inbound `traceparent` supplies one.
+- Every column in the performance transaction list is now sortable from its header, and the All functions table
+  re-ranks by calls, average, p95, self, or total time from its header.
+- Transactions can be searched by a case-insensitive fragment of their name and narrowed to those slower than a given
+  number of milliseconds. Type and service are picked from the values actually recorded.
+- The function statistics page has a name search that narrows the cards, movement lists, and table alike.
+- On wide screens the dashboard sidebar can be hidden from its header and brought back with a button at the top left.
+  The choice is remembered in the browser.
+- The performance sidebar has a search box that takes a trace ID, `traceparent`, request ID or event ID and opens the
+  matching trace or log, searching only the dashboards the viewer can open.
+
+### Changed
+
+- HTTP and activity log lists, detail pages, trace pages and the trace search treat a missing index or alias as empty
+  instead of a query failure, so an application with that log type turned off no longer sees errors there.
+- The performance transaction list matches the HTTP and activity log lists: a header with the result count, Live,
+  Copy link, and filter toggles, removable filter chips, and a rows-per-page footer.
+- A collapsed function row shows the figure the list is ranked by instead of always showing self time, and an
+  unchanged function's delta is no longer coloured as an improvement.
+- Browse transactions on the performance overview opens the full transaction list instead of one filtered to the
+  overview's time range. The stat cards and transaction types still open filtered to that range.
+- HTTP and activity audit documents record `@timestamp` with millisecond precision in UTC. Documents written before this
+  release keep second precision.
+
+### Fixed
+
+- Text fields, selects, and date fields on every dashboard have a visible border and inner padding again.
+- Changing the range or interval on the function statistics page keeps the chosen sort and search.
+
 ## [5.1.1] - 2026-10-24
 
 ### Changed
