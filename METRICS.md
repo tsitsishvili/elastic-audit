@@ -143,9 +143,6 @@ that made it. When the start and end genuinely cannot share a scope, use
 `beginMeasure()`/`endMeasure()` instead.
 
 Blocks measured outside any transaction are still recorded, with their own trace.
-
-HTTP and activity audit documents written inside a trace carry its `trace.id` and `trace.span_id`, unless an explicit id
-or an inbound `traceparent` already names one.
 Timing is governed by `capture.functions`, so it can be sampled, thresholded, or
 turned off like any other category. Names become an Elasticsearch `keyword`:
 use a bounded label such as `checkout.totals`, never one built from user input or
@@ -158,6 +155,9 @@ Inbound `traceparent` and `tracestate` headers are validated and continued. The 
 continues the producer trace while creating a new queue-job transaction. Disable these independently with
 `trace.propagate_http` and `trace.propagate_queue`; `trace.honor_incoming_sampled` controls whether an upstream sampled
 flag of `00` suppresses local capture.
+
+HTTP and activity audit documents written inside a trace carry its `trace.id` and `trace.span_id`, unless an explicit id
+or an inbound `traceparent` already names one.
 
 Trace stacks and suppression guards are isolated by Swoole coroutine or PHP Fiber identity, so interleaved Octane and
 concurrent execution cannot merge request data into another trace. Native profiler drivers remain process-global and
