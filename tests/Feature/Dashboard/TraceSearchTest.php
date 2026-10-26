@@ -112,6 +112,22 @@ final class TraceSearchTest extends TestCase
             ->assertSee('Some sources could not be searched, so this may be incomplete.');
     }
 
+    public function test_a_missing_audit_index_is_not_reported_as_incomplete(): void
+    {
+        // Default config: HTTP logging off, so its index or alias was never created.
+        $this->fake->searchResolver = function (array $params): array {
+            if (str_contains((string) $params['index'], 'http_logs') && ! (($params['ignore_unavailable'] ?? false) && ($params['allow_no_indices'] ?? false))) {
+                throw new \RuntimeException('index_not_found_exception');
+            }
+
+            return ['hits' => ['total' => ['value' => 0], 'hits' => []]];
+        };
+
+        $this->find('req-1')
+            ->assertNotFound()
+            ->assertDontSee('may be incomplete');
+    }
+
     public function test_array_id_input_redirects_to_the_overview(): void
     {
         $this->get(route('elastic-audit-metrics.find').'?id[]=x')

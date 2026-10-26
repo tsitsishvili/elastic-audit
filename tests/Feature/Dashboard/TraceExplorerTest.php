@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
@@ -90,6 +91,45 @@ final class TraceExplorerTest extends TestCase
             ->assertOk()
             ->assertSee('GET orders.store')
             ->assertSee('Failed to query Elasticsearch');
+    }
+
+    public function test_failing_source_is_named_in_the_error_log(): void
+    {
+        Log::spy();
+        $this->fake->searchResolver = function (array $params): array {
+            if (str_contains((string) $params['index'], 'activity_logs')) {
+                throw new RuntimeException('boom');
+            }
+
+            return $this->hits(str_contains((string) $params['index'], 'metrics') ? [$this->root()] : []);
+        };
+
+        $this->get($this->url())->assertOk();
+
+        Log::shouldHaveReceived('error')->with(
+            'Elastic Audit metrics dashboard query failed',
+            ['source' => 'activity', 'trace_id' => $this->traceId, 'error' => 'boom'],
+        )->once();
+    }
+
+    public function test_a_missing_audit_index_counts_as_no_documents(): void
+    {
+        // Default config: HTTP logging off, so its index or alias was never created.
+        $this->fake->searchResolver = function (array $params): array {
+            $index = (string) $params['index'];
+
+            // Elasticsearch answers index_not_found for a missing target unless both flags are set.
+            if (str_contains($index, 'http_logs') && ! (($params['ignore_unavailable'] ?? false) && ($params['allow_no_indices'] ?? false))) {
+                throw new RuntimeException('index_not_found_exception');
+            }
+
+            return $this->hits(str_contains($index, 'metrics') ? [$this->root()] : []);
+        };
+
+        $this->get($this->url())
+            ->assertOk()
+            ->assertSee('GET orders.store')
+            ->assertDontSee('Failed to query Elasticsearch');
     }
 
     public function test_audit_rows_are_capped_with_a_notice(): void

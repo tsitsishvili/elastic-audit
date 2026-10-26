@@ -157,7 +157,7 @@ final class MetricsDashboardController
         try {
             $metrics = $this->query->trace($traceId);
         } catch (Throwable $exception) {
-            $errors[DashboardAccess::METRICS] = $this->queryError($exception);
+            $errors[DashboardAccess::METRICS] = $this->queryError($exception, ['source' => DashboardAccess::METRICS, 'trace_id' => $traceId]);
         }
 
         foreach ([DashboardAccess::HTTP => $http, DashboardAccess::ACTIVITY => $activity] as $source => $query) {
@@ -180,7 +180,7 @@ final class MetricsDashboardController
                     $truncated[$source] = $result['total'];
                 }
             } catch (Throwable $exception) {
-                $errors[$source] = $this->queryError($exception);
+                $errors[$source] = $this->queryError($exception, ['source' => $source, 'trace_id' => $traceId]);
             }
         }
 
@@ -269,9 +269,10 @@ final class MetricsDashboardController
         return $filters;
     }
 
-    private function queryError(Throwable $exception): string
+    /** @param array<string, string> $context */
+    private function queryError(Throwable $exception, array $context = []): string
     {
-        Log::error('Elastic Audit metrics dashboard query failed', ['error' => $exception->getMessage()]);
+        Log::error('Elastic Audit metrics dashboard query failed', $context + ['error' => $exception->getMessage()]);
 
         return 'Failed to query Elasticsearch. Check the application log for details.';
     }
