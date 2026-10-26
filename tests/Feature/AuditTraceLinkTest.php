@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Route;
+use Orchestra\Testbench\Attributes\DefineEnvironment;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogContext;
@@ -12,6 +14,9 @@ use Tsitsishvili\ElasticAudit\DataTransferObjects\HttpLogData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\MetricData;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\RedactedHttpPayload;
 use Tsitsishvili\ElasticAudit\Enums\HttpDirection;
+use Tsitsishvili\ElasticAudit\Http\Middleware\IncomingHttpLogMiddleware;
+use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
+use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
 use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
 use Tsitsishvili\ElasticAudit\Support\TraceContext;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\TestEntityType;
@@ -80,6 +85,39 @@ class AuditTraceLinkTest extends TestCase
             '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',
             $data->timestamp,
         );
+    }
+
+    #[DefineEnvironment('enableMetrics')]
+    public function test_incoming_callback_log_carries_the_requests_metrics_trace(): void
+    {
+        Bus::fake();
+        Route::post('/_test/traced-callback', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_entity_type', TestEntityType::Order->value);
+
+            return response()->json(['received' => true]);
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/traced-callback')->assertOk();
+
+        // The callback is logged in terminate(); it must still see the request's transaction.
+        $root = null;
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $job) use (&$root): bool {
+            $root = collect($job->items)->first(fn (MetricData $m): bool => $m->type === MetricData::TYPE_HTTP_SERVER);
+
+            return $root !== null;
+        });
+        Bus::assertDispatched(LogHttpRequestJob::class, fn (LogHttpRequestJob $job): bool => $job->data->direction === HttpDirection::Incoming
+            && $job->data->traceId === $root->traceId
+            && $job->data->spanId === $root->spanId);
+    }
+
+    protected function enableMetrics($app): void
+    {
+        $app['config']->set('elastic_audit_metrics.enabled', true);
+        $app['config']->set('elastic_audit_metrics.profiles.enabled', false);
+        $app['config']->set('http_logs.enabled', true);
     }
 
     private function beginTransaction(): TraceContext
