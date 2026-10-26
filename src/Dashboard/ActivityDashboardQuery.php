@@ -64,7 +64,7 @@ class ActivityDashboardQuery
         $result = $this->client->search([
             'index' => $this->readAlias,
             ...self::MISSING_INDEX_IS_EMPTY,
-            'body'  => [
+            'body' => [
                 'track_total_hits' => true,
                 'from'             => ($this->offsetPage($page, $perPage) - 1) * $perPage,
                 'size'             => $perPage,
@@ -87,7 +87,7 @@ class ActivityDashboardQuery
         $result = $this->client->search([
             'index' => $this->readAlias,
             ...self::MISSING_INDEX_IS_EMPTY,
-            'body'  => [
+            'body' => [
                 'size'  => 1,
                 'query' => ['term' => ['event_id' => $eventId]],
             ],
