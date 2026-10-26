@@ -90,7 +90,8 @@ final class TraceExplorerTest extends TestCase
         $this->get($this->url())
             ->assertOk()
             ->assertSee('GET orders.store')
-            ->assertSee('Failed to query Elasticsearch');
+            ->assertSee('Failed to query Elasticsearch')
+            ->assertViewHas('sourceErrors', ['activity' => 'Failed to query Elasticsearch. Check the application log for details.']);
     }
 
     public function test_failing_source_is_named_in_the_error_log(): void

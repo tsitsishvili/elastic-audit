@@ -148,16 +148,16 @@ final class MetricsDashboardController
     ): View {
         abort_unless(preg_match('/^[a-f0-9]{32}$/', $traceId) === 1, 404);
 
-        $errors      = [];
-        $truncated   = [];
-        $auditHidden = false;
-        $metrics     = [];
-        $audit       = [DashboardAccess::HTTP => [], DashboardAccess::ACTIVITY => []];
+        $sourceErrors = [];
+        $truncated    = [];
+        $auditHidden  = false;
+        $metrics      = [];
+        $audit        = [DashboardAccess::HTTP => [], DashboardAccess::ACTIVITY => []];
 
         try {
             $metrics = $this->query->trace($traceId);
         } catch (Throwable $exception) {
-            $errors[DashboardAccess::METRICS] = $this->queryError($exception, ['source' => DashboardAccess::METRICS, 'trace_id' => $traceId]);
+            $sourceErrors[DashboardAccess::METRICS] = $this->queryError($exception, ['source' => DashboardAccess::METRICS, 'trace_id' => $traceId]);
         }
 
         foreach ([DashboardAccess::HTTP => $http, DashboardAccess::ACTIVITY => $activity] as $source => $query) {
@@ -180,15 +180,15 @@ final class MetricsDashboardController
                     $truncated[$source] = $result['total'];
                 }
             } catch (Throwable $exception) {
-                $errors[$source] = $this->queryError($exception, ['source' => $source, 'trace_id' => $traceId]);
+                $sourceErrors[$source] = $this->queryError($exception, ['source' => $source, 'trace_id' => $traceId]);
             }
         }
 
         $timeline = TraceTimeline::build($metrics, $audit[DashboardAccess::HTTP], $audit[DashboardAccess::ACTIVITY]);
 
-        abort_if($timeline['rows'] === [] && $timeline['profiled'] === [] && $errors === [], 404);
+        abort_if($timeline['rows'] === [] && $timeline['profiled'] === [] && $sourceErrors === [], 404);
 
-        return view('elastic-audit::metrics.trace', compact('timeline', 'errors', 'auditHidden', 'truncated', 'traceId') + [
+        return view('elastic-audit::metrics.trace', compact('timeline', 'sourceErrors', 'auditHidden', 'truncated', 'traceId') + [
             'timezone' => $this->timezone(),
             'auditCap' => self::AUDIT_ROWS_PER_SOURCE,
         ]);
