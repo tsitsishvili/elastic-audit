@@ -22,8 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The choice is remembered in the browser.
 - The performance sidebar has a search box that takes a trace ID, `traceparent`, request ID or event ID and opens the
   matching trace or log, searching only the dashboards the viewer can open.
+- Audit logs and metrics written by a scheduled closure or job callback record `execution.type` `schedule` instead of
+  `console` / `schedule:run`. The task is not named, because descriptions and commands can contain secrets. A
+  scheduled Artisan command runs in its own process and is still recorded as `console` with its command name.
 
 ### Changed
+
+- `guzzlehttp/guzzle` 8 is now allowed alongside 7 (`^7.15.2 || ^8.0.1`), and `guzzlehttp/promises` 3 alongside 2.
+  Guzzle 8.0.0 is excluded because it is affected by the same noncanonical-host and cookie-domain advisories as
+  7.15.1 and earlier.
 
 - HTTP and activity log lists, detail pages, trace pages and the trace search treat a missing index or alias as empty
   instead of a query failure, so an application with that log type turned off no longer sees errors there.
@@ -40,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Text fields, selects, and date fields on every dashboard have a visible border and inner padding again.
 - Changing the range or interval on the function statistics page keeps the chosen sort and search.
+- Write aliases no longer pile up old index generations. All four create-index commands attached the write alias
+  with an explicit `is_write_index: true`. Elasticsearch's rollover API only removes an alias from the old index when
+  the alias has no such flag, so every rollover, ILM-driven ones included, left `<prefix>_*_write` on the old index
+  with the flag set to `false`. Writes were never affected. The alias is now attached without the flag, so
+  Elasticsearch moves it on each rollover. The `*:create-index` and `*:rollover` commands remove the alias from old
+  indexes on existing deployments and clear the flag. `elastic-audit:health` shows a non-failing notice until that has
+  run. See the [Upgrade Guide](UPGRADE.md#upgrading-from-511).
 
 ## [5.1.1] - 2026-10-24
 

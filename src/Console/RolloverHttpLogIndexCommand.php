@@ -9,6 +9,7 @@ use Throwable;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchWriteAlias;
 
 class RolloverHttpLogIndexCommand extends Command
 {
@@ -30,14 +31,23 @@ class RolloverHttpLogIndexCommand extends Command
         try {
             $newIndex = $this->explicitRolloverIndex($client, $readAlias, $writeAlias);
             $result   = $client->rollover($writeAlias, ElasticsearchLifecycle::rolloverConditions(), $newIndex);
+
+            // Runs whether or not this call rolled over: a scheduled run also
+            // detaches entries left behind by earlier ILM rollovers of an alias
+            // that an older package version attached with an explicit flag.
+            $detached = ElasticsearchWriteAlias::normalize($client, $writeAlias);
         } catch (Throwable $e) {
-            $this->error("Failed to roll over {$writeAlias}: ".$e->getMessage());
+            $this->error("Failed to roll over or clean up {$writeAlias}: ".$e->getMessage());
 
             return self::FAILURE;
         }
 
         $rolledOver = (bool) ($result['rolled_over'] ?? false);
         $this->info($rolledOver ? "Rolled over {$writeAlias}." : "Rollover conditions were not met for {$writeAlias}.");
+
+        if ($detached !== []) {
+            $this->info("Detached {$writeAlias} from previous indexes: ".implode(', ', $detached));
+        }
 
         return self::SUCCESS;
     }

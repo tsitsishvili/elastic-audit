@@ -234,8 +234,8 @@ DB::transaction(function () use ($invoice, $oldStatus): void {
 ```
 
 The explicit `ExecutionOrigin` is optional. Without it, the package automatically records the active HTTP route and
-controller, queue job class, or Artisan command. It never captures a stack trace, filesystem path, raw URL, or query
-string as execution metadata.
+controller, queue job class, scheduled task, or Artisan command. It never captures a stack trace, filesystem path, raw
+URL, or query string as execution metadata.
 
 ### Automatic Model Logging (the `ActivityLoggable` trait)
 

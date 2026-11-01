@@ -13,7 +13,8 @@ independent subsystems that share one Elasticsearch connection:
 
 Each subsystem has its own config, Elasticsearch index/aliases, queue, console commands, and optional dashboard, so an
 application can enable only what it needs. Both document types include the configured application identity and a
-snapshotted execution origin (HTTP route/controller, queue job, Artisan command, or an explicit manual origin).
+snapshotted execution origin (HTTP route/controller, queue job, scheduled task, Artisan command, or an explicit
+manual origin).
 
 Optional [application performance monitoring](METRICS.md) automatically captures transactions and spans for inbound
 HTTP, SQL, queues, commands, scheduled tasks, outbound Laravel HTTP, Redis, cache, mail, and notifications. Searchable

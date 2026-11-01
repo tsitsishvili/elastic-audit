@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Support\Facades\Artisan;
+use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\IntBackedProvider;
@@ -18,7 +20,47 @@ class ElasticAuditOperationsCommandTest extends TestCase
 
         $this->app->instance(LogElasticsearchClientInterface::class, new FakeLogElasticsearchClient);
 
-        $this->artisan('elastic-audit:health')->assertSuccessful();
+        $this->artisan('elastic-audit:health')
+            ->doesntExpectOutputToContain('is_write_index')
+            ->doesntExpectOutputToContain('previous indexes')
+            ->assertSuccessful();
+    }
+
+    public function test_health_command_notes_when_the_write_alias_still_lists_previous_indexes(): void
+    {
+        config(['http_logs.enabled' => false, 'activity_logs.enabled' => true]);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $this->flaggedRolloverStateClient());
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain(
+                'still lists previous indexes: '.config('activity_logs.index_alias').'-000001. '
+                .'Run php artisan activity-logs:rollover to detach them.'
+            )
+            ->assertSuccessful();
+    }
+
+    public function test_health_command_notes_when_the_write_index_carries_an_explicit_write_flag(): void
+    {
+        config(['http_logs.enabled' => true, 'activity_logs.enabled' => false]);
+
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getAlias(string $name): array
+            {
+                $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
+                return [
+                    "{$baseName}-000001" => ['aliases' => [$name => ['is_write_index' => true]]],
+                ];
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('elastic-audit:health')
+            ->expectsOutputToContain('explicit is_write_index flag; the next rollover would leave the alias on it. Run php artisan http-logs:rollover to clear it.')
+            ->assertSuccessful();
     }
 
     public function test_health_fails_when_service_name_is_empty(): void
@@ -628,5 +670,141 @@ class ElasticAuditOperationsCommandTest extends TestCase
         $this->artisan('http-logs:rollover')->assertSuccessful();
 
         $this->assertSame(config('http_logs.index_alias').'-000001', $fake->newIndex);
+    }
+
+    #[DataProvider('rolloverCommands')]
+    public function test_rollover_command_detaches_the_write_alias_from_previous_indexes(string $command, string $configKey): void
+    {
+        $readAlias  = config("{$configKey}.index_alias");
+        $writeAlias = config("{$configKey}.index_alias_write");
+
+        $fake = $this->flaggedRolloverStateClient();
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan($command)
+            ->expectsOutputToContain("{$readAlias}-000001")
+            ->assertSuccessful();
+
+        $this->assertSame([[
+            ['remove' => ['index' => "{$readAlias}-000001", 'alias' => $writeAlias]],
+            ['add' => ['index' => "{$readAlias}-000002", 'alias' => $writeAlias]],
+        ]], $fake->aliasActions);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function rolloverCommands(): array
+    {
+        return [
+            'http logs'     => ['http-logs:rollover', 'http_logs'],
+            'activity logs' => ['activity-logs:rollover', 'activity_logs'],
+            'metrics'       => ['elastic-audit:metrics:rollover', 'elastic_audit_metrics'],
+            'profiles'      => ['elastic-audit:profiles:rollover', 'elastic_audit_metrics.profiles'],
+        ];
+    }
+
+    public function test_rollover_command_cleans_up_even_when_rollover_conditions_are_not_met(): void
+    {
+        $fake = $this->flaggedRolloverStateClient(rolledOver: false);
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('http-logs:rollover')
+            ->expectsOutputToContain('Rollover conditions were not met')
+            ->assertSuccessful();
+
+        $this->assertCount(1, $fake->aliasActions);
+    }
+
+    public function test_rollover_command_leaves_a_normalized_write_alias_alone(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public array $aliasActions = [];
+
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
+            {
+                return ['rolled_over' => true];
+            }
+
+            public function updateAliases(array $actions): void
+            {
+                $this->aliasActions[] = $actions;
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('http-logs:rollover')->assertSuccessful();
+
+        $this->assertSame([], $fake->aliasActions);
+    }
+
+    public function test_rollover_command_fails_when_the_alias_cleanup_fails(): void
+    {
+        $fake = new class extends FakeLogElasticsearchClient
+        {
+            public function getAlias(string $name): array
+            {
+                $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
+
+                return [
+                    "{$baseName}-000001" => ['aliases' => [$name => ['is_write_index' => true]]],
+                ];
+            }
+
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
+            {
+                return ['rolled_over' => false];
+            }
+
+            public function updateAliases(array $actions): void
+            {
+                throw new RuntimeException('cluster busy');
+            }
+        };
+
+        $this->app->instance(LogElasticsearchClientInterface::class, $fake);
+
+        $this->artisan('http-logs:rollover')
+            ->expectsOutputToContain('cluster busy')
+            ->assertFailed();
+    }
+
+    /**
+     * A client whose write alias is in the state Elasticsearch leaves behind
+     * after rolling over an alias that carried an explicit is_write_index flag.
+     */
+    private function flaggedRolloverStateClient(bool $rolledOver = true): FakeLogElasticsearchClient
+    {
+        return new class($rolledOver) extends FakeLogElasticsearchClient
+        {
+            public array $aliasActions = [];
+
+            public function __construct(private readonly bool $rolledOver) {}
+
+            public function getAlias(string $name): array
+            {
+                $isWrite  = str_ends_with($name, '_write');
+                $baseName = $isWrite ? substr($name, 0, -6) : $name;
+
+                return [
+                    "{$baseName}-000001" => ['aliases' => [$name => $isWrite ? ['is_write_index' => false] : []]],
+                    "{$baseName}-000002" => ['aliases' => [$name => $isWrite ? ['is_write_index' => true] : []]],
+                ];
+            }
+
+            public function rollover(string $alias, array $conditions, ?string $newIndex = null): array
+            {
+                return ['rolled_over' => $this->rolledOver];
+            }
+
+            public function updateAliases(array $actions): void
+            {
+                $this->aliasActions[] = $actions;
+            }
+        };
     }
 }

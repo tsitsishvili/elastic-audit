@@ -6,12 +6,14 @@ namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ActivityLogContext;
@@ -208,6 +210,36 @@ class ElasticAuditServiceProviderTest extends TestCase
         $this->app['events']->dispatch(new CommandFinished('', $input, $output, 0));
 
         $this->assertNotSame('console', $resolver->resolve()->execution->type);
+    }
+
+    public function test_scheduled_closures_run_with_a_schedule_origin(): void
+    {
+        $resolver = $this->app->make(AuditSourceResolver::class);
+        $origins  = [];
+        $schedule = $this->app->make(Schedule::class);
+
+        $schedule->call(function () use ($resolver, &$origins): void {
+            $origins[] = $resolver->resolve()->execution;
+        })->description('nightly invoice sync');
+
+        // A failing task is reported as failed instead of finished; it must leave too.
+        $schedule->call(function () use ($resolver, &$origins): void {
+            $origins[] = $resolver->resolve()->execution;
+
+            throw new RuntimeException('provider down');
+        });
+
+        $this->artisan('schedule:run');
+
+        $this->assertCount(2, $origins);
+
+        foreach ($origins as $origin) {
+            $this->assertSame(ExecutionOrigin::TYPE_SCHEDULE, $origin->type);
+            // Descriptions can contain secrets, so the task is not named.
+            $this->assertNull($origin->name);
+        }
+
+        $this->assertNotSame(ExecutionOrigin::TYPE_SCHEDULE, $resolver->resolve()->execution->type);
     }
 
     public function test_log_elasticsearch_config_is_merged(): void

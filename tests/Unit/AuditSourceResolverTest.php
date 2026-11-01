@@ -7,6 +7,7 @@ namespace Tsitsishvili\ElasticAudit\Tests\Unit;
 use Illuminate\Container\Container;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
+use stdClass;
 use Tsitsishvili\ElasticAudit\DataTransferObjects\ExecutionOrigin;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
@@ -117,6 +118,28 @@ class AuditSourceResolverTest extends TestCase
 
         $this->assertSame('console', $resolver->resolve()->execution->type);
         $this->assertSame('queue:work', $resolver->resolve()->execution->name);
+    }
+
+    public function test_scheduled_task_takes_precedence_over_schedule_run_and_tolerates_a_repeated_leave(): void
+    {
+        $resolver = new AuditSourceResolver(new Container);
+        $task     = new stdClass;
+        $resolver->enterConsoleCommand('schedule:run');
+        $resolver->enterScheduledTask($task);
+
+        $this->assertSame(ExecutionOrigin::TYPE_SCHEDULE, $resolver->resolve()->execution->type);
+        $this->assertNull($resolver->resolve()->execution->name);
+
+        $resolver->enterQueueJob('App\\Jobs\\SyncInvoice');
+        $this->assertSame('queue', $resolver->resolve()->execution->type);
+        $resolver->leaveQueueJob();
+
+        // Laravel reports a scheduled command that exits non-zero as finished and then failed.
+        $resolver->leaveScheduledTask($task);
+        $resolver->leaveScheduledTask($task);
+
+        $this->assertSame('console', $resolver->resolve()->execution->type);
+        $this->assertSame('schedule:run', $resolver->resolve()->execution->name);
     }
 
     public function test_explicit_origin_overrides_automatic_origin(): void
