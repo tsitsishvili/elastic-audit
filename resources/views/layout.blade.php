@@ -19,23 +19,44 @@
             const saved = localStorage.getItem('tphl_theme');
             const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
             document.documentElement.classList.toggle('dark', dark);
+            document.documentElement.classList.toggle('ea-sidebar-hidden', localStorage.getItem('ea_sidebar') === 'hidden');
         })();
+
+        window.eaToggleSidebar = function () {
+            const hidden = document.documentElement.classList.toggle('ea-sidebar-hidden');
+            localStorage.setItem('ea_sidebar', hidden ? 'hidden' : 'shown');
+            // Hand focus to the counterpart button, since the clicked one just disappeared.
+            document.getElementById(hidden ? 'ea-sidebar-show' : 'ea-sidebar-hide')?.focus();
+        };
     </script>
 </head>
 <body class="min-h-full text-slate-800 antialiased dark:text-slate-200">
     @include('elastic-audit::partials.nav', ['current' => $currentDashboard])
 
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
-        @isset($error)
-            @if ($error)
-                <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-                    <span class="font-semibold">Elasticsearch error:</span> {{ $error }}
-                </div>
-            @endif
-        @endisset
+    {{-- Shown only on lg+ while the sidebar is hidden (see .ea-sidebar-hidden in elastic-audit.css). --}}
+    <button type="button" id="ea-sidebar-show"
+            onclick="eaToggleSidebar()"
+            aria-controls="ea-sidebar"
+            aria-expanded="false"
+            aria-label="Show sidebar"
+            title="Show sidebar"
+            class="ea-sidebar-show ea-focus fixed left-3 top-4 z-30 hidden h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-xs transition hover:bg-slate-100 hover:text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white">
+        »
+    </button>
 
-        @yield('content')
-    </main>
+    <div class="ea-content lg:pl-60">
+        <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+            @isset($error)
+                @if ($error)
+                    <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                        <span class="font-semibold">Elasticsearch error:</span> {{ $error }}
+                    </div>
+                @endif
+            @endisset
+
+            @yield('content')
+        </main>
+    </div>
 
     <script type="module" src="{{ route('elastic-audit.assets', ['asset' => $elasticAuditAssets['resources/js/alpine.js']['file']], false) }}"></script>
     @stack('scripts')

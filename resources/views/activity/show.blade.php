@@ -68,7 +68,10 @@
             @foreach ($meta as $label => $value)
                 <div>
                     <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ $label }}</dt>
-                    <dd class="mt-0.5 break-all font-mono text-sm text-slate-700 dark:text-slate-300">{{ ($value === null || $value === '') ? '—' : $value }}</dd>
+                    <dd class="mt-0.5 break-all font-mono text-sm text-slate-700 dark:text-slate-300">
+                        @if ($label === 'Trace ID') @include('elastic-audit::partials.trace-link', ['traceId' => $value])
+                        @else {{ ($value === null || $value === '') ? '—' : $value }} @endif
+                    </dd>
                 </div>
             @endforeach
         </dl>

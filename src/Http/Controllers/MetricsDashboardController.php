@@ -9,7 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+use Tsitsishvili\ElasticAudit\Dashboard\ActivityDashboardQuery;
+use Tsitsishvili\ElasticAudit\Dashboard\DashboardAccess;
+use Tsitsishvili\ElasticAudit\Dashboard\HttpLogDashboardQuery;
 use Tsitsishvili\ElasticAudit\Dashboard\MetricsDashboardQuery;
+use Tsitsishvili\ElasticAudit\Dashboard\TraceTimeline;
 
 final class MetricsDashboardController
 {
@@ -24,6 +28,9 @@ final class MetricsDashboardController
 
     private const PER_PAGE_OPTIONS = [25, 50, 100];
 
+    /** Both queries clamp page size to 200; a trace with more rows from one source is truncated with a notice. */
+    private const AUDIT_ROWS_PER_SOURCE = 200;
+
     /** How the function list can be ranked, mirroring what each column means. */
     private const SORTS = [
         MetricsDashboardQuery::SORT_TOTAL   => 'total time',
@@ -31,6 +38,16 @@ final class MetricsDashboardController
         MetricsDashboardQuery::SORT_AVERAGE => 'average duration',
         MetricsDashboardQuery::SORT_P95     => 'p95 duration',
         MetricsDashboardQuery::SORT_CALLS   => 'call count',
+    ];
+
+    /** Sortable transaction columns, mapped from query value to the Elasticsearch field. */
+    private const TRANSACTION_SORTS = [
+        'time'     => '@timestamp',
+        'name'     => 'name',
+        'type'     => 'type',
+        'outcome'  => 'outcome',
+        'duration' => 'duration_ms',
+        'spans'    => 'transaction.span_count',
     ];
 
     public function __construct(
@@ -70,6 +87,11 @@ final class MetricsDashboardController
         $sort  = isset(self::SORTS[$sort]) ? $sort : MetricsDashboardQuery::SORT_TOTAL;
         $error = null;
         $rows  = [];
+        $name  = $request->query('name');
+
+        if (is_string($name) && $name !== '') {
+            $filters['name'] = $name;
+        }
 
         try {
             $rows = $this->query->functionStatistics($filters, sort: $sort);
@@ -91,41 +113,84 @@ final class MetricsDashboardController
         $page    = max(1, (int) $request->query('page', 1));
         $perPage = (int) $request->query('per_page', config('elastic_audit_metrics.dashboard.per_page', 25));
         $perPage = in_array($perPage, self::PER_PAGE_OPTIONS, true) ? $perPage : 25;
+        $sort    = (string) $request->query('sort', 'time');
+        $sort    = isset(self::TRANSACTION_SORTS[$sort]) ? $sort : 'time';
+        $dir     = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $error   = null;
         $data    = ['hits' => [], 'total' => 0];
+        $options = ['types' => [], 'services' => []];
 
         try {
             $data = $this->query->transactions(
                 [...$filters, 'timezone' => $this->timezone()],
                 $page,
                 $perPage,
+                self::TRANSACTION_SORTS[$sort],
+                $dir,
             );
+            $options = $this->query->filterOptions();
         } catch (Throwable $exception) {
             $error = $this->queryError($exception);
         }
 
-        return view('elastic-audit::metrics.transactions', compact('data', 'filters', 'page', 'perPage', 'error') + [
+        return view('elastic-audit::metrics.transactions', compact('data', 'filters', 'page', 'perPage', 'sort', 'dir', 'options', 'error') + [
             'timezone'       => $this->timezone(),
             'perPageOptions' => self::PER_PAGE_OPTIONS,
         ]);
     }
 
-    public function trace(string $traceId): View
-    {
+    public function trace(
+        Request $request,
+        string $traceId,
+        HttpLogDashboardQuery $http,
+        ActivityDashboardQuery $activity,
+        DashboardAccess $access,
+    ): View {
         abort_unless(preg_match('/^[a-f0-9]{32}$/', $traceId) === 1, 404);
-        $error = null;
-        $items = [];
+
+        $sourceErrors = [];
+        $truncated    = [];
+        $auditHidden  = false;
+        $metrics      = [];
+        $audit        = [DashboardAccess::HTTP => [], DashboardAccess::ACTIVITY => []];
 
         try {
-            $items = $this->query->trace($traceId);
+            $metrics = $this->query->trace($traceId);
         } catch (Throwable $exception) {
-            $error = $this->queryError($exception);
+            $sourceErrors[DashboardAccess::METRICS] = $this->queryError($exception, ['source' => DashboardAccess::METRICS, 'trace_id' => $traceId]);
         }
 
-        abort_if($items === [] && $error === null, 404);
+        foreach ([DashboardAccess::HTTP => $http, DashboardAccess::ACTIVITY => $activity] as $source => $query) {
+            if (! $access->enabled($source)) {
+                continue;
+            }
 
-        return view('elastic-audit::metrics.trace', compact('items', 'traceId', 'error') + [
+            // Never query a source the viewer cannot open on its own dashboard.
+            if (! $access->allows($request, $source)) {
+                $auditHidden = true;
+
+                continue;
+            }
+
+            try {
+                $result         = $query->search(['trace_id' => $traceId], 1, self::AUDIT_ROWS_PER_SOURCE, '@timestamp', 'asc');
+                $audit[$source] = $result['hits'];
+
+                if ($result['total'] > self::AUDIT_ROWS_PER_SOURCE) {
+                    $truncated[$source] = $result['total'];
+                }
+            } catch (Throwable $exception) {
+                $sourceErrors[$source] = $this->queryError($exception, ['source' => $source, 'trace_id' => $traceId]);
+            }
+        }
+
+        $timeline = TraceTimeline::build($metrics, $audit[DashboardAccess::HTTP], $audit[DashboardAccess::ACTIVITY]);
+
+        abort_if($timeline['rows'] === [] && $timeline['profiled'] === [] && $sourceErrors === [], 404);
+
+        return view('elastic-audit::metrics.trace', compact('timeline', 'sourceErrors', 'auditHidden', 'truncated', 'traceId') + [
             'timezone' => $this->timezone(),
+            'auditCap' => self::AUDIT_ROWS_PER_SOURCE,
         ]);
     }
 
@@ -193,7 +258,7 @@ final class MetricsDashboardController
     {
         $filters = [];
 
-        foreach (['type', 'outcome', 'service', 'trace_id', 'from', 'to'] as $key) {
+        foreach (['name', 'type', 'outcome', 'service', 'min_duration', 'trace_id', 'from', 'to'] as $key) {
             $value = $request->query($key);
 
             if (is_string($value) && $value !== '') {
@@ -204,9 +269,10 @@ final class MetricsDashboardController
         return $filters;
     }
 
-    private function queryError(Throwable $exception): string
+    /** @param array<string, string> $context */
+    private function queryError(Throwable $exception, array $context = []): string
     {
-        Log::error('Elastic Audit metrics dashboard query failed', ['error' => $exception->getMessage()]);
+        Log::error('Elastic Audit metrics dashboard query failed', $context + ['error' => $exception->getMessage()]);
 
         return 'Failed to query Elasticsearch. Check the application log for details.';
     }

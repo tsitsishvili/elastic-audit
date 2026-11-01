@@ -51,4 +51,37 @@ final class TraceContextTest extends TestCase
 
         $this->assertNull($context->traceState);
     }
+
+    public function test_merge_falls_back_to_the_active_trace(): void
+    {
+        $active = new TraceContext(traceId: str_repeat('a', 32), spanId: str_repeat('b', 16));
+        $merged = TraceContext::merge(active: $active);
+
+        $this->assertSame(str_repeat('a', 32), $merged->traceId);
+        $this->assertSame(str_repeat('b', 16), $merged->spanId);
+        $this->assertNull($merged->traceParent); // never fabricate a header
+    }
+
+    public function test_merge_prefers_explicit_ids_over_the_active_trace(): void
+    {
+        $merged = TraceContext::merge(
+            traceId: str_repeat('c', 32),
+            spanId: str_repeat('d', 16),
+            active: new TraceContext(traceId: str_repeat('a', 32), spanId: str_repeat('b', 16)),
+        );
+
+        $this->assertSame(str_repeat('c', 32), $merged->traceId);
+        $this->assertSame(str_repeat('d', 16), $merged->spanId);
+    }
+
+    public function test_merge_prefers_an_inbound_traceparent_over_the_active_trace(): void
+    {
+        $merged = TraceContext::merge(
+            traceParent: '00-'.str_repeat('e', 32).'-'.str_repeat('f', 16).'-01',
+            active: new TraceContext(traceId: str_repeat('a', 32), spanId: str_repeat('b', 16)),
+        );
+
+        $this->assertSame(str_repeat('e', 32), $merged->traceId);
+        $this->assertSame(str_repeat('f', 16), $merged->spanId);
+    }
 }

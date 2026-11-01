@@ -32,6 +32,40 @@ final class MetricsDashboardQueryTest extends TestCase
         $this->assertContains(['term' => ['outcome' => 'failure']], $filters);
     }
 
+    public function test_transactions_sort_by_a_column_and_break_ties_newest_first(): void
+    {
+        $this->query->transactions([], 1, 25, 'duration_ms', 'asc');
+
+        $this->assertSame([
+            ['duration_ms' => ['order' => 'asc', 'unmapped_type' => 'double']],
+            ['@timestamp' => ['order' => 'desc']],
+        ], $this->client->lastSearch()['body']['sort']);
+
+        // Anything outside the allowlist falls back to newest first.
+        $this->query->transactions([], 1, 25, 'payload', 'sideways');
+
+        $this->assertSame(
+            [['@timestamp' => ['order' => 'desc', 'unmapped_type' => 'date']]],
+            $this->client->lastSearch()['body']['sort'],
+        );
+    }
+
+    public function test_name_search_is_a_case_insensitive_contains_match_with_wildcards_escaped(): void
+    {
+        $this->query->transactions(['name' => 'App\\Jobs*', 'min_duration' => '500'], 1, 25);
+        $filters = $this->client->lastSearch()['body']['query']['bool']['filter'];
+
+        $this->assertContains(['wildcard' => ['name' => ['value' => '*App\\\\Jobs\\**', 'case_insensitive' => true]]], $filters);
+        $this->assertContains(['range' => ['duration_ms' => ['gte' => 500.0]]], $filters);
+
+        $this->query->transactions(['min_duration' => 'slow'], 1, 25);
+
+        $this->assertSame(
+            [['term' => ['kind' => 'transaction']]],
+            $this->client->lastSearch()['body']['query']['bool']['filter'],
+        );
+    }
+
     public function test_function_statistics_compare_the_window_against_the_one_before_it(): void
     {
         $bucket = static fn (string $name, int $count, float $avg, string $type): array => [

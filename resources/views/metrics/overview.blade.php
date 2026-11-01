@@ -64,7 +64,8 @@
             <h1 class="text-2xl font-semibold tracking-normal text-slate-950 dark:text-slate-50">Application performance</h1>
             <p class="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">Transactions, spans, failures, and sampled PHP profiles for the selected window.</p>
         </div>
-        <a href="{{ $txLink() }}"
+        {{-- Unfiltered on purpose: browsing starts from the full list, unlike the drill-downs below. --}}
+        <a href="{{ route('elastic-audit-metrics.transactions', [], false) }}"
            class="ea-focus inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-medium text-white shadow-xs transition hover:bg-indigo-700">
             Browse transactions →
         </a>

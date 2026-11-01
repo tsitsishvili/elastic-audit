@@ -47,11 +47,12 @@ final readonly class ActivityLogData
             traceId: $context->traceId,
             spanId: $context->spanId,
             traceParent: $context->traceParent,
+            active: TraceContext::active(),
         );
 
         return new self(
             eventId: (string) Str::ulid(),
-            timestamp: now()->toIso8601ZuluString(),
+            timestamp: now()->toIso8601ZuluString('millisecond'),
             requestId: $context->requestId,
             actorType: $context->actorType,
             actorId: $context->actorId,

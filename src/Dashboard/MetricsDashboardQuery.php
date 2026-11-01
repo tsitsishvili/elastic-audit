@@ -23,6 +23,19 @@ final class MetricsDashboardQuery
 
     private const MAX_PER_PAGE = 200;
 
+    /**
+     * Sortable transaction fields mapped to their type, sent as `unmapped_type` so
+     * older indexes behind the read alias that predate a field do not fail the search.
+     */
+    private const TRANSACTION_SORT_FIELDS = [
+        '@timestamp'             => 'date',
+        'name'                   => 'keyword',
+        'type'                   => 'keyword',
+        'outcome'                => 'keyword',
+        'duration_ms'            => 'double',
+        'transaction.span_count' => 'integer',
+    ];
+
     /** Aggregation each sort orders the terms bucket by. */
     private const SORT_ORDERS = [
         self::SORT_SELF    => ['self_duration' => 'desc'],
@@ -287,16 +300,30 @@ final class MetricsDashboardQuery
      * @param  array<string, string>  $filters
      * @return array{hits: list<array<string, mixed>>, total: int}
      */
-    public function transactions(array $filters, int $page, int $perPage): array
-    {
-        $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
-        $result  = $this->client->search([
+    public function transactions(
+        array $filters,
+        int $page,
+        int $perPage,
+        string $sortField = '@timestamp',
+        string $sortDir = 'desc',
+    ): array {
+        $perPage   = max(1, min(self::MAX_PER_PAGE, $perPage));
+        $sortField = isset(self::TRANSACTION_SORT_FIELDS[$sortField]) ? $sortField : '@timestamp';
+        $sortDir   = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $sort      = [[$sortField => ['order' => $sortDir, 'unmapped_type' => self::TRANSACTION_SORT_FIELDS[$sortField]]]];
+
+        // Newest first within ties, so pages stay stable when many rows share a value.
+        if ($sortField !== '@timestamp') {
+            $sort[] = ['@timestamp' => ['order' => 'desc']];
+        }
+
+        $result = $this->client->search([
             'index' => $this->metricsAlias,
             'body'  => [
                 'track_total_hits' => true,
                 'from'             => ($this->offsetPage($page, $perPage) - 1) * $perPage,
                 'size'             => $perPage,
-                'sort'             => [['@timestamp' => ['order' => 'desc']]],
+                'sort'             => $sort,
                 'query'            => ['bool' => ['filter' => [
                     ['term' => ['kind' => 'transaction']],
                     ...$this->filters($filters),
@@ -305,6 +332,31 @@ final class MetricsDashboardQuery
         ]);
 
         return $this->hits($result);
+    }
+
+    /**
+     * Distinct transaction types and services, for the transaction filter dropdowns.
+     *
+     * @return array{types: list<string>, services: list<string>}
+     */
+    public function filterOptions(): array
+    {
+        $result = $this->client->search([
+            'index' => $this->metricsAlias,
+            'body'  => [
+                'size'  => 0,
+                'query' => ['term' => ['kind' => 'transaction']],
+                'aggs'  => [
+                    'types'    => ['terms' => ['field' => 'type', 'size' => 50]],
+                    'services' => ['terms' => ['field' => 'service.name', 'size' => 100]],
+                ],
+            ],
+        ]);
+
+        return [
+            'types'    => array_column(data_get($result, 'aggregations.types.buckets', []), 'key'),
+            'services' => array_column(data_get($result, 'aggregations.services.buckets', []), 'key'),
+        ];
     }
 
     /** @return list<array<string, mixed>> */
@@ -506,6 +558,18 @@ final class MetricsDashboardQuery
             if (isset($filters[$key]) && $filters[$key] !== '') {
                 $clauses[] = ['term' => [$field => $filters[$key]]];
             }
+        }
+
+        // A contains-match, so a route or class fragment finds the full name.
+        if (isset($filters['name']) && $filters['name'] !== '') {
+            $clauses[] = ['wildcard' => ['name' => [
+                'value'            => '*'.addcslashes($filters['name'], '\\*?').'*',
+                'case_insensitive' => true,
+            ]]];
+        }
+
+        if (isset($filters['min_duration']) && is_numeric($filters['min_duration'])) {
+            $clauses[] = ['range' => ['duration_ms' => ['gte' => (float) $filters['min_duration']]]];
         }
 
         if (isset($filters['from']) || isset($filters['to'])) {

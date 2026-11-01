@@ -27,6 +27,35 @@
             ? '—'
             : ($value > 0 ? '+' : '').number_format($value, 1).'%';
 
+        // Range, sort and search survive every control on the page.
+        $keep = [
+            'range' => $range,
+            'interval' => $interval,
+            'from' => $range === 'custom' ? request('from') : null,
+            'to' => $range === 'custom' ? request('to') : null,
+            'sort' => $sort,
+            'name' => $filters['name'] ?? null,
+        ];
+        $link = fn (array $overrides) => route('elastic-audit-metrics.functions', array_filter(array_merge($keep, $overrides), fn ($v) => $v !== null && $v !== ''), false);
+
+        // The collapsed row shows whatever the list is ranked by.
+        [$metricKey, $metricLabel] = match ($sort) {
+            'total' => ['total_ms', 'total'],
+            'average' => ['avg_ms', 'avg'],
+            'p95' => ['p95_ms', 'p95'],
+            'calls' => ['count', 'calls'],
+            default => ['self_ms', 'self'],
+        };
+
+        $toneFor = fn (array $row): string => match ($row['status']) {
+            'regressed' => 'text-red-600 dark:text-red-400',
+            'improved' => 'text-emerald-600 dark:text-emerald-400',
+            default => 'text-slate-400 dark:text-slate-500',
+        };
+
+        // Table columns that map onto a server-side ranking.
+        $sortable = ['Calls' => 'calls', 'Avg' => 'average', 'p95' => 'p95', 'Self' => 'self', 'Total' => 'total'];
+
         $cards = [
             ['label' => 'Functions', 'value' => number_format($active->count()), 'sub' => 'seen in window', 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => '#table'],
             ['label' => 'Self time', 'value' => $ms((float) $active->sum('self_ms')), 'sub' => 'excluding callees', 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => '#heaviest'],
@@ -45,6 +74,17 @@
                 Where time goes inside your own code, and how it moved against the window of the same length immediately before.
             </p>
         </div>
+        <form method="GET" action="{{ route('elastic-audit-metrics.functions', [], false) }}" role="search" class="flex items-center gap-2">
+            @foreach (\Illuminate\Support\Arr::except($keep, 'name') as $name => $value)
+                @if ($value)<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
+            @endforeach
+            <label for="fn-search" class="sr-only">Search functions</label>
+            <input id="fn-search" type="search" name="name" value="{{ $filters['name'] ?? '' }}" placeholder="Search functions…"
+                   class="ea-focus h-10 w-full rounded-md border-slate-300 bg-white font-mono text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:w-72 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+            @if (! empty($filters['name']))
+                <a href="{{ $link(['name' => null]) }}" class="ea-focus shrink-0 rounded-xs text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear</a>
+            @endif
+        </form>
     </div>
 
     @include('elastic-audit::partials.stat-cards', [
@@ -62,15 +102,23 @@
         'intervals' => $intervals,
         'timezone' => $timezone,
         'liveKey' => 'tphl_live_metrics_functions',
+        'keep' => ['sort' => $sort, 'name' => $filters['name'] ?? null],
     ])
 
     @if ($all->isEmpty())
         <div class="ea-panel mt-4 rounded-lg border p-10 text-center">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">No function timings in this window.</p>
-            <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Turn on <code class="font-mono">capture.functions.automatic</code> to read them from captured profiles,
-                or wrap a block with <code class="font-mono">Performance::measure()</code>.
-            </p>
+            @if (! empty($filters['name']))
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">No functions match <span class="font-mono">{{ $filters['name'] }}</span> in this window.</p>
+                <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    <a href="{{ $link(['name' => null]) }}" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">Clear the search</a> or widen the range.
+                </p>
+            @else
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">No function timings in this window.</p>
+                <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Turn on <code class="font-mono">capture.functions.automatic</code> to read them from captured profiles,
+                    or wrap a block with <code class="font-mono">Performance::measure()</code>.
+                </p>
+            @endif
         </div>
     @else
         {{-- Movement first: a list of slow functions is only actionable once you know which ones changed. --}}
@@ -164,7 +212,7 @@
                     </p>
                 </div>
                 <form method="GET" class="flex items-center gap-2">
-                    @foreach (['range' => $range, 'interval' => $interval, 'from' => request('from'), 'to' => request('to')] as $name => $value)
+                    @foreach (\Illuminate\Support\Arr::except($keep, 'sort') as $name => $value)
                         @if ($value)<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
                     @endforeach
                     <label class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400" for="fn-sort">Sort</label>
@@ -197,14 +245,10 @@
                             </span>
 
                             <span class="shrink-0 text-right font-mono text-xs">
-                                <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $ms($row['self_ms']) }}</span>
-                                <span class="text-slate-400 dark:text-slate-500"> self</span>
+                                <span class="font-semibold text-slate-700 dark:text-slate-200">{{ $metricKey === 'count' ? number_format($row['count']) : $ms($row[$metricKey]) }}</span>
+                                <span class="text-slate-400 dark:text-slate-500"> {{ $metricLabel }}</span>
                             </span>
-                            @if ($row['delta_pct'] !== null)
-                                <span class="w-16 shrink-0 text-right font-mono text-xs {{ $row['delta_pct'] > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400' }}">{{ $pct($row['delta_pct']) }}</span>
-                            @else
-                                <span class="w-16 shrink-0 text-right font-mono text-xs text-slate-300 dark:text-slate-600">—</span>
-                            @endif
+                            <span class="w-16 shrink-0 text-right font-mono text-xs {{ $toneFor($row) }}">{{ $pct($row['delta_pct']) }}</span>
                         </summary>
 
                         <div class="px-4 pb-4">
@@ -242,25 +286,20 @@
                     <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                         <tr>
                             <th class="px-4 py-3">Function</th>
-                            <th class="px-4 py-3 text-right">Calls</th>
-                            <th class="px-4 py-3 text-right">Avg</th>
-                            <th class="px-4 py-3 text-right">p75</th>
-                            <th class="px-4 py-3 text-right">p95</th>
-                            <th class="px-4 py-3 text-right">Self</th>
-                            <th class="px-4 py-3 text-right">Max</th>
-                            <th class="px-4 py-3 text-right">Total</th>
-                            <th class="px-4 py-3 text-right">Δ avg</th>
+                            @foreach (['Calls', 'Avg', 'p75', 'p95', 'Self', 'Max', 'Total', 'Δ avg'] as $label)
+                                @php $key = $sortable[$label] ?? null; @endphp
+                                <th class="px-4 py-3 text-right" @if ($key !== null && $sort === $key) aria-sort="descending" @endif>
+                                    @if ($key !== null)
+                                        <a href="{{ $link(['sort' => $key]) }}#table" class="inline-flex items-center gap-1 hover:text-slate-700 dark:hover:text-slate-200 {{ $sort === $key ? 'text-indigo-600 dark:text-indigo-400' : '' }}">{{ $label }}@if ($sort === $key) <span>↓</span>@endif</a>
+                                    @else
+                                        {{ $label }}
+                                    @endif
+                                </th>
+                            @endforeach
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($all as $row)
-                            @php
-                                $tone = match ($row['status']) {
-                                    'regressed' => 'text-red-600 dark:text-red-400',
-                                    'improved' => 'text-emerald-600 dark:text-emerald-400',
-                                    default => 'text-slate-400 dark:text-slate-500',
-                                };
-                            @endphp
                             <tr class="hover:bg-indigo-50/40 dark:hover:bg-slate-900/60">
                                 <td class="max-w-md px-4 py-2.5">
                                     <div class="flex items-baseline gap-1.5">
@@ -282,7 +321,7 @@
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right font-mono text-xs">{{ $ms($row['self_ms']) }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right font-mono text-xs">{{ $ms($row['max_ms']) }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right font-mono text-xs">{{ $ms($row['total_ms']) }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right font-mono text-xs {{ $tone }}" title="{{ $row['baseline_avg_ms'] !== null ? 'was '.$ms($row['baseline_avg_ms']).' over '.number_format($row['baseline_count']).' calls' : 'no comparable baseline' }}">
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right font-mono text-xs {{ $toneFor($row) }}" title="{{ $row['baseline_avg_ms'] !== null ? 'was '.$ms($row['baseline_avg_ms']).' over '.number_format($row['baseline_count']).' calls' : 'no comparable baseline' }}">
                                     {{ $pct($row['delta_pct']) }}
                                 </td>
                             </tr>

@@ -22,6 +22,14 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  /* Preflight strips field borders and padding, so `border-slate-*` on a field colours nothing without this. */
+  input:where(:not([type='checkbox'], [type='radio'])),
+  select,
+  textarea {
+    border-width: 1px;
+    padding-inline: 0.75rem;
+  }
 }
 
 @utility ea-panel {
@@ -70,5 +78,20 @@
     background:
       linear-gradient(180deg, rgb(79 70 229 / 8%), transparent 280px),
       var(--ea-bg);
+  }
+}
+
+/* Unlayered so it overrides the lg:flex / lg:pl-60 / hidden utilities while the sidebar is hidden (lg+ only). */
+@media (width >= 64rem) {
+  .ea-sidebar-hidden .ea-sidebar {
+    display: none;
+  }
+
+  .ea-sidebar-hidden .ea-content {
+    padding-left: 3.5rem;
+  }
+
+  .ea-sidebar-hidden .ea-sidebar-show {
+    display: inline-flex;
   }
 }

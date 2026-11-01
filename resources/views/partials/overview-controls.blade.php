@@ -56,6 +56,11 @@
             </div>
         </template>
 
+        {{-- Page state the controls should not reset, e.g. a sort or search. --}}
+        @foreach ($keep ?? [] as $name => $value)
+            @if ($value !== null && $value !== '')<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
+        @endforeach
+
         <noscript>
             <button type="submit" class="ea-focus h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Apply</button>
         </noscript>

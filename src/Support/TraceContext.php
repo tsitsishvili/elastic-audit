@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Support;
 
+use Throwable;
+use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
+
 final readonly class TraceContext
 {
     public function __construct(
@@ -62,8 +65,21 @@ final readonly class TraceContext
         ?string $spanId = null,
         ?string $traceParent = null,
         ?string $traceState = null,
+        ?self $active = null,
     ): self {
         $parsed = self::fromTraceParent($traceParent, $traceState);
+
+        // The active trace only fills in when nothing explicit or inbound names one.
+        // traceParent is never taken from it: an audit document must not invent a header.
+        if ($active !== null && self::normalizeHeader($traceId) === null && $parsed->traceId === null) {
+            $parsed = new self(
+                traceId: $active->traceId,
+                spanId: $parsed->spanId ?? $active->spanId,
+                traceParent: $parsed->traceParent,
+                sampled: $active->sampled,
+                traceState: $parsed->traceState ?? $active->traceState,
+            );
+        }
 
         return new self(
             traceId: self::normalizeHeader($traceId) ?? $parsed->traceId,
@@ -72,6 +88,20 @@ final readonly class TraceContext
             sampled: $parsed->sampled,
             traceState: $parsed->traceState,
         );
+    }
+
+    /** The trace the metrics recorder has open right now, if any. Never throws. */
+    public static function active(): ?self
+    {
+        try {
+            if (! config('elastic_audit_metrics.enabled') || ! app()->bound(MetricsRecorder::class)) {
+                return null;
+            }
+
+            return app(MetricsRecorder::class)->propagationContext();
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     public function toTraceParent(?string $spanId = null, ?bool $sampled = null): ?string
