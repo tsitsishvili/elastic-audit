@@ -7,6 +7,9 @@ Changes are tagged by **likelihood of impact** so you can quickly find what affe
 
 ## Upgrading from 5.1.1
 
+5.2.0 is a minor release, so an existing `^5.0` constraint picks it up with
+`composer update tsitsishvili/elastic-audit`. No strict mapping changed, so no create-index run is required.
+
 ### Low impact: run each rollover command once to tidy the write aliases
 
 Earlier versions attached each write alias with an explicit `is_write_index: true`. With that flag, Elasticsearch's

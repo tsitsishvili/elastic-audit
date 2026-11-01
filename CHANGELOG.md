@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-11-01
+
 ### Added
 
 - The trace page is now a merged timeline of performance spans, queue jobs, HTTP logs and activity events, with filter
@@ -22,15 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The choice is remembered in the browser.
 - The performance sidebar has a search box that takes a trace ID, `traceparent`, request ID or event ID and opens the
   matching trace or log, searching only the dashboards the viewer can open.
-- Audit logs and metrics written by a scheduled closure or job callback record `execution.type` `schedule` instead of
-  `console` / `schedule:run`. The task is not named, because descriptions and commands can contain secrets. A
-  scheduled Artisan command runs in its own process and is still recorded as `console` with its command name.
 
 ### Changed
-
-- `guzzlehttp/guzzle` 8 is now allowed alongside 7 (`^7.15.2 || ^8.0.1`), and `guzzlehttp/promises` 3 alongside 2.
-  Guzzle 8.0.0 is excluded because it is affected by the same noncanonical-host and cookie-domain advisories as
-  7.15.1 and earlier.
 
 - HTTP and activity log lists, detail pages, trace pages and the trace search treat a missing index or alias as empty
   instead of a query failure, so an application with that log type turned off no longer sees errors there.
@@ -42,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overview's time range. The stat cards and transaction types still open filtered to that range.
 - HTTP and activity audit documents record `@timestamp` with millisecond precision in UTC. Documents written before this
   release keep second precision.
+- Audit logs and metrics written by a scheduled closure or job callback record `execution.type` `schedule` instead of
+  `console` / `schedule:run`. The task is not named, because descriptions and commands can contain secrets. A
+  scheduled Artisan command runs in its own process and is still recorded as `console` with its command name. See the
+  [Upgrade Guide](UPGRADE.md#upgrading-from-511).
+- `guzzlehttp/guzzle` 8 is now allowed alongside 7 (`^7.15.2 || ^8.0.1`), and `guzzlehttp/promises` 3 alongside 2.
+  Guzzle 8.0.0 is excluded because it is affected by the same noncanonical-host and cookie-domain advisories as
+  7.15.1 and earlier.
 
 ### Fixed
 
@@ -444,7 +446,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.2.0...HEAD
+[5.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...v5.2.0
 [5.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0
