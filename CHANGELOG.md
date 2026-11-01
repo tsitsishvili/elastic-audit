@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-11-01
+
 ### Added
 
 - The trace page is now a merged timeline of performance spans, queue jobs, HTTP logs and activity events, with filter
@@ -35,11 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overview's time range. The stat cards and transaction types still open filtered to that range.
 - HTTP and activity audit documents record `@timestamp` with millisecond precision in UTC. Documents written before this
   release keep second precision.
+- Audit logs and metrics written by a scheduled closure or job callback record `execution.type` `schedule` instead of
+  `console` / `schedule:run`. The task is not named, because descriptions and commands can contain secrets. A
+  scheduled Artisan command runs in its own process and is still recorded as `console` with its command name. See the
+  [Upgrade Guide](UPGRADE.md#upgrading-from-511).
+- `guzzlehttp/guzzle` 8 is now allowed alongside 7 (`^7.15.2 || ^8.0.1`), and `guzzlehttp/promises` 3 alongside 2.
+  Guzzle 8.0.0 is excluded because it is affected by the same noncanonical-host and cookie-domain advisories as
+  7.15.1 and earlier.
 
 ### Fixed
 
 - Text fields, selects, and date fields on every dashboard have a visible border and inner padding again.
 - Changing the range or interval on the function statistics page keeps the chosen sort and search.
+- Write aliases no longer pile up old index generations. All four create-index commands attached the write alias
+  with an explicit `is_write_index: true`. Elasticsearch's rollover API only removes an alias from the old index when
+  the alias has no such flag, so every rollover, ILM-driven ones included, left `<prefix>_*_write` on the old index
+  with the flag set to `false`. Writes were never affected. The alias is now attached without the flag, so
+  Elasticsearch moves it on each rollover. The `*:create-index` and `*:rollover` commands remove the alias from old
+  indexes on existing deployments and clear the flag. `elastic-audit:health` shows a non-failing notice until that has
+  run. See the [Upgrade Guide](UPGRADE.md#upgrading-from-511).
 
 ## [5.1.1] - 2026-10-24
 
@@ -430,7 +446,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.2.0...HEAD
+[5.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...v5.2.0
 [5.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/tsitsishvili/elastic-audit/compare/v4.2.0...v5.0.0

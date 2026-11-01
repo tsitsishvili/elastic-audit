@@ -7,6 +7,9 @@ namespace Tsitsishvili\ElasticAudit;
 use Elastic\Elasticsearch\ClientBuilder;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Events\Dispatcher;
@@ -377,6 +380,22 @@ class ElasticAuditServiceProvider extends ServiceProvider
             $this->app->make(AuditSourceResolver::class)
                 ->leaveConsoleCommand();
         });
+
+        // A scheduled command runs in its own Artisan process and is attributed
+        // there as a console command; this covers closures and job callbacks,
+        // which run inside schedule:run.
+        $events->listen(ScheduledTaskStarting::class, function (ScheduledTaskStarting $event): void {
+            $this->app->make(AuditSourceResolver::class)
+                ->enterScheduledTask($event->task);
+        });
+
+        $leaveScheduledTask = function (ScheduledTaskFinished|ScheduledTaskFailed $event): void {
+            $this->app->make(AuditSourceResolver::class)
+                ->leaveScheduledTask($event->task);
+        };
+
+        $events->listen(ScheduledTaskFinished::class, $leaveScheduledTask);
+        $events->listen(ScheduledTaskFailed::class, $leaveScheduledTask);
     }
 
     private function registerApplicationMetrics(): void

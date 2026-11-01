@@ -79,6 +79,10 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface, Log
         return true;
     }
 
+    /**
+     * A single-generation alias as this package version provisions it: the
+     * write alias carries no explicit is_write_index flag.
+     */
     public function getAlias(string $name): array
     {
         $baseName = str_ends_with($name, '_write') ? substr($name, 0, -6) : $name;
@@ -86,7 +90,7 @@ class FakeLogElasticsearchClient implements LogElasticsearchClientInterface, Log
         return [
             "{$baseName}-000001" => [
                 'aliases' => [
-                    $name => ['is_write_index' => true],
+                    $name => [],
                 ],
             ],
         ];

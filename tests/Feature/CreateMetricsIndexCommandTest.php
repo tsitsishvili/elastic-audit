@@ -59,6 +59,8 @@ class CreateMetricsIndexCommandTest extends TestCase
         $this->assertSame("{$readAlias}-000001", $fake->createdIndexes[0]['index']);
         $this->assertSame(MetricMapping::get(), $template['template']['mappings']);
         $this->assertArrayHasKey($readAlias, $fake->createdAliases);
-        $this->assertSame(['body' => ['is_write_index' => true]], $fake->createdAliases[$writeAlias]);
+        // Elasticsearch's rollover API only moves an alias off the previous
+        // index when the alias carries no explicit is_write_index flag.
+        $this->assertSame([], $fake->createdAliases[$writeAlias]);
     }
 }

@@ -7,6 +7,37 @@ Changes are tagged by **likelihood of impact** so you can quickly find what affe
 
 ## Upgrading from 5.1.1
 
+5.2.0 is a minor release, so an existing `^5.0` constraint picks it up with
+`composer update tsitsishvili/elastic-audit`. No strict mapping changed, so no create-index run is required.
+
+### Low impact: run each rollover command once to tidy the write aliases
+
+Earlier versions attached each write alias with an explicit `is_write_index: true`. With that flag, Elasticsearch's
+rollover API keeps the alias on the previous index (flagged `false`) instead of moving it, so `<prefix>_*_write` gained
+one stale entry per generation. Elasticsearch copies the flag to every new generation, so this continues until the
+flag is cleared once. Writes were never affected. Run the rollover command for each subsystem you use:
+
+```bash
+php artisan http-logs:rollover                # if HTTP logs are enabled
+php artisan activity-logs:rollover            # if activity logs are enabled
+php artisan elastic-audit:metrics:rollover    # if metrics are enabled
+php artisan elastic-audit:profiles:rollover   # if profiles are enabled
+php artisan elastic-audit:health
+```
+
+Each rollover command only rolls over when the configured conditions match. Every run, though, removes the write alias
+from old indexes and clears the flag in one atomic aliases request, then lists the indexes it removed. Re-running
+`*:create-index` does the same after its rollover. Until one of them has run, `elastic-audit:health` shows a
+non-failing notice that the write alias still lists old indexes or still has the flag. After that no scheduled cleanup
+is needed. Fresh installations need nothing.
+
+### Low impact: scheduled closures record a `schedule` origin
+
+Audit logs and metrics written inside a scheduled closure or job callback now record `execution.type` `schedule` with
+no `execution.name`. Before, they recorded `console` / `schedule:run`. Update saved dashboard filters or external
+queries that matched that pair. A scheduled Artisan command runs in its own process and is still recorded as `console`
+with its command name.
+
 ### Low impact: audit timestamps have milliseconds
 
 New HTTP and activity audit documents store `@timestamp` with millisecond precision in UTC, such as

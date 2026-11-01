@@ -333,7 +333,7 @@ data, and failure information.
 | `request_id`        | Correlation ULID shared by the log context.                                               |
 | `service.name`      | Stable emitting application identity from Laravel's `app.name` configuration.            |
 | `service.environment` | Deployment environment from Laravel's `app.env` configuration.                          |
-| `execution.type`    | `http`, `queue`, `console`, `manual`, or `unknown`.                                      |
+| `execution.type`    | `http`, `queue`, `schedule` (unnamed), `console`, `manual`, or `unknown`.                |
 | `execution.name`    | Route name/template, queue job class, Artisan command, or explicit manual name.          |
 | `execution.action`  | Controller action or explicit manual action when available.                              |
 | `trace.id`          | Optional trace id from the context, `traceparent`, or the active metrics trace.           |
@@ -389,7 +389,9 @@ php artisan http-logs:create-index
 The command creates the next available rollover-compatible physical index. A fresh setup starts with
 `<prefix>_http_logs-000001`; if an index exists without a write alias, the command advances to `-000002`, `-000003`,
 and so on. When the write alias already exists, re-running the command uses Elasticsearch's rollover API instead of
-manually swapping aliases, preserving lifecycle progression for the previous generation.
+manually swapping aliases, preserving lifecycle progression for the previous generation. The write alias is attached
+without an explicit `is_write_index` flag, so each rollover moves it to the new index instead of also leaving it on
+the previous one.
 
 The command also installs an index template for `<prefix>_http_logs-*` so Elasticsearch-created rollover indexes inherit
 the HTTP log mapping, lifecycle settings, replica settings, and read alias.
@@ -432,6 +434,9 @@ Rollover can be run manually or scheduled:
 ```bash
 php artisan http-logs:rollover
 ```
+
+Every run, whether or not it rolls over, also removes the write alias from old indexes and clears an explicit
+`is_write_index` flag left by earlier package versions.
 
 Use the health command during deploys or runbooks to validate cluster reachability, aliases and write-index topology,
 the current write-index and index-template mappings, Elasticsearch names, HTTP enum classes, queue retry and

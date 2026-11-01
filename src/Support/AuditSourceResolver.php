@@ -18,6 +18,9 @@ final class AuditSourceResolver
     /** @var list<string> */
     private array $queueJobs = [];
 
+    /** @var array<int, true> Running scheduled tasks, keyed by task object id. */
+    private array $scheduledTasks = [];
+
     /** @var list<string> */
     private array $consoleCommands = [];
 
@@ -55,6 +58,24 @@ final class AuditSourceResolver
     public function leaveQueueJob(): void
     {
         array_pop($this->queueJobs);
+    }
+
+    /**
+     * The task is not named: descriptions and commands can contain secrets, and
+     * metric documents copy this origin (see capture.scheduled_tasks.include_description).
+     */
+    public function enterScheduledTask(object $task): void
+    {
+        $this->scheduledTasks[spl_object_id($task)] = true;
+    }
+
+    /**
+     * Keyed by task so a repeated leave is harmless: Laravel reports a scheduled
+     * command that exits non-zero as both finished and failed.
+     */
+    public function leaveScheduledTask(object $task): void
+    {
+        unset($this->scheduledTasks[spl_object_id($task)]);
     }
 
     public function enterConsoleCommand(string $name): void
@@ -101,6 +122,12 @@ final class AuditSourceResolver
                 type: ExecutionOrigin::TYPE_QUEUE,
                 name: $queueJob,
             );
+        }
+
+        // Checked before the console stack, which holds schedule:run itself while
+        // an in-process task (a closure or job callback) runs.
+        if ($this->scheduledTasks !== []) {
+            return new ExecutionOrigin(ExecutionOrigin::TYPE_SCHEDULE);
         }
 
         $consoleCommand = end($this->consoleCommands);

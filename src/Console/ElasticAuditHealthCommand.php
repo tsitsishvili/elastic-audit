@@ -19,6 +19,7 @@ use Tsitsishvili\ElasticAudit\Services\Elasticsearch\ProfileMapping;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexNames;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchIndexTemplate;
 use Tsitsishvili\ElasticAudit\Support\ElasticsearchLifecycle;
+use Tsitsishvili\ElasticAudit\Support\ElasticsearchWriteAlias;
 use Tsitsishvili\ElasticAudit\Support\RetentionDays;
 
 class ElasticAuditHealthCommand extends Command
@@ -63,6 +64,7 @@ class ElasticAuditHealthCommand extends Command
             (string) config('http_logs.index_alias_write'),
             (string) config('http_logs.queue', 'default'),
             HttpLogMapping::get(),
+            'http-logs:rollover',
         ) || $failed;
 
         $failed = $this->checkHttpEnums((bool) config('http_logs.enabled', false)) || $failed;
@@ -77,6 +79,7 @@ class ElasticAuditHealthCommand extends Command
             (string) config('activity_logs.index_alias_write'),
             (string) config('activity_logs.queue', 'default'),
             ActivityLogMapping::get(),
+            'activity-logs:rollover',
         ) || $failed;
 
         $metricsEnabled = (bool) config('elastic_audit_metrics.enabled', false);
@@ -89,6 +92,7 @@ class ElasticAuditHealthCommand extends Command
             (string) config('elastic_audit_metrics.index_alias_write'),
             (string) config('elastic_audit_metrics.queue', 'default'),
             MetricMapping::get(),
+            'elastic-audit:metrics:rollover',
         ) || $failed;
         $failed = $this->checkMetricsCapture($metricsEnabled, $profiler) || $failed;
 
@@ -102,6 +106,7 @@ class ElasticAuditHealthCommand extends Command
             (string) config('elastic_audit_metrics.profiles.index_alias_write'),
             (string) config('elastic_audit_metrics.profiles.queue', 'default'),
             ProfileMapping::get(),
+            'elastic-audit:profiles:rollover',
             hasBatchJob: false,
         ) || $failed;
 
@@ -316,6 +321,7 @@ class ElasticAuditHealthCommand extends Command
         string $writeAlias,
         string $queue,
         array $expectedMapping,
+        string $rolloverCommand,
         bool $hasBatchJob = true,
     ): bool {
         if (! $enabled && ! $this->option('all')) {
@@ -381,7 +387,7 @@ class ElasticAuditHealthCommand extends Command
         }
 
         if (isset($aliasResponses['write'])) {
-            $writeIndex = $this->resolveWriteIndex($aliasResponses['write'], $writeAlias);
+            $writeIndex = ElasticsearchWriteAlias::writeIndex($aliasResponses['write'], $writeAlias);
 
             if ($writeIndex === null) {
                 $this->recordError("{$label}: write alias {$writeAlias} must resolve to exactly one writable index.");
@@ -391,6 +397,7 @@ class ElasticAuditHealthCommand extends Command
                 $failed = true;
             } else {
                 $this->recordSuccess("{$label}: write alias targets {$writeIndex}.");
+                $this->reportUnnormalizedWriteAlias($label, $rolloverCommand, $aliasResponses['write'], $writeAlias, $writeIndex);
 
                 if ($client instanceof LogElasticsearchSchemaInspectorInterface) {
                     $failed = $this->checkWriteMapping(
@@ -613,36 +620,36 @@ class ElasticAuditHealthCommand extends Command
         return $differences;
     }
 
-    private function resolveWriteIndex(array $response, string $writeAlias): ?string
-    {
-        $aliasIndexes         = [];
-        $explicitWriteIndexes = [];
+    /**
+     * Writes still reach the right index in both states, so neither fails the
+     * check; they mean the alias was attached by an earlier package version and
+     * the rollover command has not run since. Elasticsearch's rollover only
+     * moves an alias off the previous index when it carries no explicit flag.
+     *
+     * @param  array<string, mixed>  $aliasResponse
+     */
+    private function reportUnnormalizedWriteAlias(
+        string $label,
+        string $rolloverCommand,
+        array $aliasResponse,
+        string $writeAlias,
+        string $writeIndex,
+    ): void {
+        $stale = ElasticsearchWriteAlias::staleIndexes($aliasResponse, $writeAlias);
 
-        foreach ($response as $index => $metadata) {
-            $alias = is_array($metadata) ? ($metadata['aliases'][$writeAlias] ?? null) : null;
-
-            if (! is_array($alias)) {
-                continue;
-            }
-
-            $aliasIndexes[(string) $index] = $alias;
-
-            if (($alias['is_write_index'] ?? null) === true) {
-                $explicitWriteIndexes[] = (string) $index;
-            }
+        if ($stale !== []) {
+            $this->recordInfo(
+                "{$label}: write alias {$writeAlias} still lists previous indexes: ".implode(', ', $stale).'. '
+                ."Run php artisan {$rolloverCommand} to detach them."
+            );
         }
 
-        if (count($explicitWriteIndexes) === 1) {
-            return $explicitWriteIndexes[0];
+        if (ElasticsearchWriteAlias::hasExplicitWriteFlag($aliasResponse, $writeAlias)) {
+            $this->recordInfo(
+                "{$label}: write index {$writeIndex} carries an explicit is_write_index flag; the next rollover "
+                ."would leave the alias on it. Run php artisan {$rolloverCommand} to clear it."
+            );
         }
-
-        if ($explicitWriteIndexes !== [] || count($aliasIndexes) !== 1) {
-            return null;
-        }
-
-        $index = array_key_first($aliasIndexes);
-
-        return ! array_key_exists('is_write_index', $aliasIndexes[$index]) ? $index : null;
     }
 
     private function checkRetentionDays(string $label, string $configKey): bool

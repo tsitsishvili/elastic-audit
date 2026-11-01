@@ -10,6 +10,8 @@ final readonly class ExecutionOrigin
 
     public const TYPE_QUEUE = 'queue';
 
+    public const TYPE_SCHEDULE = 'schedule';
+
     public const TYPE_CONSOLE = 'console';
 
     public const TYPE_MANUAL = 'manual';

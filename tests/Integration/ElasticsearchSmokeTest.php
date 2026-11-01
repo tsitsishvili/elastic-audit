@@ -136,6 +136,17 @@ final class ElasticsearchSmokeTest extends TestCase
         // The read aliases must retain the rolled-over index and all of its documents.
         $this->assertDocumentsExist($client, $live);
 
+        // Without an explicit is_write_index flag, Elasticsearch moves the write alias
+        // off the previous generation instead of leaving it there flagged false.
+        foreach ([
+            'http_logs.index_alias_write',
+            'activity_logs.index_alias_write',
+            'elastic_audit_metrics.index_alias_write',
+            'elastic_audit_metrics.profiles.index_alias_write',
+        ] as $writeAliasKey) {
+            $this->assertCount(1, $client->getAlias((string) config($writeAliasKey)), $writeAliasKey);
+        }
+
         // Exercise the conditional rollover endpoints too; unmet conditions are a successful no-op.
         $this->artisan('http-logs:rollover')->assertSuccessful();
         $this->artisan('activity-logs:rollover')->assertSuccessful();
