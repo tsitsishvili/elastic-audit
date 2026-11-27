@@ -36,13 +36,22 @@ final class SqlStatementNormalizer
         $length              = strlen($sql);
         $normalized          = '';
         $doubleQuotesAreData = ! in_array($driver, ['pgsql', 'oci', 'oracle'], true);
-        $hashStartsComment   = in_array($driver, ['mysql', 'mariadb', 'unknown'], true);
+        $hashStartsComment   = in_array($driver, ['mysql', 'mariadb', 'singlestore', 'unknown'], true);
         // Standard SQL has no backslash escapes. Honouring one where the database
         // does not would end a literal like 'C:\' late and leak the next literal.
-        $backslashEscapes = in_array($driver, ['mysql', 'mariadb', 'unknown'], true);
+        $backslashEscapes = in_array($driver, ['mysql', 'mariadb', 'singlestore', 'unknown'], true);
+        // Oracle q'[...]' literals may hold unescaped single quotes.
+        $alternativeQuoting = in_array($driver, ['oci', 'oracle'], true);
 
         for ($offset = 0; $offset < $length;) {
             $character = $sql[$offset];
+
+            if ($character === "'" && $alternativeQuoting && $this->isAlternativeQuote($sql, $offset)) {
+                $normalized .= '?';
+                $offset = $this->alternativeQuoteEnd($sql, $offset);
+
+                continue;
+            }
 
             if ($character === "'") {
                 $normalized .= '?';
@@ -188,9 +197,24 @@ final class SqlStatementNormalizer
         return $length;
     }
 
+    /** Whether the quote at $offset opens an Oracle q'[...]' (or nq'...') literal. */
+    private function isAlternativeQuote(string $sql, int $offset): bool
+    {
+        return preg_match('/(?:^|[^a-z0-9_$#])n?q$/i', substr($sql, max(0, $offset - 3), min(3, $offset))) === 1;
+    }
+
+    private function alternativeQuoteEnd(string $sql, int $offset): int
+    {
+        $delimiter = $sql[$offset + 1] ?? '';
+        $closing   = ['[' => ']', '{' => '}', '(' => ')', '<' => '>'][$delimiter] ?? $delimiter;
+        $end       = $delimiter === '' ? false : strpos($sql, $closing."'", $offset + 2);
+
+        return $end === false ? strlen($sql) : $end + 2;
+    }
+
     private function dollarQuoteTag(string $sql, int $offset): ?string
     {
-        if (preg_match('/\A\$(?:[a-z_][a-z0-9_]*)?\$/i', substr($sql, $offset), $matches) !== 1) {
+        if (preg_match('/\G\$(?:[a-z_][a-z0-9_]*)?\$/i', $sql, $matches, 0, $offset) !== 1) {
             return null;
         }
 
@@ -243,10 +267,13 @@ final class SqlStatementNormalizer
             return null;
         }
 
+        // \G with an offset, not substr(): copying the tail per number made a 100k-id IN list take ~1 s.
         if (preg_match(
-            '/\A(?:0x[0-9a-f]+|0b[01]+|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)/i',
-            substr($sql, $offset),
+            '/\G(?:0x[0-9a-f]+|0b[01]+|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)/i',
+            $sql,
             $matches,
+            0,
+            $offset,
         ) !== 1) {
             return null;
         }

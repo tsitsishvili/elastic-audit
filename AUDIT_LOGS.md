@@ -182,6 +182,11 @@ LOG_ELASTICSEARCH_REPLICAS=1
 | `LOG_ELASTICSEARCH_LIFECYCLE_DELETE_AFTER`  | Whole-index ILM delete age; it does not enforce document `retention_days`.                                                         |
 | `LOG_ELASTICSEARCH_INDEX_PREFIX`            | Shared prefix for derived HTTP/activity aliases and the lifecycle policy. Defaults to a slugged `APP_NAME`, then `app_logs`.       |
 | `LOG_ELASTICSEARCH_REPLICAS`                | Replica count for newly created indexes. Defaults to `1`; use `0` only for an intentional single-node cluster.                    |
+| `LOG_ELASTICSEARCH_API_KEY`                 | Encoded API key. Used instead of the username and password when set.                                                              |
+| `LOG_ELASTICSEARCH_SSL_VERIFY`              | Set to `false` to skip TLS certificate verification. Defaults to `true`.                                                          |
+| `LOG_ELASTICSEARCH_CA_BUNDLE`               | Path to a CA certificate for a cluster signed by a private authority.                                                             |
+| `LOG_ELASTICSEARCH_CONNECT_TIMEOUT`         | Seconds to wait for a connection. Unset waits without limit.                                                                      |
+| `LOG_ELASTICSEARCH_TIMEOUT`                 | Seconds to wait for a response. Unset waits without limit; prune commands wait for the whole delete.                              |
 
 The package writes to aliases based on `LOG_ELASTICSEARCH_INDEX_PREFIX`. When that variable is absent, the `APP_NAME`
 fallback is slugged (for example, `Example App` becomes `example_app`); an explicit invalid prefix is rejected by the

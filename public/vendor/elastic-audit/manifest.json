@@ -1,6 +1,6 @@
 {
   "resources/css/elastic-audit.css": {
-    "file": "styles-Czp5BmYr.css",
+    "file": "styles-DT3xeY9E.css",
     "name": "styles",
     "names": [
       "styles.css"
@@ -9,13 +9,13 @@
     "isEntry": true
   },
   "resources/js/alpine.js": {
-    "file": "alpine-RtO928pj.js",
+    "file": "alpine-Wv_9O73y.js",
     "name": "alpine",
     "src": "resources/js/alpine.js",
     "isEntry": true
   },
   "resources/js/chart.js": {
-    "file": "chart-BGnPYjVl.js",
+    "file": "chart-Chv5QODT.js",
     "name": "chart",
     "src": "resources/js/chart.js",
     "isEntry": true

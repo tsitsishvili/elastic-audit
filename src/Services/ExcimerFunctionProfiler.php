@@ -194,13 +194,32 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
             ];
         }
 
+        // Excimer folds the timer overruns of a blocking call (a query, curl, sleep) into one
+        // sample whose weight is the nanoseconds it stands for, so a sample can be many periods.
+        $periods = [];
+
+        foreach (is_array($payload['profiles'] ?? null) ? $payload['profiles'] : [] as $profile) {
+            if (! is_array($profile) || ! is_array($profile['samples'] ?? null)) {
+                continue;
+            }
+
+            $weighted = ($profile['unit'] ?? null) === 'nanoseconds' && $this->periodMs > 0;
+
+            foreach (array_keys($profile['samples']) as $position) {
+                $weight    = $profile['weights'][$position] ?? null;
+                $periods[] = $weighted && is_numeric($weight) ? max(1.0, $weight / ($this->periodMs * 1_000_000)) : 1.0;
+            }
+        }
+
         $self  = [];
         $total = [];
 
-        foreach ($samples as $stack) {
+        foreach ($samples as $position => $stack) {
             if (! is_array($stack)) {
                 continue;
             }
+
+            $worth = $periods[$position] ?? 1.0;
 
             // Once per sample: a recursive frame appears at several depths of one
             // stack, but the sample is still one period of its inclusive time.
@@ -209,14 +228,14 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
             foreach ($stack as $frameId) {
                 if ((is_int($frameId) || is_numeric($frameId)) && ! isset($seen[(int) $frameId])) {
                     $seen[(int) $frameId]  = true;
-                    $total[(int) $frameId] = ($total[(int) $frameId] ?? 0) + 1;
+                    $total[(int) $frameId] = ($total[(int) $frameId] ?? 0) + $worth;
                 }
             }
 
             $leaf = end($stack);
 
             if (is_int($leaf) || is_numeric($leaf)) {
-                $self[(int) $leaf] = ($self[(int) $leaf] ?? 0) + 1;
+                $self[(int) $leaf] = ($self[(int) $leaf] ?? 0) + $worth;
             }
         }
 
@@ -229,8 +248,8 @@ final class ExcimerFunctionProfiler implements FunctionProfiler
                 'function'      => (string) ($frame['name'] ?? 'unknown'),
                 'file'          => isset($frame['file']) ? (string) $frame['file'] : null,
                 'line'          => isset($frame['line']) ? (int) $frame['line'] : null,
-                'self_samples'  => $count,
-                'total_samples' => $total[$frameId] ?? $count,
+                'self_samples'  => (int) round($count),
+                'total_samples' => (int) round($total[$frameId] ?? $count),
             ];
         }
 

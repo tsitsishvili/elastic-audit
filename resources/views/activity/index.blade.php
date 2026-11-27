@@ -5,7 +5,8 @@
 @section('title', 'Activity Logs')
 
 @php
-    $totalPages = max(1, (int) ceil($total / max(1, $perPage)));
+    // Capped at the 10,000-row window the query can page through.
+    $totalPages = max(1, min((int) ceil($total / max(1, $perPage)), intdiv(10000, max(1, $perPage))));
     $page       = min($page, $totalPages);
     $from       = $total > 0 ? ($page - 1) * $perPage + 1 : 0;
     $to         = min($page * $perPage, $total);
@@ -152,8 +153,8 @@
                     <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Result</span>
                     <select name="success" class="{{ $field }}">
                         <option value="">All</option>
-                        <option value="1" @selected(($filters['success'] ?? '') === '1')>Success</option>
-                        <option value="0" @selected(($filters['success'] ?? '') === '0')>Failure</option>
+                        <option value="1" @selected(in_array($filters['success'] ?? '', ['1', 'true'], true))>Success</option>
+                        <option value="0" @selected(in_array($filters['success'] ?? '', ['0', 'false'], true))>Failure</option>
                     </select>
                 </label>
 

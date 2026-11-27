@@ -86,6 +86,15 @@ class MetricNormalizersTest extends TestCase
             $normalizer->normalize("SELECT 'it\\'s' AS note, 'sk_live_secret' AS token", driver: 'mysql'),
         );
         $this->assertSame(
+            'SELECT ? AS note, ? AS token',
+            $normalizer->normalize("SELECT 'it\\'s' AS note, 'sk_live_secret' AS token", driver: 'singlestore'),
+        );
+        // Oracle alternative quoting holds unescaped single quotes.
+        $this->assertSame(
+            'select q? as note, ? as token from dual',
+            $normalizer->normalize("select q'[it's a sec]' as note, 'sk_live_secret' as token from dual", driver: 'oracle'),
+        );
+        $this->assertSame(
             'SELECT E? AS note, ? AS token',
             $normalizer->normalize("SELECT E'it\\'s' AS note, 'sk_live_secret' AS token", driver: 'pgsql'),
         );

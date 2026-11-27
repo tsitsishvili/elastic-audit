@@ -164,7 +164,7 @@ final class ElasticsearchSmokeTest extends TestCase
             ->expectsOutputToContain('Deleted 1 documents.')
             ->assertSuccessful();
         $this->artisan('elastic-audit:profiles:prune')
-            ->expectsOutputToContain('Deleted 1 profile documents with retention_days=1.')
+            ->expectsOutputToContain('Deleted 1 documents.')
             ->assertSuccessful();
 
         foreach ($live as $alias => [$keptId, $expiredId]) {

@@ -46,6 +46,19 @@ final class MetricsRecorder
      */
     private int $daemonDepth = 0;
 
+    /**
+     * Spans recorded outside any transaction (queries in a provider's boot(), work in
+     * terminating callbacks) wait here so they leave as one queue job, not one each.
+     * Off until the application promises a flush at termination.
+     *
+     * @var list<MetricData>
+     */
+    private array $rootless = [];
+
+    private bool $bufferRootless = false;
+
+    private bool $rootlessFlushArranged = false;
+
     /** @param array<string, mixed>|null $config */
     public function __construct(
         private readonly ?array $config = null,
@@ -77,6 +90,62 @@ final class MetricsRecorder
         if ($this->suppressions[$slot] === 0) {
             unset($this->suppressions[$slot]);
         }
+    }
+
+    /**
+     * Drop whatever this execution context still holds from earlier work. A long-lived
+     * worker calls it before each unit of work: a request whose terminate() never ran
+     * would otherwise leave its root open, and every later request would join its trace
+     * and never be flushed.
+     */
+    public function reset(): void
+    {
+        $current = $this->slot();
+
+        // Under Swoole every request is a new coroutine, so a leaked root sits in a slot no
+        // later request reuses; those are freed here once their coroutine is gone.
+        foreach (array_keys($this->contexts + $this->stacks + $this->suppressions) as $slot) {
+            if ($slot !== $current && ExecutionContextId::alive($slot)) {
+                continue;
+            }
+
+            foreach ($this->contexts[$slot] ?? [] as $context) {
+                if (! $context->ownsProfiler) {
+                    continue;
+                }
+
+                try {
+                    $this->profiler?->stop();
+                } catch (Throwable) {
+                    // A custom profiler implementation must not affect the application.
+                }
+            }
+
+            unset($this->contexts[$slot], $this->stacks[$slot], $this->suppressions[$slot]);
+        }
+
+        // A new unit of work ends with the application's termination flush again.
+        $this->bufferRootless = $this->rootlessFlushArranged;
+    }
+
+    /** Hold root-less spans until flushRootless(); the caller must arrange that flush. */
+    public function bufferRootless(): void
+    {
+        $this->bufferRootless        = true;
+        $this->rootlessFlushArranged = true;
+    }
+
+    /**
+     * Send the held root-less spans and stop holding: anything recorded after the
+     * application's termination has no later flush to wait for.
+     */
+    public function flushRootless(): void
+    {
+        $this->bufferRootless = false;
+        $rootless             = $this->rootless;
+        $this->rootless       = [];
+
+        $this->flush($rootless);
     }
 
     public function enterDaemonProcess(): void
@@ -143,7 +212,11 @@ final class MetricsRecorder
                 startedAt: hrtime(true),
                 startedTimestamp: Carbon::now()->toIso8601ZuluString('millisecond'),
                 sampled: $sampled,
-                traceState: $parent !== null ? $parent->traceState : $upstream?->traceState,
+                // W3C: a tracestate is discarded with the traceparent it arrived with, so a
+                // fresh trace never forwards the caller's.
+                traceState: $parent !== null
+                    ? $parent->traceState
+                    : ($upstream?->traceId !== null ? $upstream->traceState : null),
                 source: $source ?? $this->resolver()->resolve(),
             );
 
@@ -219,8 +292,10 @@ final class MetricsRecorder
             // A root below its own threshold is never indexed. Its spans carry
             // that root's transaction id, so keeping them would leave documents
             // pointing at a transaction that does not exist — invisible to the
-            // dashboards, which only list transactions, but still stored.
-            if (! $keepRoot) {
+            // dashboards, which only list transactions, but still stored. A measured
+            // block inside a transaction is different: its spans belong to that
+            // transaction, which is kept or dropped on its own.
+            if (! $keepRoot && ($context->kind === MetricData::KIND_TRANSACTION || $context->transactionId === null)) {
                 $context->spans = [];
             }
 
@@ -266,10 +341,19 @@ final class MetricsRecorder
             }
 
             unset($this->contexts[$slot][$token]);
-            $this->stacks[$slot] = array_values(array_filter(
-                $this->stacks[$slot] ?? [],
-                static fn (string $candidate): bool => $candidate !== $token,
-            ));
+            $stack = $this->stacks[$slot] ?? [];
+            $index = array_search($token, $stack, true);
+
+            // A transaction that ends takes whatever is still open above it along. A measured
+            // block that was begun and never ended would otherwise become this transaction's
+            // parent, swallow it, and stay on the stack for the rest of the process.
+            if ($index !== false && $context->kind === MetricData::KIND_TRANSACTION) {
+                foreach (array_splice($stack, $index + 1) as $orphan) {
+                    unset($this->contexts[$slot][$orphan]);
+                }
+            }
+
+            $this->stacks[$slot] = array_values(array_diff($stack, [$token]));
 
             if (($this->contexts[$slot] ?? []) === []) {
                 unset($this->contexts[$slot]);
@@ -424,7 +508,19 @@ final class MetricsRecorder
                 return;
             }
 
-            $this->flush([$metric]);
+            if (! $this->bufferRootless) {
+                $this->flush([$metric]);
+
+                return;
+            }
+
+            $this->rootless[] = $metric;
+
+            if (count($this->rootless) >= max(1, (int) $this->setting('batch_size', 100))) {
+                $rootless       = $this->rootless;
+                $this->rootless = [];
+                $this->flush($rootless);
+            }
         } catch (Throwable) {
             // Metrics are best-effort.
         }

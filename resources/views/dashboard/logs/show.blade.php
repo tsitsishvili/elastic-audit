@@ -42,7 +42,7 @@
 @endphp
 
 @section('content')
-    <a href="{{ url()->previous() !== url()->current() ? url()->previous() : route('http-logs.logs.index', [], false) }}"
+    <a href="{{ url()->previous() !== url()->current() && str_starts_with(url()->previous(), url('/').'/') ? url()->previous() : route('http-logs.logs.index', [], false) }}"
        class="ea-focus mb-4 inline-flex h-9 items-center gap-1 rounded-md text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">← Back to logs</a>
 
     @if (! $log)

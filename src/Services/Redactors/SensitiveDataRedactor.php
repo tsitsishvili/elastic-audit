@@ -30,6 +30,8 @@ class SensitiveDataRedactor
      */
     private const REDACTED_HEADER_WORDS = [
         'authorization',
+        // Symfony copies Basic/Digest credentials into php-auth-user / php-auth-pw / php-auth-digest.
+        'auth',
         'cookie',
         'signature',
         'hmac',
@@ -162,6 +164,12 @@ class SensitiveDataRedactor
     /** @var string[] */
     private array $bodyBlock;
 
+    /** @var array{string, string} [anywhere, trailing] regexes, built once: rebuilding them per key cost ~0.5 s per MB of JSON. */
+    private array $headerPatterns;
+
+    /** @var array{string, string} */
+    private array $bodyPatterns;
+
     public function __construct(
         RedactionRules $headers = new RedactionRules,
         RedactionRules $body = new RedactionRules,
@@ -172,6 +180,15 @@ class SensitiveDataRedactor
         $this->headerBlock = array_map($this->normalizeName(...), $headers->block);
         $this->bodyAllow   = array_map($this->normalizeName(...), $body->allow);
         $this->bodyBlock   = array_map($this->normalizeName(...), $body->block);
+
+        $this->headerPatterns = [
+            $this->wordPattern([...self::REDACTED_HEADER_WORDS, ...$this->headerBlock], '(?:_|$)'),
+            $this->wordPattern(self::REDACTED_HEADER_TRAILING_WORDS, '$'),
+        ];
+        $this->bodyPatterns = [
+            $this->wordPattern([...self::REDACTED_BODY_WORDS, ...$this->bodyBlock], '(?:_|$)'),
+            $this->wordPattern(self::REDACTED_BODY_TRAILING_WORDS, '$'),
+        ];
     }
 
     public function redactHeaders(array $headers): array
@@ -287,7 +304,10 @@ class SensitiveDataRedactor
             );
         }
 
-        $redactedString = $redactedArray !== null ? (string) json_encode($redactedArray) : $rawBody;
+        // Unescaped so non-ASCII text is not inflated sixfold before the size cap and stays readable in the preview.
+        $redactedString = $redactedArray !== null
+            ? (string) json_encode($redactedArray, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE)
+            : $rawBody;
 
         $payload = $this->truncateAndHash($redactedString, $maxBytes, $previewBytes);
 
@@ -374,15 +394,10 @@ class SensitiveDataRedactor
 
     private function isSensitiveHeader(string $name): bool
     {
-        if (in_array($this->normalizeName($name), $this->headerAllow, true)) {
-            return false;
-        }
+        $normalized = $this->normalizeName($name);
 
-        return $this->matchesSecretWord(
-            $name,
-            [...self::REDACTED_HEADER_WORDS, ...$this->headerBlock],
-            self::REDACTED_HEADER_TRAILING_WORDS,
-        );
+        return ! in_array($normalized, $this->headerAllow, true)
+            && $this->matchesSecretWord($normalized, $this->headerPatterns);
     }
 
     private function isSensitiveBodyKey(string $key): bool
@@ -393,54 +408,45 @@ class SensitiveDataRedactor
             return false;
         }
 
-        if (in_array($normalized, self::REDACTED_BODY_KEYS, true)) {
+        // Digit suffixes ('cvv2', 'phone1') name the same secret.
+        if (in_array(rtrim($normalized, '0123456789'), self::REDACTED_BODY_KEYS, true)) {
             return true;
         }
 
-        return $this->matchesSecretWord(
-            $key,
-            [...self::REDACTED_BODY_WORDS, ...$this->bodyBlock],
-            self::REDACTED_BODY_TRAILING_WORDS,
-        );
+        return $this->matchesSecretWord($normalized, $this->bodyPatterns);
     }
 
     /**
      * Normalize a header or key name to lower snake_case so camelCase,
      * kebab-case, dotted and spaced variants compare equal: 'accessToken',
      * 'access-token', 'access.token' and 'access_token' all become
-     * 'access_token'.
+     * 'access_token'. An acronym is split from the word after it, so
+     * 'DBPassword' and 'X-CSRFToken' become 'db_password' and 'x_csrf_token'.
      */
     private function normalizeName(string $name): string
     {
+        $name = (string) preg_replace('/([A-Z])([A-Z][a-z]{2})/', '$1_$2', $name);
         $name = (string) preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $name);
 
         return strtolower((string) preg_replace('/[-.\s]+/', '_', $name));
     }
 
     /**
-     * Word-aware match against secret words. The name is normalized first, then
-     * patterns are matched on '_' word boundaries (with an optional plural 's'),
-     * so they never fire mid-word. Words in $anywhere match in any position;
-     * words in $trailing match only as the final word, keeping qualifier
-     * prefixes like 'token_type' visible.
+     * Word-aware match of a normalized name against secret words, on '_' word
+     * boundaries (with an optional plural 's' or digit suffix), so they never
+     * fire mid-word. The first pattern matches in any position; the second only
+     * as the final word, keeping qualifier prefixes like 'token_type' visible.
      *
-     * @param  string[]  $anywhere
-     * @param  string[]  $trailing
+     * @param  array{string, string}  $patterns
      */
-    private function matchesSecretWord(string $name, array $anywhere, array $trailing): bool
+    private function matchesSecretWord(string $normalized, array $patterns): bool
     {
-        $name = $this->normalizeName($name);
-
-        if ($anywhere !== [] && preg_match($this->wordPattern($anywhere, '(?:_|$)'), $name) === 1) {
-            return true;
-        }
-
-        return $trailing !== [] && preg_match($this->wordPattern($trailing, '$'), $name) === 1;
+        return preg_match($patterns[0], $normalized) === 1 || preg_match($patterns[1], $normalized) === 1;
     }
 
     /**
-     * Build a regex matching any of $words as a whole word (optionally plural)
-     * starting on a '_' boundary and ending with $suffix.
+     * Build a regex matching any of $words as a whole word (optionally plural
+     * or numbered, e.g. 'password2') starting on a '_' boundary and ending with $suffix.
      *
      * @param  string[]  $words
      */
@@ -448,18 +454,40 @@ class SensitiveDataRedactor
     {
         $group = implode('|', array_map(static fn (string $w): string => preg_quote($w, '/'), $words));
 
-        return '/(?:^|_)(?:'.$group.')s?'.$suffix.'/';
+        return '/(?:^|_)(?:'.$group.')s?\\d*'.$suffix.'/';
     }
 
     private function decodeBody(array $headers, string $rawBody): mixed
     {
         if ($this->isFormUrlEncoded($headers)) {
+            // The Content-Type is only a claim (curl -d sends JSON as a form): parse_str() would
+            // turn a non-form body into one giant key that key redaction never looks inside.
+            $json = json_decode($rawBody, true, 512, JSON_BIGINT_AS_STRING);
+
+            if (is_array($json)) {
+                return $json;
+            }
+
+            $pairs = explode('&', $rawBody);
+
+            // parse_str() warns past max_input_vars, which would drop the whole log entry.
+            if (count($pairs) > (int) ini_get('max_input_vars')) {
+                return null;
+            }
+
+            foreach ($pairs as $pair) {
+                if ($pair !== '' && preg_match('/^[\\w.\\-\\[\\]%+]+=/', $pair) !== 1) {
+                    return null;
+                }
+            }
+
             parse_str($rawBody, $parsed);
 
             return $parsed;
         }
 
-        return json_decode($rawBody, true);
+        // Without the flag a 20-digit id is stored as a rounded float.
+        return json_decode($rawBody, true, 512, JSON_BIGINT_AS_STRING);
     }
 
     private function isFormUrlEncoded(array $headers): bool

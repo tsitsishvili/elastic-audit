@@ -24,7 +24,7 @@ final class ProfileSourcePath
      * lookbehind keeps the drive-letter branch from firing mid-word, where the
      * `e:/` in `{closure:/srv/...}` would otherwise read as a drive.
      */
-    private const ABSOLUTE_PATH = '#(?:(?<![A-Za-z0-9_])[A-Za-z]:[\\\\/]|/)[^\s()\[\]{}<>"|*?]+#';
+    private const ABSOLUTE_PATH = '#(?:(?<![A-Za-z0-9_])[A-Za-z]:[\\\\/]|/)[^\r\n()\[\]{}<>"|*?]+#';
 
     /**
      * Reduce an absolute path to one relative to the application root, falling

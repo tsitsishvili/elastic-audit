@@ -64,6 +64,7 @@ final class ApplicationMetricsSubscriber
         'horizon',
         'horizon:supervisor',
         'horizon:work',
+        'vapor:work',
         'octane:start',
         'octane:frankenphp',
         'octane:roadrunner',
@@ -436,7 +437,12 @@ final class ApplicationMetricsSubscriber
 
     public function scheduledTaskFinished(ScheduledTaskFinished $event): void
     {
-        $this->finishScheduledTask($event->task, MetricData::OUTCOME_SUCCESS);
+        // Laravel reports a command that exits non-zero as finished first and failed second;
+        // by the failed event the timer is gone, so the exit code decides the outcome here.
+        $this->finishScheduledTask(
+            $event->task,
+            ($event->task->exitCode ?? 0) !== 0 ? MetricData::OUTCOME_FAILURE : MetricData::OUTCOME_SUCCESS,
+        );
     }
 
     public function scheduledTaskFailed(ScheduledTaskFailed $event): void

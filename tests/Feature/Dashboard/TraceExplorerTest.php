@@ -133,6 +133,17 @@ final class TraceExplorerTest extends TestCase
             ->assertDontSee('Failed to query Elasticsearch');
     }
 
+    public function test_a_trace_larger_than_the_metrics_cap_says_so(): void
+    {
+        $this->fake->searchResolver = fn (array $params): array => str_contains((string) $params['index'], 'metrics')
+            ? $this->hits([$this->root()], 1102)
+            : $this->hits([]);
+
+        $this->get($this->url())
+            ->assertOk()
+            ->assertSee('Showing the first 1,000 performance records of 1,102');
+    }
+
     public function test_audit_rows_are_capped_with_a_notice(): void
     {
         $this->fake->searchResolver = function (array $params): array {

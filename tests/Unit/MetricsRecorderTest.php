@@ -17,6 +17,7 @@ use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogProfileJob;
 use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
 use Tsitsishvili\ElasticAudit\Support\AuditSourceResolver;
+use Tsitsishvili\ElasticAudit\Support\TraceContext;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
 class MetricsRecorderTest extends TestCase
@@ -427,6 +428,74 @@ class MetricsRecorderTest extends TestCase
         });
     }
 
+    /** @return array<string, mixed> */
+    public function test_a_measured_block_left_open_cannot_swallow_the_transactions_around_it(): void
+    {
+        Bus::fake();
+        $recorder = new MetricsRecorder(
+            config: $this->enabledConfig(),
+            sourceResolver: $this->app->make(AuditSourceResolver::class),
+        );
+
+        $first = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET first');
+        $recorder->beginMeasure('never ended');
+        $recorder->finish($first, 'GET first', MetricData::OUTCOME_SUCCESS);
+
+        $second = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET second');
+        $recorder->finish($second, 'GET second', MetricData::OUTCOME_SUCCESS);
+
+        $traces = [];
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $job) use (&$traces): bool {
+            $traces[] = $job->items[0]->traceId;
+
+            return true;
+        });
+
+        $this->assertCount(2, array_unique($traces));
+    }
+
+    public function test_a_measured_block_below_its_threshold_keeps_the_spans_recorded_inside_it(): void
+    {
+        Bus::fake();
+        $config                         = $this->enabledConfig();
+        $config['capture']['functions'] = ['enabled' => true, 'sample_rate' => 1, 'min_duration_ms' => 5000];
+        $recorder                       = new MetricsRecorder(
+            config: $config,
+            sourceResolver: $this->app->make(AuditSourceResolver::class),
+        );
+
+        $token = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET /');
+        $recorder->measure('fast block', fn () => $recorder->record(
+            category: 'queries',
+            type: MetricData::TYPE_DB_QUERY,
+            name: 'select sqlite',
+            outcome: MetricData::OUTCOME_SUCCESS,
+            durationMs: 1.0,
+        ));
+        $recorder->finish($token, 'GET /', MetricData::OUTCOME_SUCCESS);
+
+        Bus::assertDispatched(LogMetricBatchJob::class, fn (LogMetricBatchJob $job): bool => array_map(
+            static fn (MetricData $metric): string => $metric->type,
+            $job->items,
+        ) === [MetricData::TYPE_DB_QUERY, MetricData::TYPE_HTTP_SERVER]);
+    }
+
+    public function test_a_fresh_trace_does_not_forward_the_callers_tracestate(): void
+    {
+        $recorder = new MetricsRecorder(
+            config: $this->enabledConfig(),
+            sourceResolver: $this->app->make(AuditSourceResolver::class),
+        );
+
+        $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET /', upstream: TraceContext::fromTraceParent('not-a-traceparent', 'vendor=1'));
+        $this->assertNull($recorder->propagationContext()?->traceState);
+        $recorder->reset();
+
+        $valid = '00-'.str_repeat('a', 32).'-'.str_repeat('b', 16).'-01';
+        $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET /', upstream: TraceContext::fromTraceParent($valid, 'vendor=1'));
+        $this->assertSame('vendor=1', $recorder->propagationContext()?->traceState);
+    }
+
     /** @param list<array{function: string, self_ms: float, total_ms: float, calls: ?int}> $timings */
     private function profilerReturning(array $timings): FunctionProfiler
     {
@@ -466,7 +535,6 @@ class MetricsRecorderTest extends TestCase
         };
     }
 
-    /** @return array<string, mixed> */
     private function enabledConfig(): array
     {
         return [

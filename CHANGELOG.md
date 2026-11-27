@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-11-27
+
+Several fixes in this release stop secrets from being stored in clear text; upgrading is recommended. See the
+[Upgrade Guide](UPGRADE.md#upgrading-from-520) for the behavior changes.
+
+### Added
+
+- The Elasticsearch connection accepts an API key (`LOG_ELASTICSEARCH_API_KEY`), a private CA bundle
+  (`LOG_ELASTICSEARCH_CA_BUNDLE`), disabled certificate verification (`LOG_ELASTICSEARCH_SSL_VERIFY=false`), and
+  connection and response timeouts (`LOG_ELASTICSEARCH_CONNECT_TIMEOUT`, `LOG_ELASTICSEARCH_TIMEOUT`). All are off by
+  default. Setting a timeout, CA bundle or disabled verification makes the client use Guzzle.
+
+### Security
+
+- Incoming Basic and Digest credentials are no longer stored in clear text. Symfony copies them into `php-auth-user`,
+  `php-auth-pw` and `php-auth-digest` headers; header names containing the word `auth` are now redacted.
+- A JSON body sent with a form `Content-Type` (curl's default for `-d`) is redacted as JSON. A body that is neither JSON
+  nor `key=value` pairs is stored as a hash only instead of in full.
+- Key redaction now catches acronym camelCase and numbered names such as `DBPassword`, `X-CSRFToken`, `password1` and
+  `cvv2`.
+- `ActivityLoggable` records the stored form of an updated attribute's old value. It used to apply the model's casts,
+  which wrote the decrypted value of an `encrypted` attribute into `changes.*.old`.
+- "Back to logs" on the log detail pages only follows a referer from the same site.
+- Profile frame names no longer keep part of an absolute path that contains a space. SQL literals with backslash
+  escapes are stripped correctly on the `singlestore` driver, and Oracle `q'[...]'` literals are stripped whole.
+- A request with a missing or invalid `traceparent` starts a fresh trace without forwarding the caller's `tracestate`.
+
+### Changed
+
+- Spans recorded outside any transaction, such as queries in a service provider's `boot()`, are sent as one queue job
+  when the application terminates instead of one job each.
+- The profiles create-index, rollover and prune commands print the same messages as the other subsystems' commands.
+- Dashboard assets are rebuilt with Tailwind CSS 4.3.5, Chart.js 4.6.2 and Vite 8.4.0. The dashboards keep serving the
+  copy bundled with the package.
+- Redacted bodies are re-encoded without escaping non-ASCII text or slashes, so such text no longer counts sixfold
+  against `body_max_bytes` and stays readable in the preview. `body_hash` values for bodies containing either differ
+  from those written by earlier releases. Integers too large for PHP are kept as strings instead of rounded floats.
+
+### Fixed
+
+- A callback that throws is logged with its `error.class` and `error.message` when Laravel's exception handler renders
+  the response, which is the normal production path.
+- A form body with more fields than `max_input_vars` is stored as a hash instead of dropping the whole log entry.
+- Setting a `*_DASHBOARD_ENABLED` variable to `0` now turns the dashboard's routes off, not only its navigation link.
+- The HTTP and activity log lists stop paging at the 10,000 rows Elasticsearch can serve instead of repeating the last
+  page under later page numbers.
+- An array-valued query parameter on a dashboard page returns 400, or is ignored for filters, instead of a 500.
+- The trace page says when a trace has more performance records than the 1,000 it shows.
+- The function statistics page no longer compares an open-ended custom range against itself and calls every function
+  stable.
+- The activity list keeps the Result filter selected when opened from an overview card, and the overview's distinct
+  action count is no longer capped at 10.
+- Key redaction of large JSON bodies is several times faster; the patterns were rebuilt for every key.
+- Sampled function timings from Excimer use each sample's weight, so time spent blocked in a query, HTTP call or sleep
+  is no longer counted as a single sampling period.
+- A scheduled command that exits non-zero is recorded with outcome `failure` instead of `success`.
+- A `Performance::beginMeasure()` block that is never ended no longer swallows the transaction around it and every
+  later one in the same process.
+- Spans recorded inside a measured block shorter than `functions.min_duration_ms` are kept with their transaction.
+- Under Octane, a request whose terminate phase is cut short by another middleware's exception no longer leaves its
+  transaction open in the worker, where every later request joined its trace and was never recorded. Trace state is
+  cleared when Octane receives each request.
+- Normalizing a very large SQL statement no longer takes time quadratic in its length.
+- Queue trace propagation works in every test of a host application's suite, not only the first. The payload hook was
+  registered once per process, and Laravel's test teardown removes it.
+- A job run on the `sync` queue, or dispatched with `queue_publish` capture off, is attached to the span that dispatched
+  it. Its `parent_span_id` used to name a publish span that was never stored.
+- `vapor:work` is excluded from command metrics by default; it runs once per queue message and would otherwise queue a
+  new metrics job for every metrics job it delivers. Add it to a published `capture.commands.exclude` list.
+
 ## [5.2.0] - 2026-11-01
 
 ### Added
@@ -446,7 +516,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.2.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.3.0...HEAD
+[5.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.2.0...v5.3.0
 [5.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...v5.2.0
 [5.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.0.0...v5.1.0

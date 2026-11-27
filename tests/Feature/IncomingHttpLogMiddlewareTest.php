@@ -408,6 +408,28 @@ class IncomingHttpLogMiddlewareTest extends TestCase
         });
     }
 
+    public function test_exception_detail_is_kept_when_the_exception_handler_renders_the_response(): void
+    {
+        Bus::fake();
+
+        Route::post('/_test/callback-handled-exception', function () {
+            request()->attributes->set('third_party_provider', TestProvider::Delivery->value);
+            request()->attributes->set('third_party_event_type', TestEventType::DeliveryStatusCallback->value);
+            request()->attributes->set('third_party_entity_type', TestEntityType::Order->value);
+            request()->attributes->set('third_party_entity_id', '99');
+
+            throw new \RuntimeException('boom');
+        })->middleware(IncomingHttpLogMiddleware::class);
+
+        $this->postJson('/_test/callback-handled-exception')->assertStatus(500);
+
+        Bus::assertDispatchedTimes(LogHttpRequestJob::class, 1);
+        Bus::assertDispatched(LogHttpRequestJob::class, fn (LogHttpRequestJob $job) => $job->data->success === false
+            && $job->data->httpStatusCode === 500
+            && $job->data->errorClass === \RuntimeException::class
+            && $job->data->errorMessage === 'boom');
+    }
+
     public function test_failed_callback_is_logged_once_even_when_terminate_runs(): void
     {
         // Exception handling stays ON, so the kernel renders a response for the

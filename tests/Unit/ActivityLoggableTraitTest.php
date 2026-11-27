@@ -45,6 +45,23 @@ class TraitTestSoftOrder extends Model
     protected array $activityLogExcept = [];
 }
 
+class TraitTestCastOrder extends Model
+{
+    use ActivityLoggable;
+
+    public $timestamps = false;
+
+    protected $table = 'orders';
+
+    protected $fillable = ['status', 'amount', 'note'];
+
+    protected $casts = ['note' => 'encrypted'];
+
+    protected string $activityEntityType = 'order';
+
+    protected array $activityLogExcept = [];
+}
+
 class ActivityLoggableTraitTest extends TestCase
 {
     protected function setUp(): void
@@ -107,6 +124,23 @@ class ActivityLoggableTraitTest extends TestCase
                 && $job->data->changes['status']['old'] === 'pending'
                 && $job->data->changes['status']['new'] === 'paid'
                 && ! array_key_exists('amount', $job->data->changes);
+        });
+    }
+
+    public function test_updated_diff_keeps_cast_attributes_in_stored_form(): void
+    {
+        $order = TraitTestCastOrder::create(['note' => 'old plaintext']);
+        Bus::fake();
+
+        $order->update(['note' => 'new plaintext']);
+
+        Bus::assertDispatched(LogActivityJob::class, function (LogActivityJob $job) {
+            $note = $job->data->changes['note'];
+
+            // Both sides stay as stored (ciphertext); the cast must not decrypt the old value.
+            return ! str_contains(serialize($note), 'plaintext')
+                && is_string($note['old'])
+                && is_string($note['new']);
         });
     }
 

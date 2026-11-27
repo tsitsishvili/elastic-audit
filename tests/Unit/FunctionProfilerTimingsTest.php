@@ -35,6 +35,28 @@ final class FunctionProfilerTimingsTest extends TestCase
         $this->assertSame(2, $leaf['total_samples']);
     }
 
+    public function test_excimer_counts_a_blocking_sample_by_its_weight_not_as_one_period(): void
+    {
+        // What Excimer emits: a 600 ms sleep is one sample weighing 600 ms, a CPU sample weighs one period.
+        $payload = [
+            'shared'   => ['frames' => [['name' => '{main}'], ['name' => 'blocking_io'], ['name' => 'cpu_loop']]],
+            'profiles' => [[
+                'type'    => 'sampled',
+                'unit'    => 'nanoseconds',
+                'samples' => [[0, 1], [0, 2]],
+                'weights' => [600_000_000, 10_000_000],
+            ]],
+        ];
+
+        [, , , , $timings] = (new ReflectionMethod(ExcimerFunctionProfiler::class, 'normalize'))
+            ->invoke(new ExcimerFunctionProfiler(periodMs: 10.0), $payload);
+        $timings = collect($timings)->keyBy('function');
+
+        $this->assertSame(600.0, $timings['blocking_io']['total_ms']);
+        $this->assertSame(10.0, $timings['cpu_loop']['total_ms']);
+        $this->assertSame(610.0, $timings['{main}']['total_ms']);
+    }
+
     public function test_xhprof_derives_self_time_from_outbound_edges_and_ranks_hot_frames_by_it(): void
     {
         $raw = [

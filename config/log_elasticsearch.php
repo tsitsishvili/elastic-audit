@@ -22,6 +22,25 @@ return [
         'password' => env('LOG_ELASTICSEARCH_PASSWORD', ''),
     ],
 
+    // An API key (the base64 "encoded" value) is used instead of basicAuthentication when set.
+    'api_key' => env('LOG_ELASTICSEARCH_API_KEY'),
+
+    'ssl' => [
+        'verify' => env('LOG_ELASTICSEARCH_SSL_VERIFY', true),
+        // Path to a CA certificate, for clusters signed by a private authority.
+        'ca_bundle' => env('LOG_ELASTICSEARCH_CA_BUNDLE'),
+    ],
+
+    /*
+     * Seconds to wait for the connection and for the whole response. Null waits
+     * without limit, so a cluster that stops answering holds the dashboard page
+     * or sync-queue request that called it. Prune commands wait for the delete
+     * to finish: leave 'timeout' unset for the process that runs them, or give
+     * it room.
+     */
+    'connect_timeout' => env('LOG_ELASTICSEARCH_CONNECT_TIMEOUT'),
+    'timeout'         => env('LOG_ELASTICSEARCH_TIMEOUT'),
+
     // Explicit values are preserved. The APP_NAME fallback is slugged so names
     // such as "Example App" remain valid; derived aliases are validated by commands.
     'index_prefix' => $indexPrefix,
