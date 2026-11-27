@@ -5,6 +5,28 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 5.3.0
+
+5.3.1 is a patch release, so an existing `^5.0` constraint picks it up with
+`composer update tsitsishvili/elastic-audit`. No mapping changed, so no create-index or rollover run is required.
+
+### Medium impact: names written without separators are redacted
+
+Incoming header names arrive lowercased, so `X-CSRFToken` reached the redactor as `x-csrftoken` and was stored in clear
+text. Names without a word boundary are now matched too:
+
+- `password`, `passwd`, `passphrase`, `passcode`, `signature`, `hmac`, `credential`, `authorization` and `secret`
+  anywhere in a header name or body key, such as `x-secretkey` and `userpasswordhash`. `secretary` and `passwordless`
+  stay visible;
+- `token` at the end of a header name or body key, such as `x-csrftoken` and `csrfmiddlewaretoken`. `token_type` stays
+  visible;
+- a header ending in `auth` or `key`, such as `x-userauth` and `x-accesskey`;
+- an exact body key written without separators, such as `cardnumber`, `dateofbirth` and `privatekey`.
+
+The same key rules apply to activity `changes` and `metadata`. If a dashboard or external query relied on one of these
+values being visible, add the name to `http_logs.redaction.headers.allow`, `http_logs.redaction.body.allow` or
+`activity_logs.redaction.allow`. Documents indexed before the upgrade are not rewritten.
+
 ## Upgrading from 5.2.0
 
 5.3.0 is a minor release, so an existing `^5.0` constraint picks it up with

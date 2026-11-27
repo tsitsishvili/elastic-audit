@@ -44,13 +44,31 @@ class SensitiveDataRedactor
 
     /**
      * Words redacted only when they are the final word of a header name, so a
-     * qualifier prefix stays visible: 'x-api-key'/'postman-token' are redacted
-     * but a header containing 'monkey' is not, and 'token-type' would not be.
+     * qualifier prefix stays visible: 'x-api-key' is redacted but a header
+     * containing 'monkey' is not.
      */
     private const REDACTED_HEADER_TRAILING_WORDS = [
-        'token',
         'key',
     ];
+
+    /**
+     * Secret words matched without a word boundary, in headers and body keys.
+     * Symfony and HTTP/2 send header names lowercased, so 'X-CSRFToken' arrives as
+     * 'x-csrftoken' with no capital left to split on, and some body keys are
+     * written that way ('csrfmiddlewaretoken'). 'token' matches only at the
+     * end, so 'token_type' stays visible; the rest match in any position
+     * ('x-secretkey', 'userpasswordhash'), except in 'secretary' and
+     * 'passwordless'.
+     */
+    private const REDACTED_RUN_TOGETHER = '/tokens?\\d*$|password(?!less)|passwd|passphrase|passcode|signature|hmac|credential|authorization|secret(?!ar)/';
+
+    /**
+     * A lowercased header ending in 'auth' or 'key' ('x-userauth',
+     * 'x-accesskey') is redacted too. The lookbehind keeps monkey, donkey,
+     * turkey, hockey and jockey visible. Body keys are not matched this way:
+     * 'sortkey' and 'oauth' are ordinary field names there.
+     */
+    private const REDACTED_HEADER_SUFFIX = '/(?:auth|(?<!mon|don|tur|hoc|joc)key)s?\\d*$/';
 
     /** Header values that are URLs and therefore need value-level sanitizing. */
     private const URL_VALUE_HEADERS = [
@@ -170,6 +188,9 @@ class SensitiveDataRedactor
     /** @var array{string, string} */
     private array $bodyPatterns;
 
+    /** @var string[] REDACTED_BODY_KEYS plus each key written without separators ('cardnumber'). */
+    private array $bodyKeys;
+
     public function __construct(
         RedactionRules $headers = new RedactionRules,
         RedactionRules $body = new RedactionRules,
@@ -189,6 +210,7 @@ class SensitiveDataRedactor
             $this->wordPattern([...self::REDACTED_BODY_WORDS, ...$this->bodyBlock], '(?:_|$)'),
             $this->wordPattern(self::REDACTED_BODY_TRAILING_WORDS, '$'),
         ];
+        $this->bodyKeys = array_unique([...self::REDACTED_BODY_KEYS, ...str_replace('_', '', self::REDACTED_BODY_KEYS)]);
     }
 
     public function redactHeaders(array $headers): array
@@ -397,7 +419,8 @@ class SensitiveDataRedactor
         $normalized = $this->normalizeName($name);
 
         return ! in_array($normalized, $this->headerAllow, true)
-            && $this->matchesSecretWord($normalized, $this->headerPatterns);
+            && ($this->matchesSecretWord($normalized, $this->headerPatterns)
+                || preg_match(self::REDACTED_HEADER_SUFFIX, $normalized) === 1);
     }
 
     private function isSensitiveBodyKey(string $key): bool
@@ -409,7 +432,7 @@ class SensitiveDataRedactor
         }
 
         // Digit suffixes ('cvv2', 'phone1') name the same secret.
-        if (in_array(rtrim($normalized, '0123456789'), self::REDACTED_BODY_KEYS, true)) {
+        if (in_array(rtrim($normalized, '0123456789'), $this->bodyKeys, true)) {
             return true;
         }
 
@@ -441,7 +464,9 @@ class SensitiveDataRedactor
      */
     private function matchesSecretWord(string $normalized, array $patterns): bool
     {
-        return preg_match($patterns[0], $normalized) === 1 || preg_match($patterns[1], $normalized) === 1;
+        return preg_match($patterns[0], $normalized) === 1
+            || preg_match($patterns[1], $normalized) === 1
+            || preg_match(self::REDACTED_RUN_TOGETHER, $normalized) === 1;
     }
 
     /**
