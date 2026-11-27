@@ -783,6 +783,116 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertSame('[REDACTED]', $this->redactor->redactHeaders(['X-CSRFToken' => 'abc'])['X-CSRFToken']);
     }
 
+    public function test_redacts_run_together_token_headers_after_symfony_lowercases_them(): void
+    {
+        $result = $this->redactor->redactHeaders([
+            'x-csrftoken'  => 'abc',
+            'x-authtoken'  => 'abc',
+            'x-token-type' => 'bearer',
+            'x-tokenizer'  => 'bpe',
+        ]);
+
+        $this->assertSame('[REDACTED]', $result['x-csrftoken']);
+        $this->assertSame('[REDACTED]', $result['x-authtoken']);
+        $this->assertSame('bearer', $result['x-token-type']);
+        $this->assertSame('bpe', $result['x-tokenizer']);
+    }
+
+    public function test_redacts_names_that_end_in_a_secret_word_without_a_separator(): void
+    {
+        $headers = $this->redactor->redactHeaders([
+            'x-clientsecret' => 's',
+            'x-hubsignature' => 'sig',
+            'x-userpassword' => 'pw',
+            'x-secretary'    => 'Ann',
+            'x-monkey'       => 'george',
+            'x-passwordless' => 'yes',
+        ]);
+
+        $this->assertSame('[REDACTED]', $headers['x-clientsecret']);
+        $this->assertSame('[REDACTED]', $headers['x-hubsignature']);
+        $this->assertSame('[REDACTED]', $headers['x-userpassword']);
+        $this->assertSame('Ann', $headers['x-secretary']);
+        $this->assertSame('george', $headers['x-monkey']);
+        $this->assertSame('yes', $headers['x-passwordless']);
+
+        $body = $this->redactor->redactBody([
+            'csrfmiddlewaretoken' => 'tok',
+            'clientsecret'        => 's',
+            'userpassword'        => 'pw',
+            'tokenizer'           => 'bpe',
+            'secretary'           => 'Ann',
+            'monkey'              => 'george',
+        ]);
+
+        $this->assertSame('[REDACTED]', $body['csrfmiddlewaretoken']);
+        $this->assertSame('[REDACTED]', $body['clientsecret']);
+        $this->assertSame('[REDACTED]', $body['userpassword']);
+        $this->assertSame('bpe', $body['tokenizer']);
+        $this->assertSame('Ann', $body['secretary']);
+        $this->assertSame('george', $body['monkey']);
+    }
+
+    public function test_redacts_run_together_names_with_a_secret_word_in_any_position(): void
+    {
+        $headers = $this->redactor->redactHeaders([
+            'x-secretkey'         => 's',
+            'x-clientsecretvalue' => 's',
+            'x-passwordhash'      => 'h',
+            'x-accesskey'         => 'k',
+            'x-userauth'          => 'a',
+            'x-monkey'            => 'george',
+            'x-keyword'           => 'sale',
+            'x-author'            => 'Ann',
+            'x-secretary'         => 'Ann',
+        ]);
+
+        $this->assertSame('[REDACTED]', $headers['x-secretkey']);
+        $this->assertSame('[REDACTED]', $headers['x-clientsecretvalue']);
+        $this->assertSame('[REDACTED]', $headers['x-passwordhash']);
+        $this->assertSame('[REDACTED]', $headers['x-accesskey']);
+        $this->assertSame('[REDACTED]', $headers['x-userauth']);
+        $this->assertSame('george', $headers['x-monkey']);
+        $this->assertSame('sale', $headers['x-keyword']);
+        $this->assertSame('Ann', $headers['x-author']);
+        $this->assertSame('Ann', $headers['x-secretary']);
+
+        $body = $this->redactor->redactBody([
+            'secretkey'         => 's',
+            'clientsecretvalue' => 's',
+            'userpasswordhash'  => 'h',
+            'privatekey'        => 'k',
+            'cardnumber'        => '4111',
+            'dateofbirth'       => '1990-01-01',
+            'secretary'         => 'Ann',
+            'passwordless'      => true,
+            'monkey'            => 'george',
+            'sortkey'           => 'name',
+        ]);
+
+        $this->assertSame('[REDACTED]', $body['secretkey']);
+        $this->assertSame('[REDACTED]', $body['clientsecretvalue']);
+        $this->assertSame('[REDACTED]', $body['userpasswordhash']);
+        $this->assertSame('[REDACTED]', $body['privatekey']);
+        $this->assertSame('[REDACTED]', $body['cardnumber']);
+        $this->assertSame('[REDACTED]', $body['dateofbirth']);
+        $this->assertSame('Ann', $body['secretary']);
+        $this->assertTrue($body['passwordless']);
+        $this->assertSame('george', $body['monkey']);
+        $this->assertSame('name', $body['sortkey']);
+    }
+
+    public function test_an_allowed_name_is_kept_even_when_it_ends_in_a_secret_word(): void
+    {
+        $redactor = new SensitiveDataRedactor(
+            new RedactionRules(allow: ['x-csrftoken']),
+            new RedactionRules(allow: ['csrfmiddlewaretoken']),
+        );
+
+        $this->assertSame('abc', $redactor->redactHeaders(['x-csrftoken' => 'abc'])['x-csrftoken']);
+        $this->assertSame('tok', $redactor->redactBody(['csrfmiddlewaretoken' => 'tok'])['csrfmiddlewaretoken']);
+    }
+
     public function test_json_sent_with_a_form_content_type_is_still_redacted(): void
     {
         $payload = $this->redactor->buildPayload(

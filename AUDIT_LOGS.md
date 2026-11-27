@@ -852,6 +852,18 @@ so compound keys like `password_confirmation` and `webhook_secret` are redacted.
 match only as the **final** word, so `access_token` / `x-api-key` are redacted while the non-secret `token_type` and
 `token_expires_in` are kept.
 
+Names written without separators have no word boundary to match on, and incoming header names always arrive
+lowercased (`X-CSRFToken` becomes `x-csrftoken`), so a few rules match without one:
+
+- `password`, `passwd`, `passphrase`, `passcode`, `signature`, `hmac`, `credential`, `authorization` and `secret` match
+  anywhere in a name (`x-secretkey`, `userpasswordhash`), except in `secretary` and `passwordless`;
+- `token` matches at the end of a name (`x-csrftoken`, `csrfmiddlewaretoken`);
+- a header ending in `auth` or `key` is redacted (`x-userauth`, `x-accesskey`), except monkey, donkey, turkey, hockey
+  and jockey;
+- an exact body key also matches when written without separators (`cardnumber`, `dateofbirth`, `privatekey`).
+
+Add a name to `allow` to keep it visible.
+
 ### Customizing what gets redacted
 
 You can extend or override the built-in rules per surface (headers vs. body) without forking the package, via the

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.1] - 2026-11-27
+
+### Security
+
+- Header names and body keys written without separators are redacted: `X-CSRFToken`, `x-secretkey`, `x-accesskey`,
+  `csrfmiddlewaretoken`, `userpasswordhash`, `cardnumber`. 5.3.0 split such names on their capitals, but Symfony
+  lowercases incoming header names first, so an `X-CSRFToken` value was still stored in clear text. See the
+  [Upgrade Guide](UPGRADE.md#upgrading-from-530) for the rules and how to keep a name visible.
+
 ## [5.3.0] - 2026-11-27
 
 Several fixes in this release stop secrets from being stored in clear text; upgrading is recommended. See the
@@ -516,7 +525,8 @@ Initial stable release. Provides two independent subsystems on a shared Elastics
 - Raised the minimum `elasticsearch/elasticsearch` constraint to `^8.5`, the first release where `Client` implements the `ClientInterface` the package type-hints; earlier 8.x versions failed at container resolution.
 - Added an explicit `guzzlehttp/psr7: ^2.0` requirement to guarantee the PSR-17 factory used by the Elasticsearch transport is present.
 
-[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.3.0...HEAD
+[Unreleased]: https://github.com/tsitsishvili/elastic-audit/compare/v5.3.1...HEAD
+[5.3.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.3.0...v5.3.1
 [5.3.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.2.0...v5.3.0
 [5.2.0]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.1...v5.2.0
 [5.1.1]: https://github.com/tsitsishvili/elastic-audit/compare/v5.1.0...v5.1.1
