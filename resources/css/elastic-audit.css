@@ -1,4 +1,11 @@
-@import 'tailwindcss';
+/*
+  Only the dashboard views carry utility classes. Automatic source detection would scan the whole package, so a word
+  such as `lowercase` in a PHP comment or a Markdown file would add a rule and change the hash of the built file.
+  Add an `@source` line here when another directory starts to hold class names.
+*/
+@import 'tailwindcss' source(none);
+
+@source '../views';
 
 @custom-variant dark (&:is(.dark *));
 
