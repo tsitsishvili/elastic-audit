@@ -48,7 +48,7 @@
         $inline = fn ($value): string => is_string($value) ? $value : (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         $sourceLabels = ['metrics' => 'Performance data', 'http' => 'HTTP logs', 'activity' => 'Activity events'];
-        $capLabels    = ['http' => 'HTTP logs', 'activity' => 'activity events'];
+        $capLabels    = ['metrics' => 'performance records', 'http' => 'HTTP logs', 'activity' => 'activity events'];
 
         /*
          * Each kind of work reads differently, so each gets its own colour and
@@ -99,7 +99,7 @@
         <div class="mb-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200"><span class="font-semibold">{{ $sourceLabels[$source] }}:</span> {{ $message }}</div>
     @endforeach
     @foreach ($truncated as $source => $total)
-        <div class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">Showing the first {{ $auditCap }} {{ $capLabels[$source] }} of {{ number_format($total) }}.</div>
+        <div class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">Showing the first {{ number_format($source === 'metrics' ? $metricsCap : $auditCap) }} {{ $capLabels[$source] }} of {{ number_format($total) }}.</div>
     @endforeach
 
     <div x-data="{ show: { span: true, http: true, activity: true, job: true }, open: {} }">

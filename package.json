@@ -6,12 +6,12 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.3.3",
+    "@tailwindcss/postcss": "4.3.5",
     "alpinejs": "3.17.5",
-    "chart.js": "4.6.1",
-    "postcss": "8.5.31",
-    "tailwindcss": "4.3.3",
-    "vite": "8.3.5"
+    "chart.js": "4.6.2",
+    "postcss": "8.5.34",
+    "tailwindcss": "4.3.5",
+    "vite": "8.4.0"
   },
   "allowScripts": {
     "fsevents": false

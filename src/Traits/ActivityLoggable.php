@@ -169,7 +169,8 @@ trait ActivityLoggable
 
         foreach ($dirty as $field => $newValue) {
             $changes[$field] = [
-                'old' => $this->getOriginal($field),
+                // Raw like 'new': getOriginal() applies casts, which decrypts `encrypted` attributes.
+                'old' => $this->getRawOriginal($field),
                 'new' => $newValue,
             ];
         }

@@ -23,6 +23,12 @@ class ProfileSourcePathTest extends TestCase
             '{closure:}',
             ProfileSourcePath::sanitizeName('{closure:C:\\srv\\app\\src\\Reports.php:12}', false),
         );
+
+        // A space in a directory name must not end the match and leave the rest of the path behind.
+        $this->assertSame(
+            '{closure:}',
+            ProfileSourcePath::sanitizeName('{closure:/Users/John Smith/Sites/acme-bank/app/Jobs/Pay.php:12}', false),
+        );
     }
 
     public function test_namespaced_class_names_are_never_treated_as_paths(): void

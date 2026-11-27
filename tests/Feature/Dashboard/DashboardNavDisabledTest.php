@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature\Dashboard;
 
+use Illuminate\Support\Facades\Route;
 use Tsitsishvili\ElasticAudit\Dashboard\Dashboard;
 use Tsitsishvili\ElasticAudit\Services\Elasticsearch\LogElasticsearchClientInterface;
 use Tsitsishvili\ElasticAudit\Tests\Fixtures\FakeLogElasticsearchClient;
@@ -38,13 +39,16 @@ class DashboardNavDisabledTest extends TestCase
         $this->get(route('http-logs.overview', [], false))
             ->assertOk()
             ->assertDontSee('Activity Logs');
+
+        $this->assertFalse(Route::has('activity-logs.overview'));
     }
 
     protected function getEnvironmentSetUp($app): void
     {
         parent::getEnvironmentSetUp($app);
 
-        // Activity dashboard off: its routes are never registered.
-        $app['config']->set('activity_logs.dashboard.enabled', false);
+        // Activity dashboard off: its routes are never registered. "0" is what env() yields
+        // for ACTIVITY_LOGS_DASHBOARD_ENABLED=0, and must count as off like false does.
+        $app['config']->set('activity_logs.dashboard.enabled', '0');
     }
 }

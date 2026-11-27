@@ -750,4 +750,81 @@ class SensitiveDataRedactorTest extends TestCase
         $this->assertLessThanOrEqual(2048, strlen($result));
         $this->assertTrue(mb_check_encoding($result, 'UTF-8'));
     }
+
+    public function test_redacts_symfony_synthetic_basic_auth_headers(): void
+    {
+        $result = $this->redactor->redactHeaders([
+            'php-auth-user'   => ['merchant'],
+            'php-auth-pw'     => ['hunter2'],
+            'php-auth-digest' => ['Digest username="u", response="abc"'],
+            'authenticated'   => 'yes',
+        ]);
+
+        $this->assertSame('[REDACTED]', $result['php-auth-user']);
+        $this->assertSame('[REDACTED]', $result['php-auth-pw']);
+        $this->assertSame('[REDACTED]', $result['php-auth-digest']);
+        $this->assertSame('yes', $result['authenticated']);
+    }
+
+    public function test_redacts_acronym_and_numbered_key_names(): void
+    {
+        $result = $this->redactor->redactBody([
+            'DBPassword' => 'pw', 'password1' => 'pw', 'cvv2' => '123', 'APISecret' => 's',
+            'token_type' => 'bearer', 'secretary' => 'Ann', 'userIDs' => [1],
+        ]);
+
+        $this->assertSame('[REDACTED]', $result['DBPassword']);
+        $this->assertSame('[REDACTED]', $result['password1']);
+        $this->assertSame('[REDACTED]', $result['cvv2']);
+        $this->assertSame('[REDACTED]', $result['APISecret']);
+        $this->assertSame('bearer', $result['token_type']);
+        $this->assertSame('Ann', $result['secretary']);
+        $this->assertSame([1], $result['userIDs']);
+        $this->assertSame('[REDACTED]', $this->redactor->redactHeaders(['X-CSRFToken' => 'abc'])['X-CSRFToken']);
+    }
+
+    public function test_json_sent_with_a_form_content_type_is_still_redacted(): void
+    {
+        $payload = $this->redactor->buildPayload(
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            '{"password":"hunter2","status":"ok"}',
+            32768,
+            4096,
+        );
+
+        $this->assertSame(['password' => '[REDACTED]', 'status' => 'ok'], $payload->body);
+        $this->assertStringNotContainsString('hunter2', (string) $payload->bodyPreview);
+    }
+
+    public function test_non_form_body_with_a_form_content_type_is_stored_as_a_hash_only(): void
+    {
+        $payload = $this->redactor->buildPayload(
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            '<xml a="1"><password>hunter2</password></xml>',
+            32768,
+            4096,
+        );
+
+        $this->assertNull($payload->body);
+        $this->assertNull($payload->bodyPreview);
+        $this->assertStringStartsWith('sha256:', (string) $payload->bodyHash);
+    }
+
+    public function test_form_body_with_more_fields_than_max_input_vars_is_stored_as_a_hash_only(): void
+    {
+        $fields = (int) ini_get('max_input_vars') + 1;
+        $body   = implode('&', array_map(static fn (int $i): string => "f{$i}=1", range(1, $fields)));
+
+        $payload = $this->redactor->buildPayload(['Content-Type' => 'application/x-www-form-urlencoded'], $body, 32768, 4096);
+
+        $this->assertNull($payload->body);
+        $this->assertStringStartsWith('sha256:', (string) $payload->bodyHash);
+    }
+
+    public function test_non_ascii_text_and_big_integers_survive_re_encoding(): void
+    {
+        $payload = $this->redactor->buildPayload([], '{"name":"თბილისი","url":"https://a.test/x","id":12345678901234567890}', 32768, 4096);
+
+        $this->assertSame('{"name":"თბილისი","url":"https://a.test/x","id":"12345678901234567890"}', $payload->bodyPreview);
+    }
 }

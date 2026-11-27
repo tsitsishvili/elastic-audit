@@ -125,10 +125,11 @@ class ActivityDashboardQuery
                 'track_total_hits' => true,
                 'query'            => ['bool' => ['filter' => $this->filterClauses($filters)]],
                 'aggs'             => [
-                    'by_action' => ['terms' => ['field' => 'action', 'size' => 20]],
-                    'by_actor'  => ['terms' => ['field' => 'actor.type', 'size' => 10]],
-                    'success'   => ['terms' => ['field' => 'success', 'size' => 2]],
-                    'over_time' => [
+                    'by_action'        => ['terms' => ['field' => 'action', 'size' => 20]],
+                    'distinct_actions' => ['cardinality' => ['field' => 'action']],
+                    'by_actor'         => ['terms' => ['field' => 'actor.type', 'size' => 10]],
+                    'success'          => ['terms' => ['field' => 'success', 'size' => 2]],
+                    'over_time'        => [
                         'date_histogram' => $dateHistogram,
                         'aggs'           => [
                             'success' => ['terms' => ['field' => 'success', 'size' => 2]],

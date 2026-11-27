@@ -8,6 +8,10 @@ use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\RetrievingKey;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskStarting;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
@@ -32,6 +36,7 @@ use Tsitsishvili\ElasticAudit\Facades\Performance;
 use Tsitsishvili\ElasticAudit\Jobs\LogActivityJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogHttpRequestJob;
 use Tsitsishvili\ElasticAudit\Jobs\LogMetricBatchJob;
+use Tsitsishvili\ElasticAudit\Services\MetricsRecorder;
 use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 use Tsitsishvili\ElasticAudit\Tests\TestCase;
 
@@ -224,6 +229,10 @@ class MetricsInstrumentationTest extends TestCase
         $connection->method('getName')->willReturn('cache');
         Event::dispatch(new CommandExecuted('get', ['customer:private-token'], 2.5, $connection));
 
+        // Spans outside a transaction leave together when the application terminates.
+        $this->app->terminate();
+        Bus::assertDispatchedTimes(LogMetricBatchJob::class, 1);
+
         Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $batch): bool {
             $metric = $batch->items[0] ?? null;
 
@@ -233,7 +242,7 @@ class MetricsInstrumentationTest extends TestCase
                 && ! str_contains(serialize($metric), 'private-value');
         });
         Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $batch): bool {
-            $metric = $batch->items[0] ?? null;
+            $metric = $batch->items[1] ?? null;
 
             return $metric?->type === MetricData::TYPE_REDIS_COMMAND
                 && $metric->redis === ['command' => 'GET', 'connection' => 'cache']
@@ -315,6 +324,7 @@ class MetricsInstrumentationTest extends TestCase
 
         // Once the daemon exits, context-less spans are recorded again.
         DB::select('select 1 as after_daemon');
+        $this->app->terminate();
 
         Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
             foreach ($batch->items as $metric) {
@@ -340,6 +350,8 @@ class MetricsInstrumentationTest extends TestCase
         } catch (ConnectionException) {
             // Expected; metrics must preserve the application's exception behavior.
         }
+
+        $this->app->terminate();
 
         Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $batch): bool {
             $metric = $batch->items[0] ?? null;
@@ -614,6 +626,7 @@ class MetricsInstrumentationTest extends TestCase
         Event::dispatch(new MessageSending($email));
         // Symfony's AbstractTransport::send() clones before building the SentMessage.
         Event::dispatch(new MessageSent(new SentMessage(new SymfonySentMessage(clone $email, Envelope::create($email)))));
+        $this->app->terminate();
 
         Bus::assertDispatched(LogMetricBatchJob::class, static function (LogMetricBatchJob $batch): bool {
             return ($batch->items[0] ?? null)?->type === MetricData::TYPE_MAIL_SEND;
@@ -651,6 +664,99 @@ class MetricsInstrumentationTest extends TestCase
         $this->assertSame('still runs', Performance::measure('disabled', fn (): string => 'still runs'));
 
         Bus::assertNotDispatched(LogMetricBatchJob::class);
+    }
+
+    public function test_a_scheduled_command_that_exits_non_zero_is_recorded_as_a_failure(): void
+    {
+        Bus::fake();
+        $task = $this->app->make(Schedule::class)->command('inspire');
+
+        // The order Laravel dispatches for a non-zero exit: finished first, then failed.
+        Event::dispatch(new ScheduledTaskStarting($task));
+        $task->exitCode = 1;
+        Event::dispatch(new ScheduledTaskFinished($task, 0.1));
+        Event::dispatch(new ScheduledTaskFailed($task, new RuntimeException('exit 1')));
+
+        Bus::assertDispatched(LogMetricBatchJob::class, fn (LogMetricBatchJob $job): bool => $job->items[0]->type === MetricData::TYPE_SCHEDULED_TASK
+            && $job->items[0]->outcome === MetricData::OUTCOME_FAILURE);
+    }
+
+    public function test_spans_recorded_after_termination_are_sent_at_once(): void
+    {
+        Bus::fake();
+        $this->app->terminate();
+
+        // Nothing later will flush a buffer, so a late span must not wait in one.
+        DB::select('select 1 as late');
+
+        Bus::assertDispatchedTimes(LogMetricBatchJob::class, 1);
+    }
+
+    public function test_queue_trace_hook_answers_once_however_many_applications_registered_it(): void
+    {
+        // Two applications booted in one process leave two copies of the static hook.
+        $this->refreshApplication();
+        $recorder = $this->app->make(MetricsRecorder::class);
+        $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET /');
+        config()->set('queue.connections.null', ['driver' => 'null']);
+        $queue = $this->app->make('queue')->connection('null');
+
+        // A published job gets a random publish-span id, so a second copy answering would change it.
+        $payload = (new \ReflectionMethod($queue, 'createPayloadArray'))->invoke($queue, 'App\\Jobs\\Example', 'default');
+        $again   = (new \ReflectionMethod($queue, 'withCreatePayloadHooks'))->invoke($queue, 'default', $payload);
+
+        $this->assertArrayHasKey('elastic_audit_trace', $payload);
+        $this->assertSame($payload['elastic_audit_trace'], $again['elastic_audit_trace']);
+    }
+
+    public function test_a_sync_queue_job_hangs_off_the_span_that_dispatched_it(): void
+    {
+        Bus::fake([LogMetricBatchJob::class]);
+        config()->set('queue.default', 'sync');
+
+        Route::get('/metrics/sync-dispatch', function () {
+            dispatch(static fn () => null);
+
+            return 'ok';
+        });
+
+        $this->get('/metrics/sync-dispatch')->assertOk();
+
+        $items = [];
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $job) use (&$items): bool {
+            $items = [...$items, ...$job->items];
+
+            return true;
+        });
+        $byType = collect($items)->keyBy('type');
+
+        // The sync driver records no publish span, so the job must point at a span that exists.
+        $this->assertSame($byType[MetricData::TYPE_HTTP_SERVER]->spanId, $byType[MetricData::TYPE_QUEUE_JOB]->parentSpanId);
+        $this->assertSame($byType[MetricData::TYPE_HTTP_SERVER]->traceId, $byType[MetricData::TYPE_QUEUE_JOB]->traceId);
+    }
+
+    public function test_octane_request_start_clears_state_a_failed_terminate_left_behind(): void
+    {
+        Bus::fake();
+        Route::get('/metrics/after-leak', fn () => 'ok');
+
+        // What a request leaves in an Octane worker when another terminable middleware throws
+        // before this package's terminate() runs: an open root and a held suppression.
+        $recorder = $this->app->make(MetricsRecorder::class);
+        $stale    = $recorder->begin('http', MetricData::TYPE_HTTP_SERVER, 'GET stale');
+        $recorder->suppress();
+
+        // Octane dispatches this, by class name, before handing each request to the kernel.
+        Event::dispatch('Laravel\Octane\Events\RequestReceived');
+
+        $this->assertFalse($recorder->isSuppressed());
+        $this->get('/metrics/after-leak')->assertOk();
+
+        Bus::assertDispatched(LogMetricBatchJob::class, function (LogMetricBatchJob $job) use ($stale): bool {
+            $root = $job->items[array_key_last($job->items)];
+
+            return $stale !== null && $root->type === MetricData::TYPE_HTTP_SERVER && $root->parentSpanId === null;
+        });
     }
 
     protected function getEnvironmentSetUp($app): void

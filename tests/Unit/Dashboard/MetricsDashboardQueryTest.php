@@ -180,8 +180,23 @@ final class MetricsDashboardQueryTest extends TestCase
 
         $this->assertSame(
             ['_count' => 'desc'],
-            $this->client->searchCalls[2]['body']['aggs']['functions']['terms']['order'],
+            $this->client->lastSearch()['body']['aggs']['functions']['terms']['order'],
         );
+    }
+
+    public function test_open_ended_window_is_not_compared_against_itself(): void
+    {
+        $this->client->searchResponse = ['aggregations' => ['functions' => ['buckets' => [[
+            'key'            => 'App\\Services\\Checkout::run', 'doc_count' => 10,
+            'avg_duration'   => ['value' => 50.0], 'max_duration' => ['value' => 90.0],
+            'total_duration' => ['value' => 500.0], 'p95' => ['values' => ['95.0' => 85.0]],
+        ]]]]];
+
+        $rows = $this->query->functionStatistics(['from' => '2026-08-01T00:00']);
+
+        $this->assertCount(1, $this->client->searchCalls);
+        $this->assertSame('unknown', $rows[0]['status']);
+        $this->assertNull($rows[0]['baseline_avg_ms']);
     }
 
     public function test_function_statistics_flag_profiler_derived_rows_as_estimates(): void

@@ -73,6 +73,7 @@ return [
                 'horizon',
                 'horizon:supervisor',
                 'horizon:work',
+                'vapor:work',
                 'octane:start',
                 'octane:frankenphp',
                 'octane:roadrunner',

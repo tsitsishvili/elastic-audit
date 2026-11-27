@@ -5,7 +5,8 @@
 @section('title', 'Logs · Third-Party HTTP Logs')
 
 @php
-    $totalPages = max(1, (int) ceil($total / max(1, $perPage)));
+    // Capped at the 10,000-row window the query can page through.
+    $totalPages = max(1, min((int) ceil($total / max(1, $perPage)), intdiv(10000, max(1, $perPage))));
     $page       = min($page, $totalPages);
     $from       = $total > 0 ? ($page - 1) * $perPage + 1 : 0;
     $to         = min($page * $perPage, $total);

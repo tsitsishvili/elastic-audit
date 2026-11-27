@@ -47,7 +47,7 @@
         ['label' => 'Total events', 'value' => number_format($total), 'sub' => $rangeSub, 'accent' => 'text-slate-900 dark:text-slate-100', 'link' => $logsLink()],
         ['label' => 'Success rate', 'value' => $successRate . '%', 'sub' => number_format($successCount) . ' ok', 'accent' => 'text-emerald-600', 'link' => $logsLink(['success' => 'true'])],
         ['label' => 'Failed', 'value' => number_format($failureCount), 'sub' => $failureRate . '% of events', 'accent' => 'text-red-600', 'link' => $logsLink(['success' => 'false'])],
-        ['label' => 'Top actions', 'value' => number_format($topActions->count()), 'sub' => 'distinct actions', 'accent' => 'text-indigo-600', 'link' => $logsLink()],
+        ['label' => 'Top actions', 'value' => number_format((int) ($aggs['distinct_actions']['value'] ?? $topActions->count())), 'sub' => 'distinct actions', 'accent' => 'text-indigo-600', 'link' => $logsLink()],
     ];
 @endphp
 

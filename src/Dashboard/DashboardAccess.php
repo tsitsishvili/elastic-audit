@@ -45,7 +45,7 @@ final class DashboardAccess
     public function enabled(string $dashboard): bool
     {
         // Same test the service provider uses to decide whether to register the routes.
-        return ($this->config($dashboard)['enabled'] ?? false) !== false;
+        return (bool) ($this->config($dashboard)['enabled'] ?? false);
     }
 
     /**

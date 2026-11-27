@@ -83,7 +83,7 @@ final class MetricsDashboardController
         // Total time is the default rather than self time: self time arrives with
         // metrics schema v4, so ranking by it would show a page of zeroes until
         // an upgraded index has accumulated data.
-        $sort  = (string) $request->query('sort', MetricsDashboardQuery::SORT_TOTAL);
+        $sort  = $request->query->getString('sort', MetricsDashboardQuery::SORT_TOTAL);
         $sort  = isset(self::SORTS[$sort]) ? $sort : MetricsDashboardQuery::SORT_TOTAL;
         $error = null;
         $rows  = [];
@@ -113,7 +113,7 @@ final class MetricsDashboardController
         $page    = max(1, (int) $request->query('page', 1));
         $perPage = (int) $request->query('per_page', config('elastic_audit_metrics.dashboard.per_page', 25));
         $perPage = in_array($perPage, self::PER_PAGE_OPTIONS, true) ? $perPage : 25;
-        $sort    = (string) $request->query('sort', 'time');
+        $sort    = $request->query->getString('sort', 'time');
         $sort    = isset(self::TRANSACTION_SORTS[$sort]) ? $sort : 'time';
         $dir     = $request->query('dir') === 'asc' ? 'asc' : 'desc';
         $error   = null;
@@ -155,7 +155,11 @@ final class MetricsDashboardController
         $audit        = [DashboardAccess::HTTP => [], DashboardAccess::ACTIVITY => []];
 
         try {
-            $metrics = $this->query->trace($traceId);
+            ['hits' => $metrics, 'total' => $metricsTotal] = $this->query->trace($traceId);
+
+            if ($metricsTotal > count($metrics)) {
+                $truncated[DashboardAccess::METRICS] = $metricsTotal;
+            }
         } catch (Throwable $exception) {
             $sourceErrors[DashboardAccess::METRICS] = $this->queryError($exception, ['source' => DashboardAccess::METRICS, 'trace_id' => $traceId]);
         }
@@ -189,8 +193,9 @@ final class MetricsDashboardController
         abort_if($timeline['rows'] === [] && $timeline['profiled'] === [] && $sourceErrors === [], 404);
 
         return view('elastic-audit::metrics.trace', compact('timeline', 'sourceErrors', 'auditHidden', 'truncated', 'traceId') + [
-            'timezone' => $this->timezone(),
-            'auditCap' => self::AUDIT_ROWS_PER_SOURCE,
+            'timezone'   => $this->timezone(),
+            'auditCap'   => self::AUDIT_ROWS_PER_SOURCE,
+            'metricsCap' => MetricsDashboardQuery::TRACE_DOCUMENT_LIMIT,
         ]);
     }
 
@@ -219,11 +224,11 @@ final class MetricsDashboardController
      */
     private function window(Request $request): array
     {
-        $range    = (string) $request->query('range', '24h');
+        $range    = $request->query->getString('range', '24h');
         $isCustom = $range === 'custom';
         $range    = ($isCustom || isset(self::RANGES[$range])) ? $range : '24h';
 
-        $interval = (string) $request->query('interval', '');
+        $interval = $request->query->getString('interval', '');
         $interval = isset(self::INTERVALS[$interval]) ? $interval : ($range === '24h' ? '1h' : '1d');
 
         $filters = [

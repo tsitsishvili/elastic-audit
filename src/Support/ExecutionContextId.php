@@ -29,4 +29,21 @@ final class ExecutionContextId
 
         return $fiber === null ? 'main' : 'fiber:'.spl_object_id($fiber);
     }
+
+    /**
+     * False only for a Swoole coroutine id known to have finished; a Fiber's
+     * lifetime cannot be looked up from its id, so every other id counts as alive.
+     */
+    public static function alive(string $id): bool
+    {
+        if (! str_starts_with($id, 'swoole:')) {
+            return true;
+        }
+
+        try {
+            return ! class_exists('Swoole\\Coroutine') || Coroutine::exists((int) substr($id, 7));
+        } catch (Throwable) {
+            return true;
+        }
+    }
 }

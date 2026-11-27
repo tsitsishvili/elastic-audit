@@ -175,6 +175,32 @@ class DashboardTest extends TestCase
             ->assertSee('/orders');
     }
 
+    public function test_logs_index_stops_paging_at_the_elasticsearch_result_window(): void
+    {
+        $this->fake->searchResponse = ['hits' => ['total' => ['value' => 1000000], 'hits' => []]];
+
+        $this->get(route('http-logs.logs.index', ['page' => 5000], false))
+            ->assertOk()
+            ->assertSee('Page 400 of 400')
+            ->assertDontSee('of 40000');
+    }
+
+    public function test_array_valued_query_parameters_are_rejected_not_a_server_error(): void
+    {
+        $this->get(route('http-logs.overview', ['range' => ['x']], false))->assertStatus(400);
+        $this->get(route('http-logs.logs.index', ['sort' => ['x']], false))->assertStatus(400);
+        $this->get(route('http-logs.logs.index', ['provider' => ['x']], false))->assertOk();
+    }
+
+    public function test_back_link_ignores_an_off_site_referer(): void
+    {
+        $this->fake->searchResponse = ['hits' => ['hits' => [['_id' => 'd1', '_source' => ['event_id' => 'evt-1']]]]];
+
+        $this->get(route('http-logs.logs.show', ['eventId' => 'evt-1'], false), ['Referer' => 'https://evil.example/phish'])
+            ->assertOk()
+            ->assertDontSee('evil.example');
+    }
+
     public function test_logs_index_sorts_by_requested_column(): void
     {
         $this->get(route('http-logs.logs.index', ['sort' => 'provider', 'dir' => 'asc'], false))

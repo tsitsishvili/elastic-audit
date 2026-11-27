@@ -5,6 +5,114 @@ For the full list of changes see the [Changelog](CHANGELOG.md).
 
 Changes are tagged by **likelihood of impact** so you can quickly find what affects you.
 
+## Upgrading from 5.2.0
+
+5.3.0 is a minor release, so an existing `^5.0` constraint picks it up with
+`composer update tsitsishvili/elastic-audit`. No strict mapping changed, so no create-index or rollover run is
+required. The items below are behavior changes to check.
+
+### Medium impact: more header and body names are redacted
+
+Redaction now also catches:
+
+- any header whose name contains the word `auth`, such as `X-Auth-User`, plus the `php-auth-user`, `php-auth-pw` and
+  `php-auth-digest` headers Symfony adds to a request that carries Basic or Digest credentials;
+- acronym camelCase names such as `DBPassword`, `APISecret` and `X-CSRFToken`;
+- numbered names such as `password1`, `cvv2` and `phone2`.
+
+The same key rules apply to activity `changes` and `metadata`. If a dashboard or external query relied on one of these
+values being visible, add the name to `http_logs.redaction.headers.allow`, `http_logs.redaction.body.allow` or
+`activity_logs.redaction.allow`. Documents indexed before the upgrade are not rewritten: a webhook endpoint that
+receives Basic or Digest credentials has them stored in clear text in its existing HTTP log documents, so consider
+pruning those.
+
+### Medium impact: stored HTTP bodies and `body_hash` values changed
+
+- Redacted bodies are re-encoded without escaping non-ASCII text or slashes. `response.body_preview` now reads
+  `{"url":"https://a.test/x"}` instead of `{"url":"https:\/\/a.test\/x"}`, and non-ASCII text no longer counts
+  sixfold against `body_max_bytes`. Because the hash is taken from the re-encoded body, `body_hash` for a body containing
+  either differs from the hash written before the upgrade. Do not compare hashes across it.
+- Integers too large for PHP are stored as strings instead of rounded floats.
+- A body sent with a form `Content-Type` is decoded as JSON when it is JSON. When it is neither JSON nor `key=value`
+  pairs, or has more fields than PHP's `max_input_vars`, only its hash is stored, as for any other undecodable body.
+  `HTTP_LOGS_UNDECODABLE_BODY_MODE=preview` still stores such bodies in clear text.
+
+### Medium impact: Vapor applications must exclude `vapor:work` from command metrics
+
+Only when metrics are enabled on Laravel Vapor and `config/elastic_audit_metrics.php` is published. `vapor:work` runs
+once per queue message, so recording it queues a new metrics job for every metrics job it delivers. The package default
+now excludes it; a published config keeps its own list, so add it there:
+
+```php
+'capture' => [
+    'commands' => [
+        'exclude' => [
+            // ...
+            'vapor:work',
+        ],
+    ],
+],
+```
+
+### Low impact: activity `changes.*.old` holds the stored value
+
+`ActivityLoggable` used to pass an updated attribute's old value through the model's casts while recording the new
+value as stored. Both sides are now the stored value. For an `encrypted` attribute this stops the decrypted old value
+from being written; for other casts it changes the old value's form, for example `2026-01-01 10:00:00` instead of
+`2026-01-01T10:00:00.000000Z` for a `datetime`, or the JSON string instead of the decoded array for an `array` cast.
+
+### Low impact: metrics values that change meaning
+
+- A scheduled command that exits non-zero is recorded with `outcome` `failure`. It used to be `success`, so failure
+  counts for scheduled tasks rise after the upgrade.
+- Function timings sampled by Excimer count time blocked in a query, HTTP call or sleep in full. Functions that wait
+  on I/O report longer `app.function.profiled` durations than before, which shows as a step on the function statistics
+  page for windows that span the upgrade.
+- Spans recorded outside any transaction, such as queries in a service provider's `boot()`, are queued as one job when
+  the application terminates instead of one job each. They reach Elasticsearch slightly later.
+- A job run on the `sync` queue has the span that dispatched it as its `trace.parent_span_id`.
+- A request with a missing or invalid `traceparent` no longer forwards the caller's `tracestate`.
+
+### Low impact: dashboard behavior
+
+- Setting `HTTP_LOGS_DASHBOARD_ENABLED`, `ACTIVITY_LOGS_DASHBOARD_ENABLED` or `ELASTIC_AUDIT_METRICS_DASHBOARD_ENABLED`
+  to `0` now turns the routes off. Before, only `false` did; `0` hid the navigation link and left the routes answering.
+- An array-valued `range`, `interval` or `sort` query parameter returns 400 instead of 500.
+- The HTTP and activity log lists stop at the 10,000 rows Elasticsearch can page through.
+
+### Low impact: profiles commands print the shared messages
+
+`elastic-audit:profiles:create-index`, `:rollover` and `:prune` now share their implementation with the other
+subsystems' commands and print the same lines. A script that parsed the profiles prune output, such as
+`Deleted 3 profile documents with retention_days=30.`, needs the shared form: `Deleted 3 documents.`
+
+### Low impact: dashboard assets rebuilt
+
+Dashboard assets are rebuilt with Tailwind CSS 4.3.5, Chart.js 4.6.2 and Vite 8.4.0. Dashboards serve the copy bundled
+with the package, so no action is needed unless the application serves a published static copy; refresh it with:
+
+```bash
+php artisan vendor:publish --tag=elastic-audit-assets --force
+```
+
+### Optional: Elasticsearch connection options
+
+The connection can now use an API key, a private CA bundle, and connection and response timeouts. All are off by
+default. A published `config/log_elasticsearch.php` picks up the new keys through config merging; set the variables to
+use them:
+
+```dotenv
+LOG_ELASTICSEARCH_API_KEY=
+LOG_ELASTICSEARCH_CA_BUNDLE=
+LOG_ELASTICSEARCH_SSL_VERIFY=true
+LOG_ELASTICSEARCH_CONNECT_TIMEOUT=
+LOG_ELASTICSEARCH_TIMEOUT=
+```
+
+An API key replaces the username and password. Prune commands wait for the whole delete to finish, so leave
+`LOG_ELASTICSEARCH_TIMEOUT` unset, or generous, for the process that runs them. Setting a timeout, a CA bundle or
+`LOG_ELASTICSEARCH_SSL_VERIFY=false` makes the client use Guzzle instead of the HTTP client it would otherwise discover.
+
 ## Upgrading from 5.1.1
 
 5.2.0 is a minor release, so an existing `^5.0` constraint picks it up with

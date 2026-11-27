@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tsitsishvili\ElasticAudit\Tests\Feature;
 
+use GuzzleHttp\Client;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Scheduling\Schedule;
@@ -366,5 +367,28 @@ class ElasticAuditServiceProviderTest extends TestCase
         $client = $this->app->make(LogElasticsearchClientInterface::class);
 
         $this->assertInstanceOf(LogElasticsearchClientInterface::class, $client);
+    }
+
+    public function test_elasticsearch_client_applies_timeouts_tls_and_api_key_options(): void
+    {
+        config([
+            'log_elasticsearch.api_key'         => 'encoded-key',
+            'log_elasticsearch.timeout'         => '15',
+            'log_elasticsearch.connect_timeout' => 2,
+            'log_elasticsearch.ssl.verify'      => false,
+            // Basic credentials are ignored once an API key is set; the client rejects both together.
+            'log_elasticsearch.basicAuthentication.username' => 'elastic',
+            'log_elasticsearch.basicAuthentication.password' => 'secret',
+        ]);
+
+        $client    = $this->app->make(LogElasticsearchClientInterface::class);
+        $transport = (new \ReflectionProperty($client, 'client'))->getValue($client)->getTransport();
+        $http      = $transport->getClient();
+
+        $this->assertInstanceOf(Client::class, $http);
+        $this->assertSame(15.0, $http->getConfig('timeout'));
+        $this->assertSame(2.0, $http->getConfig('connect_timeout'));
+        $this->assertFalse($http->getConfig('verify'));
+        $this->assertSame('ApiKey encoded-key', $transport->getHeaders()['Authorization'] ?? null);
     }
 }

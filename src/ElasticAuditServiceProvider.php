@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tsitsishvili\ElasticAudit;
 
 use Elastic\Elasticsearch\ClientBuilder;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Events\ScheduledTaskFailed;
@@ -74,8 +75,6 @@ use Tsitsishvili\ElasticAudit\Support\MetricsExclusions;
 
 class ElasticAuditServiceProvider extends ServiceProvider
 {
-    private static bool $queueTraceHookRegistered = false;
-
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/http_logs.php', 'http_logs');
@@ -102,11 +101,35 @@ class ElasticAuditServiceProvider extends ServiceProvider
 
             $builder = ClientBuilder::create()->setHosts($hosts);
 
+            $apiKey   = (string) ($config['api_key'] ?? '');
             $username = $config['basicAuthentication']['username'] ?? '';
             $password = $config['basicAuthentication']['password'] ?? '';
 
-            if ($username !== '' && $password !== '') {
+            if ($apiKey !== '') {
+                $builder->setApiKey($apiKey);
+            } elseif ($username !== '' && $password !== '') {
                 $builder->setBasicAuthentication($username, $password);
+            }
+
+            $verify   = filter_var($config['ssl']['verify'] ?? true, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true;
+            $caBundle = (string) ($config['ssl']['ca_bundle'] ?? '');
+            $timeouts = array_map('floatval', array_filter([
+                'connect_timeout' => $config['connect_timeout'] ?? null,
+                'timeout'         => $config['timeout'] ?? null,
+            ], static fn (mixed $seconds): bool => is_numeric($seconds) && $seconds > 0));
+
+            if (! $verify) {
+                $builder->setSSLVerification(false);
+            }
+
+            if ($caBundle !== '') {
+                $builder->setCABundle($caBundle);
+            }
+
+            if ($timeouts !== [] || ! $verify || $caBundle !== '') {
+                // The builder applies these only to an HTTP client it knows, and which one it
+                // discovers depends on the host application. Guzzle is this package's own dependency.
+                $builder->setHttpClient(new GuzzleClient)->setHttpClientOptions($timeouts);
             }
 
             return new LogElasticsearchClient($builder->build());
@@ -404,8 +427,21 @@ class ElasticAuditServiceProvider extends ServiceProvider
             return;
         }
 
-        $this->app->make(ApplicationMetricsSubscriber::class)
-            ->register($this->app->make(Dispatcher::class));
+        $events = $this->app->make(Dispatcher::class);
+
+        $this->app->make(ApplicationMetricsSubscriber::class)->register($events);
+
+        // Octane skips the rest of a request's terminate phase when one step throws, so this
+        // package's terminate() may never run. Named as a string: Octane is not a dependency.
+        // Spans recorded outside a transaction are held and sent as one job at termination.
+        $recorder = $this->app->make(MetricsRecorder::class);
+        $recorder->bufferRootless();
+        $this->app->terminating(static fn () => $recorder->flushRootless());
+
+        $events->listen(
+            'Laravel\\Octane\\Events\\RequestReceived',
+            fn () => $this->app->make(MetricsRecorder::class)->reset(),
+        );
 
         Http::globalRequestMiddleware(
             fn (RequestInterface $request): RequestInterface => $this->app
@@ -439,7 +475,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
     {
         $dashboard = $this->app['config']['http_logs']['dashboard'] ?? [];
 
-        if (($dashboard['enabled'] ?? false) === false) {
+        if (! (bool) ($dashboard['enabled'] ?? false)) {
             return;
         }
 
@@ -456,7 +492,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
     {
         $dashboard = $this->app['config']['activity_logs']['dashboard'] ?? [];
 
-        if (($dashboard['enabled'] ?? false) === false) {
+        if (! (bool) ($dashboard['enabled'] ?? false)) {
             return;
         }
 
@@ -473,7 +509,7 @@ class ElasticAuditServiceProvider extends ServiceProvider
     {
         $dashboard = $this->app['config']['elastic_audit_metrics']['dashboard'] ?? [];
 
-        if (($dashboard['enabled'] ?? false) === false) {
+        if (! (bool) ($dashboard['enabled'] ?? false)) {
             return;
         }
 
@@ -486,25 +522,34 @@ class ElasticAuditServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Registered for every application that boots, not once per process: Laravel's test
+     * teardown clears these hooks, so a once-only guard left a host application's suite
+     * without queue trace propagation after its first test. The hooks are static, so an
+     * earlier application's copy may still be there; the payload check keeps it to one answer.
+     */
     private function registerQueueTraceHook(): void
     {
-        if (self::$queueTraceHookRegistered) {
-            return;
-        }
-
-        Queue::createPayloadUsing(function (): array {
-            if (! (bool) config('elastic_audit_metrics.enabled', false)
+        Queue::createPayloadUsing(function (?string $connection = null, ?string $queue = null, array $payload = []): array {
+            if (isset($payload['elastic_audit_trace'])
+                || ! (bool) config('elastic_audit_metrics.enabled', false)
                 || ! (bool) config('elastic_audit_metrics.trace.propagate_queue', true)) {
                 return [];
             }
 
-            $context = app(MetricsRecorder::class)->propagationContext();
+            $recorder = app(MetricsRecorder::class);
+            $context  = $recorder->propagationContext();
 
             if ($context === null) {
                 return [];
             }
 
-            $spanId      = MetricData::randomId(8);
+            // The job's parent is the publish span, which gets this id. Where no publish span
+            // is recorded (the sync driver fires no queueing events, or the category is off)
+            // the job hangs off the dispatching span instead of an id nothing was stored under.
+            $published = $recorder->categoryEnabled('queue_publish')
+                && config("queue.connections.{$connection}.driver") !== 'sync';
+            $spanId      = $published ? MetricData::randomId(8) : ($context->spanId ?? MetricData::randomId(8));
             $traceParent = $context->toTraceParent($spanId, $context->sampled);
 
             if ($traceParent === null) {
@@ -516,8 +561,6 @@ class ElasticAuditServiceProvider extends ServiceProvider
                 'tracestate'  => $context->traceState,
             ], static fn (mixed $value): bool => $value !== null)];
         });
-
-        self::$queueTraceHookRegistered = true;
     }
 
     /**

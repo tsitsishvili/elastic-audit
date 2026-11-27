@@ -205,7 +205,7 @@ makes the metrics queue feed itself:
 `capture.commands.exclude` ships with two groups of Laravel commands whose
 duration measures something other than application work: processes that run for
 their whole lifetime (`queue:work`, `queue:listen`, `schedule:work`, `horizon`,
-`horizon:supervisor`, `horizon:work`, `octane:start` and the `octane:frankenphp`, `octane:roadrunner`, and
+`horizon:supervisor`, `horizon:work`, `vapor:work`, `octane:start` and the `octane:frankenphp`, `octane:roadrunner`, and
 `octane:swoole` servers it runs, `reverb:start`, `pulse:check`, `pulse:work`, `serve`, `pail`) and development
 entrypoints (`tinker`, `test`, `dusk`). `php artisan test` would otherwise record
 an entire suite run as one transaction and dominate the latency percentiles.

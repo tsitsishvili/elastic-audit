@@ -133,6 +133,9 @@ class IncomingHttpLogMiddleware
             httpStatusCode: $response->getStatusCode(),
             success: $response->getStatusCode() < 400,
             response: $response,
+            // Laravel's pipeline turns a thrown exception into a response before it reaches
+            // handle()'s catch, and keeps the original on the response.
+            exception: ($response->exception ?? null) instanceof Throwable ? $response->exception : null,
         );
     }
 

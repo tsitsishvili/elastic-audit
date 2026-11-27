@@ -43,11 +43,11 @@ class ActivityDashboardController
 
     public function overview(Request $request): View
     {
-        $range    = (string) $request->query('range', '24h');
+        $range    = $request->query->getString('range', '24h');
         $isCustom = $range === 'custom';
         $range    = ($isCustom || isset(self::RANGES[$range])) ? $range : '24h';
 
-        $interval = (string) $request->query('interval', '');
+        $interval = $request->query->getString('interval', '');
         $interval = isset(self::INTERVALS[$interval]) ? $interval : ($range === '24h' ? '1h' : '1d');
 
         $filters             = $this->filters($request);
@@ -86,7 +86,7 @@ class ActivityDashboardController
         $filters = $this->filters($request);
         $page    = max(1, (int) $request->query('page', 1));
 
-        $sort = (string) $request->query('sort', 'time');
+        $sort = $request->query->getString('sort', 'time');
         $sort = isset(self::SORTS[$sort]) ? $sort : 'time';
         $dir  = $request->query('dir') === 'asc' ? 'asc' : 'desc';
 
@@ -183,8 +183,8 @@ class ActivityDashboardController
         foreach ($keys as $key) {
             $value = $request->query($key);
 
-            if ($value !== null && $value !== '') {
-                $filters[$key] = (string) $value;
+            if (is_string($value) && $value !== '') {
+                $filters[$key] = $value;
             }
         }
 

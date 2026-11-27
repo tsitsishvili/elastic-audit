@@ -21,6 +21,8 @@ final class MetricsDashboardQuery
 
     public const SORT_CALLS = 'calls';
 
+    public const TRACE_DOCUMENT_LIMIT = 1000;
+
     private const MAX_PER_PAGE = 200;
 
     /**
@@ -200,20 +202,22 @@ final class MetricsDashboardQuery
         int $minimumCalls = 3,
         string $sort = self::SORT_SELF,
     ): array {
+        // An open-ended window has no preceding window; comparing it against itself would call everything stable.
+        $bounded   = $this->windowSeconds($filters) !== null;
         $preceding = $this->precedingWindow($filters);
         $current   = $this->functionAggregation($filters, $size, $sort);
-        $baseline  = $this->functionAggregation($preceding, $size, $sort);
+        $baseline  = $bounded ? $this->functionAggregation($preceding, $size, $sort) : [];
         $rows      = [];
 
         // Each window is cut to its own top N, so a function just outside one
         // cut has not appeared or vanished. Look those up in the other window
         // by name before calling them new or gone.
-        $baseline += $this->functionAggregation(
+        $baseline += $bounded ? $this->functionAggregation(
             $preceding,
             $size,
             $sort,
             array_keys(array_diff_key($current, $baseline)),
-        );
+        ) : [];
         $stillRunning = $this->functionAggregation(
             $filters,
             $size,
@@ -249,6 +253,7 @@ final class MetricsDashboardQuery
                 'delta_ms'        => $deltaMs,
                 'delta_pct'       => $deltaPct,
                 'status'          => match (true) {
+                    ! $bounded         => 'unknown',
                     $before === null   => 'new',
                     ! $comparable      => 'unknown',
                     $deltaPct >= 10.0  => 'regressed',
@@ -359,19 +364,19 @@ final class MetricsDashboardQuery
         ];
     }
 
-    /** @return list<array<string, mixed>> */
+    /** @return array{hits: list<array<string, mixed>>, total: int} */
     public function trace(string $traceId): array
     {
         $result = $this->client->search([
             'index' => $this->metricsAlias,
             'body'  => [
-                'size'  => 1000,
+                'size'  => self::TRACE_DOCUMENT_LIMIT,
                 'sort'  => [['@timestamp' => ['order' => 'asc']]],
                 'query' => ['term' => ['trace.id' => $traceId]],
             ],
         ]);
 
-        return $this->hits($result)['hits'];
+        return $this->hits($result);
     }
 
     /** @return array<string, mixed>|null */
