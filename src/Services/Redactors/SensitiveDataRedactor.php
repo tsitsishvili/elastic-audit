@@ -53,7 +53,7 @@ class SensitiveDataRedactor
 
     /**
      * Secret words matched without a word boundary, in headers and body keys.
-     * Symfony and HTTP/2 lowercase header names, so 'X-CSRFToken' arrives as
+     * Symfony and HTTP/2 send header names lowercased, so 'X-CSRFToken' arrives as
      * 'x-csrftoken' with no capital left to split on, and some body keys are
      * written that way ('csrfmiddlewaretoken'). 'token' matches only at the
      * end, so 'token_type' stays visible; the rest match in any position
