@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- The dashboard stylesheet is built only from the classes in `resources/views`. Tailwind scanned the whole package
-  before, so a word such as `lowercase` in a PHP comment or a Markdown file added a rule to the built CSS and failed
-  the asset build check. Twelve utilities that no view uses are gone from the stylesheet: `absolute`, `blur`,
-  `collapse`, `container`, `contents`, `inline`, `invisible`, `isolate`, `resize`, `rounded`, `transform` and
-  `visible`. Published views that are customised to use one of them need their own CSS for it.
-
 ## [5.3.1] - 2026-11-27
 
 ### Security
@@ -23,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `csrfmiddlewaretoken`, `userpasswordhash`, `cardnumber`. 5.3.0 split such names on their capitals, but Symfony
   lowercases incoming header names first, so an `X-CSRFToken` value was still stored in clear text. See the
   [Upgrade Guide](UPGRADE.md#upgrading-from-530) for the rules and how to keep a name visible.
+
+### Fixed
+
+- The dashboard stylesheet is built only from the classes in `resources/views`. Tailwind scanned the whole package
+  before, so a word such as `lowercase` in a PHP comment or a Markdown file added a rule to the built CSS and failed
+  the asset build check. Twelve utilities that no view uses are gone from the stylesheet: `absolute`, `blur`,
+  `collapse`, `container`, `contents`, `inline`, `invisible`, `isolate`, `resize`, `rounded`, `transform` and
+  `visible`. Published views that are customised to use one of them need their own CSS for it.
 
 ## [5.3.0] - 2026-11-27
 
